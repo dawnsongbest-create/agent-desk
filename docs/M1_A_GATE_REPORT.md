@@ -140,4 +140,11 @@ No native screenshots were produced. A renderer-only browser screenshot would no
 
 Recommendation: do not mark M1-A as passed. Install the MSVC Build Tools with approval, rerun all Rust/Tauri gates and the Windows smoke checklist, then push to a remote and require a green macOS CI job before Tech Lead acceptance.
 
+## 10. Git State
+
+- Branch: `main`
+- M1-A implementation baseline: `466f0f4 feat: establish M1-A desktop foundation`
+- Remote: none configured
+- Worktree: clean immediately after the implementation baseline commit; this Gate Report state note is committed separately
+
 M1_A_GATE_STATUS: AWAITING_TECH_LEAD_REVIEW
