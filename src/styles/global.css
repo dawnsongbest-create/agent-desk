@@ -1,0 +1,72 @@
+:root {
+  font-family:
+    Inter,
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  color-scheme: light dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --paper: #f5edcf;
+  --paper-glow: rgb(255 255 255 / 58%);
+  --surface: #fffaf0;
+  --surface-soft: rgb(255 250 236 / 52%);
+  --ink: #302c24;
+  --ink-muted: #746b5b;
+  --line: rgb(76 65 44 / 16%);
+  --line-strong: rgb(76 65 44 / 28%);
+  --focus: #7d5e22;
+  --danger: #a34232;
+  background: var(--paper);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #27251f;
+  --paper-glow: rgb(255 241 188 / 6%);
+  --surface: #38342b;
+  --surface-soft: rgb(255 246 215 / 5%);
+  --ink: #f1e8d3;
+  --ink-muted: #b8ad99;
+  --line: rgb(238 223 189 / 14%);
+  --line-strong: rgb(238 223 189 / 24%);
+  --focus: #e4bd68;
+  --danger: #ef9180;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #27251f;
+    --paper-glow: rgb(255 241 188 / 6%);
+    --surface: #38342b;
+    --surface-soft: rgb(255 246 215 / 5%);
+    --ink: #f1e8d3;
+    --ink-muted: #b8ad99;
+    --line: rgb(238 223 189 / 14%);
+    --line-strong: rgb(238 223 189 / 24%);
+    --focus: #e4bd68;
+    --danger: #ef9180;
+  }
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+html,
+body {
+  min-width: 300px;
+  min-height: 360px;
+  margin: 0;
+  overflow: hidden;
+  background: var(--paper);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
