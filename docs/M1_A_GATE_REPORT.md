@@ -1,150 +1,174 @@
-# Agent Desk — M1-A Gate Report
+# Agent Desk — M1-A Recovery & Native Validation Gate Report
 
 Date: 2026-08-10
 Branch: `main`
-Scope: M1-A foundation only
+Scope: M1-A foundation recovery and native validation only
 
-## 1. Change Summary
+## Executive Result
 
-- Added a reproducible pnpm/Tauri 2/React/TypeScript/Vite scaffold with committed JavaScript and Rust lockfiles.
-- Added formatting, type-checking, linting, unit-test and production-build commands.
-- Added a Windows/macOS GitHub Actions matrix that runs frontend checks, Rust formatting, Clippy, Rust tests and a non-bundled Tauri build.
-- Established domain, application-port, infrastructure and native-shell boundaries without implementing M1-B or later product features.
-- Added the append-only SQLite `0001_card_foundation.sql` migration, connection bootstrap and a transactional base-card repository.
-- Added versioned theme and always-on-top preferences persisted through the native Tauri Store boundary.
-- Added the single-instance-first native bootstrap, window position/size restoration, off-screen clamping, close-to-tray behavior and tray Show/Quit commands.
-- Added a minimal Sticky visual shell with System/Light/Dark controls and an always-on-top control. It intentionally contains no Note/Todo product editor.
-- Amended the M0 gate report and recorded the Tech Lead decisions in ADR 0001 before starting M1-A implementation.
+- Windows Rust/Tauri automated validation: **PASS**
+- Windows native smoke: **PASS**
+- Native screenshot evidence: **PASS**
+- Architecture regression check: **PASS**
+- macOS CI: **BLOCKED — no Git remote is configured**
+- M1-B or later feature work: **NOT STARTED**
 
-## 2. Architecture Deviations
+The only remaining M1-A Gate blocker is authorization and configuration of a Git remote required to execute the real macOS CI job.
 
-No implementation deviation from the approved M1-A architecture was introduced.
+## A. Environment Recovery
 
-Validation is incomplete because this Windows host does not have the required MSVC linker. Installing Visual Studio Build Tools requires an administrator elevation that was declined, so no native binary could be compiled or smoke-tested. This is a gate blocker, not an approved architecture deviation.
+The Visual Studio x64 developer environment was initialized inside each Cargo/Tauri command process by calling:
 
-## 3. Dependency Manifest
+```text
+D:\迅雷下载\c++\Common7\Tools\VsDevCmd.bat -arch=x64 -host_arch=x64
+```
 
-Exact resolved versions are taken from `pnpm-lock.yaml` and `src-tauri/Cargo.lock`.
+No global `PATH` change was made.
 
-### Runtime and build tools
+Resolved native tools:
 
-| Dependency | Resolved version | Reason |
-| --- | ---: | --- |
-| pnpm | 11.16.0 | Deterministic package-manager entry point |
-| TypeScript | 5.8.3 | Static checking for renderer and tests |
-| Vite | 7.3.6 | Renderer development and production build |
-| `@vitejs/plugin-react` | 4.7.0 | React transformation for Vite |
-| `@tauri-apps/cli` | 2.11.4 | Native development/build orchestration |
-| Tauri Rust crate | 2.11.5 | Desktop runtime and native window/tray APIs |
-| `tauri-build` | 2.6.3 | Tauri build-time configuration |
+| Tool | Actual path/version |
+| --- | --- |
+| `cl.exe` | `D:\迅雷下载\c++\VC\Tools\MSVC\14.51.36231\bin\Hostx64\x64\cl.exe`; C/C++ compiler 19.51.36252 for x64 |
+| `link.exe` | `D:\迅雷下载\c++\VC\Tools\MSVC\14.51.36231\bin\Hostx64\x64\link.exe`; Incremental Linker 14.51.36252.0 |
+| `lib.exe` | `D:\迅雷下载\c++\VC\Tools\MSVC\14.51.36231\bin\Hostx64\x64\lib.exe` |
+| `rc.exe` | `C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\rc.exe` |
+| Windows SDK | 10.0.26100.0 |
+| Rust host | `x86_64-pc-windows-msvc`; rustc/cargo 1.97.1 |
 
-### Renderer and quality dependencies
+Node was aligned to Node 22 without replacing the machine-wide Node 24 installation:
 
-| Dependency | Resolved version | Reason |
-| --- | ---: | --- |
-| React / React DOM | 19.2.8 | Minimal renderer UI |
-| `@tauri-apps/api` | 2.11.1 | Typed renderer-to-native invocation |
-| Vitest | 3.2.7 | Renderer unit tests |
-| Testing Library React | 16.3.2 | Behavior-oriented component tests |
-| Testing Library jest-dom | 6.9.1 | DOM assertions |
-| Testing Library user-event | 14.6.3 | User-level interaction tests |
-| jsdom | 26.1.0 | Browser-like test environment |
-| ESLint | 9.39.5 | Static linting |
-| typescript-eslint | 8.66.0 | TypeScript ESLint integration |
-| eslint-plugin-react-hooks | 5.2.0 | React hook correctness |
-| eslint-plugin-react-refresh | 0.4.26 | Safe Fast Refresh exports |
-| Prettier | 3.9.6 | Deterministic formatting |
+- Added `.node-version` with `22.23.2`.
+- Added `package.json` engines for Node `>=22 <23` and pnpm `11.16.0`.
+- Changed CI to read `.node-version` through `actions/setup-node`.
+- Used the official portable Node 22.23.2 Windows x64 runtime for this Gate.
+- Verified the portable archive against the official SHA-256: `1177b4137ba5adaa56354ae40f1080c7450e8ae09cecb47da459d1c52ac99f97`.
+- Verified the validation process resolved Node 22.23.2 and pnpm 11.16.0.
 
-### Native dependencies
+The temporary local pnpm wrapper used to preserve Node 22 through Tauri's `beforeBuildCommand` was removed after validation and is not part of the repository.
 
-| Dependency | Resolved version | Reason |
-| --- | ---: | --- |
-| SQLx | 0.9.0 | Async SQLite connection, migrations and repository queries |
-| `tauri-plugin-single-instance` | 2.4.3 | One-process desktop behavior; registered first |
-| `tauri-plugin-store` | 2.4.4 | Versioned local preferences |
-| `tauri-plugin-window-state` | 2.4.1 | Window position/size persistence |
-| async-trait | 0.1.92 | Async repository port implementation |
-| serde / serde_json | 1.0.229 / 1.0.151 | Native preference and domain serialization |
-| thiserror | 2.0.20 | Typed persistence errors |
-| Tokio | 1.53.1 | Native async test runtime |
-| tempfile | 3.27.0 | Isolated SQLite test databases |
+## B. Compilation Fixes
 
-Toolchain observed on this host: Node 24.14.0, rustc/cargo 1.97.1, rustfmt 1.9.0-stable and Clippy 0.1.97. CI standardizes Node 22 and Rust stable.
+**No source changes required after native compilation.**
 
-## 4. Migration Report
+The recovered MSVC environment compiled the existing M1-A Rust/Tauri source successfully. Clippy found no source warnings under `-D warnings`.
 
-Migration `0001_card_foundation.sql` is the only schema migration.
+Two validation-harness observations did not require source changes:
 
-It creates one common `cards` table with:
+1. `cargo metadata --format-version 1 --no-deps` has no manifest argument, so it failed when first invoked from the repository root. It passed when rerun from the `src-tauri` crate directory.
+2. MSVC prints an informational import-library creation message while linking the library test/build target. Cargo surfaces that localized linker stdout as a warning, but the links, tests and Tauri build complete successfully.
 
-- stable card identity and constrained card type;
-- lifecycle and attention fields;
-- user/agent source integrity constraints;
-- JSON-validated metadata;
-- created/updated and lifecycle timestamps;
-- type/lifecycle and attention indexes.
+The only committed implementation/configuration change in this recovery is Node 22 version alignment. No dependency was upgraded.
 
-The migration intentionally does not add Note/Task payloads, Inbox, Reader, Agent Gateway, notification, reading-progress or scheduling tables. Migration execution and repository transaction tests are present in source, but could not be compiled on this host because `link.exe` is missing.
+## C. Full Automated Results
 
-## 5. Automated Test and Build Results
+All frontend commands below ran with Node 22.23.2 and pnpm 11.16.0. All native commands ran after x64 `VsDevCmd.bat` initialization in the same command process.
 
 | Command | Result | Evidence |
 | --- | --- | --- |
-| `pnpm install --frozen-lockfile --offline --store-dir D:\agent-desk-pnpm-store` after removing workspace `node_modules` | PASS | 271 packages installed; esbuild postinstall completed |
-| `pnpm format` | PASS | All matched files use Prettier style |
-| `pnpm typecheck` | PASS | TypeScript completed with no diagnostics |
-| `pnpm lint` | PASS | ESLint completed with zero warnings/errors |
-| `pnpm test` | PASS | 2 files, 5 tests passed |
-| `pnpm build` | PASS | 36 modules transformed; production renderer generated |
-| `cargo metadata --format-version 1 --no-deps` | PASS | Manifest and target graph resolved |
-| `cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check` | PASS | No formatting diff |
-| `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings` | BLOCKED | MSVC `link.exe` not found while compiling build scripts |
-| `cargo test --manifest-path src-tauri/Cargo.toml --all-targets --all-features` | BLOCKED | Same missing MSVC linker; tests did not execute |
-| `pnpm tauri build --no-bundle` | BLOCKED | Renderer build passed; native compilation stopped because `link.exe` was not found |
+| `pnpm install --frozen-lockfile` | **PASS** | Lockfile already up to date; completed with pnpm 11.16.0 |
+| `pnpm format` | **PASS** | All matched files use Prettier style |
+| `pnpm typecheck` | **PASS** | TypeScript completed without diagnostics |
+| `pnpm lint` | **PASS** | ESLint completed with zero errors/warnings |
+| `pnpm test` | **PASS** | 2 files, 5 tests passed |
+| `pnpm build` | **PASS** | 36 modules transformed; production renderer generated |
+| `cargo metadata --format-version 1 --no-deps` from `src-tauri` | **PASS** | Cargo metadata resolved |
+| `cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check` | **PASS** | No Rust formatting diff |
+| `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings` | **PASS** | Completed successfully with MSVC |
+| `cargo test --manifest-path src-tauri/Cargo.toml --all-targets --all-features` | **PASS** | 6 passed, 0 failed |
+| `pnpm tauri build --no-bundle` | **PASS** | Release executable generated at `src-tauri/target/release/agent-desk.exe` |
 
-The Rust test sources cover migration/bootstrap, foreign-key activation, transactional create/read, constraint rollback, off-screen geometry and preference JSON compatibility. They are not counted as passing until compiled and executed.
+Native Rust tests executed successfully for:
 
-## 6. Windows Native Smoke Checklist
+- preference wire serialization;
+- visible/off-screen geometry rules;
+- SQLite migration and foreign-key initialization;
+- transactional base-card create/read;
+- source-integrity constraint rollback.
 
-No native smoke item was run because no Windows executable could be produced.
+## D. Windows Native Smoke
 
-| Check | Status |
-| --- | --- |
-| First launch opens one resizable 320×420 Sticky window with 300×360 minimum | NOT RUN |
-| Second launch surfaces/focuses the existing instance | NOT RUN |
-| Position and size restore after restart | NOT RUN |
-| Off-screen saved geometry is clamped to an available monitor | NOT RUN |
-| Always-on-top applies immediately and persists | NOT RUN |
-| Close hides to tray instead of exiting | NOT RUN |
-| Tray left-click/Show surfaces the window | NOT RUN |
-| Tray Quit persists window state and exits | NOT RUN |
-| System/Light/Dark preferences persist | NOT RUN |
+Tests used the real release `agent-desk.exe`, the real WebView2 renderer, Win32 process/window state and native mouse/menu interactions. No browser renderer was substituted.
 
-## 7. macOS Build Evidence
+| Smoke item | Result | Evidence |
+| --- | --- | --- |
+| First launch creates one Agent Desk process/window | **PASS** | One process; responsive native window |
+| Default 320×420 logical client size | **PASS** | UI Automation client 400×525 physical px at 125% DPI; outer frame 418×572 |
+| Minimum 300×360 logical client size | **PASS** | `WM_GETMINMAXINFO` returned 393×497 physical outer tracking minimum at 125% DPI |
+| Resizable native frame | **PASS** | `WS_THICKFRAME` present; native size changed from 418×572 to 518×697 |
+| Window drag | **PASS** | Native title-bar drag moved the window by exactly +80,+50 physical px |
+| Single instance | **PASS** | Second launch exited 0; original PID remained; existing window surfaced |
+| Immediate always-on-top | **PASS** | `WS_EX_TOPMOST` changed from false to true after clicking Pin window |
+| Always-on-top persistence | **PASS** | Preference remained true and `WS_EX_TOPMOST` was restored after clean restart |
+| Position/size restore | **PASS** | Clean restart restored x=1388, y=242, 518×697 physical outer frame |
+| Off-screen clamp | **PASS** | Saved x=3000, y=2000; clean restart restored to x=751, y=228, fully inside 1920×1080 |
+| Close-to-tray | **PASS** | Native close hid the window while the original process remained alive |
+| Tray Show | **PASS** | Clicking the actual hidden tray icon restored the existing window |
+| Tray menu | **PASS** | Native menu exposed Show Agent Desk and Quit Agent Desk |
+| Tray Quit | **PASS** | Native Quit terminated the process; process count became zero |
+| Relaunch after Quit | **PASS** | Fresh process launched normally with intact state |
+| System theme | **PASS** | Initial System selection followed the Windows dark appearance |
+| Light theme | **PASS** | Immediate visual change; `preferences.json` persisted `theme: light` |
+| Dark theme | **PASS** | Immediate visual change; clean restart persisted `theme: dark` |
 
-`.github/workflows/ci.yml` defines a `macos-latest` job with the same frontend and Rust gates as Windows and the corrected `pnpm tauri build --no-bundle` command.
+Final smoke cleanup used the real tray Quit command. No Agent Desk process was left running.
 
-This repository has no configured Git remote, so the workflow could not be pushed or executed. There is no green macOS build evidence for this gate.
+## E. Native Screenshot Evidence
 
-## 8. Screenshots
+All screenshots are captures of the real Tauri release window or the real Windows tray UI.
 
-No native screenshots were produced. A renderer-only browser screenshot would not validate the required window chrome, always-on-top behavior, tray integration or native sizing, so it is not presented as native evidence.
+| Evidence | Dimensions | SHA-256 |
+| --- | ---: | --- |
+| [`default-sticky.png`](evidence/m1-a/windows/default-sticky.png) | 418×572 | `b63361f0636812277489a9fa93c93ab05799cae30f6f52354513ec05750660a9` |
+| [`light-mode.png`](evidence/m1-a/windows/light-mode.png) | 418×572 | `76af7601ab17e057b614540eb8cf0e8f3aae3d89c37dbf4aad9020e7dab5aeb4` |
+| [`dark-mode.png`](evidence/m1-a/windows/dark-mode.png) | 418×572 | `9b5d366a6b4f72a0789f7e0c020dc732103516d1de9b96546db995022a8446e7` |
+| [`tray-menu.png`](evidence/m1-a/windows/tray-menu.png) | 340×350 | `74bcfee9dd3264bd4038cc5487f0cd024e2d71bed011ff326540a3a119dc2536` |
 
-## 9. Known Issues and Gate Recommendation
+The Dark screenshot was recaptured after clean restart and off-screen recovery; it also shows the persisted Pinned state.
 
-1. **Gate blocker:** Visual Studio Build Tools with the Visual C++ workload is absent; Tauri's supported Windows MSVC target therefore cannot link.
-2. Rust type-checking beyond build-script compilation, Clippy, Rust test execution and Tauri native build remain unverified.
-3. All Windows native smoke checks remain unverified.
-4. The macOS CI job is configured but has not run because no remote is configured.
-5. No native screenshots are available.
+## F. macOS CI
 
-Recommendation: do not mark M1-A as passed. Install the MSVC Build Tools with approval, rerun all Rust/Tauri gates and the Windows smoke checklist, then push to a remote and require a green macOS CI job before Tech Lead acceptance.
+```text
+REMOTE_REQUIRED_FOR_MACOS_CI
+```
 
-## 10. Git State
+No Git remote is configured. Per Product Owner instruction:
+
+- no GitHub repository was created;
+- no code was uploaded;
+- the configured `macos-latest` workflow was not run;
+- no macOS CI success is claimed;
+- no macOS manual UX smoke success is claimed.
+
+The CI workflow is ready to consume `.node-version` and run the same frontend/Rust/Tauri Gate after a remote is explicitly authorized.
+
+## G. Architecture Regression Check
+
+**PASS — no architecture deviation detected.**
+
+- React contains no direct SQL access.
+- React contains no scattered raw HTTP calls.
+- Rust/Tauri still owns persistence, native shell and trusted boundaries.
+- Preference writes remain serialized through the existing React queue and native Tauri Store boundary.
+- React state is not the sole source of truth for durable preferences or domain data.
+- M1-B functionality was not introduced.
+- Inbox, Reader, Agent Gateway, HTTP Adapter, Notifications, Progressive Reading, Scheduled Tasks and Learning Enhancements were not started.
+- `0001_card_foundation.sql` is byte-for-byte unchanged from implementation baseline commit `466f0f4`.
+- JavaScript and Rust dependency lockfiles are unchanged; no unrelated dependency upgrade occurred.
+
+## H. Git State
 
 - Branch: `main`
-- M1-A implementation baseline: `466f0f4 feat: establish M1-A desktop foundation`
+- Existing implementation baseline: `466f0f4 feat: establish M1-A desktop foundation`
+- Existing initial Gate evidence commit: `674b1d6 docs: finalize M1-A gate evidence`
+- Recovery changes: Node 22 declarations, CI/README alignment, native evidence and this report
 - Remote: none configured
-- Worktree: clean immediately after the implementation baseline commit; this Gate Report state note is committed separately
+- Expected handoff worktree: clean after the recovery commit
 
-M1_A_GATE_STATUS: AWAITING_TECH_LEAD_REVIEW
+## Remaining Blocker and Recommendation
+
+Windows M1-A engineering validation is complete. Do not begin M1-B yet.
+
+The Product Owner must authorize the target Git remote before `main` can be pushed and the real macOS CI job can run. After a green macOS build, the Gate can move to Tech Lead final review. macOS CI success will still not substitute for the separate pre-release macOS manual UX smoke requirement.
+
+M1_A_GATE_STATUS: BLOCKED_REMOTE_CI

@@ -6,7 +6,7 @@ The repository is currently at **M1-A Foundation**. It contains the native shell
 
 ## Prerequisites
 
-- Node.js 22 or newer
+- Node.js 22.23.2 (see `.node-version`)
 - pnpm 11
 - Rust stable with `rustfmt` and `clippy`
 - Tauri 2 platform prerequisites for Windows or macOS
