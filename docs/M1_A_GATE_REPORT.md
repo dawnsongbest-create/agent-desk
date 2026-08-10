@@ -7,13 +7,15 @@ Scope: M1-A foundation recovery and native validation only
 ## Executive Result
 
 - Windows Rust/Tauri automated validation: **PASS**
+- Windows GitHub Actions CI: **PASS**
+- macOS GitHub Actions CI: **PASS**
 - Windows native smoke: **PASS**
 - Native screenshot evidence: **PASS**
 - Architecture regression check: **PASS**
-- macOS CI: **BLOCKED — no Git remote is configured**
+- GitHub remote/private upload verification: **PASS**
 - M1-B or later feature work: **NOT STARTED**
 
-The only remaining M1-A Gate blocker is authorization and configuration of a Git remote required to execute the real macOS CI job.
+Windows and macOS CI completed successfully on the private GitHub repository. M1-A is ready for Tech Lead final review; no M1-B work has started.
 
 ## A. Environment Recovery
 
@@ -126,23 +128,43 @@ All screenshots are captures of the real Tauri release window or the real Window
 
 The Dark screenshot was recaptured after clean restart and off-screen recovery; it also shows the persisted Pinned state.
 
-## F. macOS CI
+## F. GitHub Remote
 
-```text
-REMOTE_REQUIRED_FOR_MACOS_CI
-```
+- Repository: `https://github.com/dawnsongbest-create/agent-desk`
+- Visibility: **Private**, verified through the authenticated GitHub API before upload and after CI.
+- Origin: `https://github.com/dawnsongbest-create/agent-desk.git`
+- Pushed branch: `main`
+- Remote history: all local commit/tree/blob SHA values were verified against GitHub; remote `main` matched local HEAD.
+- Remote tree audit: workflow and M1-A report present; no tracked `node_modules/`, `dist/`, Rust `target/`, `.env`, database, or other checked build artifacts.
 
-No Git remote is configured. Per Product Owner instruction:
+The standard `git push -u origin main` command was attempted, but this machine's Git/libcurl channel could not connect to `github.com:443` while authenticated GitHub API access remained healthy. The upload therefore used GitHub's authenticated Git Data API as a transport fallback. Every blob, tree, commit and final ref SHA was checked against local Git before the remote `main` ref was accepted; local `main` tracks `origin/main`.
 
-- no GitHub repository was created;
-- no code was uploaded;
-- the configured `macos-latest` workflow was not run;
-- no macOS CI success is claimed;
-- no macOS manual UX smoke success is claimed.
+## G. GitHub Actions
 
-The CI workflow is ready to consume `.node-version` and run the same frontend/Rust/Tauri Gate after a remote is explicitly authorized.
+Final validation run: [CI run 31379834124](https://github.com/dawnsongbest-create/agent-desk/actions/runs/31379834124)
 
-## G. Architecture Regression Check
+- Event: `push`
+- CI-validated HEAD: `63f4673b6424023f62efb9aa8afd08ff2aa2055e`
+- Windows job `windows-latest` (job `93427303848`): **PASS**
+- macOS job `macos-latest` (job `93427303903`): **PASS**
+- Node: `.node-version` resolved to `22.23.2` on both runners.
+- Both jobs completed `pnpm install --frozen-lockfile`, frontend format/typecheck/lint/test/build, Rust fmt, Rust Clippy with `-D warnings`, Rust tests, and `pnpm tauri build --no-bundle`.
+- No test, Clippy, platform job, or build step was skipped or marked `continue-on-error`.
+
+Initial run `31379573974` exposed a real Windows-only failure at `pnpm format`: the Windows checkout converted text files to CRLF because the repository-wide `.gitattributes` rule did not specify an EOL. Prettier then reported 14 files as incorrectly formatted.
+
+CI fix:
+
+- Root cause: repository text EOL was platform-dependent under `* text=auto`.
+- Minimal file changed: `.gitattributes`.
+- Fix: `* text=auto eol=lf`.
+- Commit: `63f4673 fix: normalize CI text line endings`.
+- Local verification: affected files resolved to `eol=lf`; index/worktree EOL inspection passed; `pnpm format` passed.
+- Remote verification: final Windows and macOS jobs both passed the complete workflow.
+
+This CI result does not claim a separate macOS manual UX smoke; the current Gate requirement was real macOS build/CI execution.
+
+## H. Architecture Regression Check
 
 **PASS — no architecture deviation detected.**
 
@@ -156,19 +178,23 @@ The CI workflow is ready to consume `.node-version` and run the same frontend/Ru
 - `0001_card_foundation.sql` is byte-for-byte unchanged from implementation baseline commit `466f0f4`.
 - JavaScript and Rust dependency lockfiles are unchanged; no unrelated dependency upgrade occurred.
 
-## H. Git State
+## I. Git State
 
 - Branch: `main`
 - Existing implementation baseline: `466f0f4 feat: establish M1-A desktop foundation`
 - Existing initial Gate evidence commit: `674b1d6 docs: finalize M1-A gate evidence`
-- Recovery changes: Node 22 declarations, CI/README alignment, native evidence and this report
-- Remote: none configured
-- Expected handoff worktree: clean after the recovery commit
+- Native recovery/evidence commit: `816b487 chore: complete M1-A native validation`
+- Upload ignore hardening: `dd85813 chore: harden upload ignores`
+- CI-validated HEAD: `63f4673b6424023f62efb9aa8afd08ff2aa2055e`
+- Remote: `origin` → `https://github.com/dawnsongbest-create/agent-desk.git`
+- Upstream: `main` tracks `origin/main`
+- Expected handoff worktree: clean after this report-only commit
+- The final report commit SHA and its confirmation run are stated in the handoff because a commit cannot contain its own SHA or resulting run ID.
 
 ## Remaining Blocker and Recommendation
 
-Windows M1-A engineering validation is complete. Do not begin M1-B yet.
+Windows and macOS M1-A engineering validation is complete. Do not begin M1-B yet.
 
-The Product Owner must authorize the target Git remote before `main` can be pushed and the real macOS CI job can run. After a green macOS build, the Gate can move to Tech Lead final review. macOS CI success will still not substitute for the separate pre-release macOS manual UX smoke requirement.
+The Gate can move to Tech Lead final review. GitHub Actions macOS success does not substitute for the separate pre-release macOS manual UX smoke requirement.
 
-M1_A_GATE_STATUS: BLOCKED_REMOTE_CI
+M1_A_GATE_STATUS: AWAITING_TECH_LEAD_FINAL_REVIEW
