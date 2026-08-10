@@ -6,4 +6,6 @@
 - Released schema fixtures must be migrated forward in CI before destructive migrations are approved.
 - A migration failure must preserve the existing database and stop normal startup; the application must never silently replace it with an empty database.
 
-`0001_card_foundation.sql` intentionally creates only the common Card table. Note/Task payload tables, delivery tables, Reader state and Agent Gateway storage are deferred to their approved gates.
+`0001_card_foundation.sql` intentionally creates only the common Card table and remains frozen.
+
+`0002_sticky_cards.sql` adds only the approved M1-B1 Note/Task payloads and unified Sticky placement ordering. Delivery tables, Reader state and Agent Gateway storage remain deferred to their approved gates.

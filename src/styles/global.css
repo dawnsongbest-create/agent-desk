@@ -19,6 +19,8 @@
   --line-strong: rgb(76 65 44 / 28%);
   --focus: #7d5e22;
   --danger: #a34232;
+  --danger-line: rgb(163 66 50 / 22%);
+  --danger-soft: rgb(163 66 50 / 7%);
   background: var(--paper);
 }
 
@@ -34,6 +36,8 @@
   --line-strong: rgb(238 223 189 / 24%);
   --focus: #e4bd68;
   --danger: #ef9180;
+  --danger-line: rgb(239 145 128 / 24%);
+  --danger-soft: rgb(239 145 128 / 8%);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -48,6 +52,8 @@
     --line-strong: rgb(238 223 189 / 24%);
     --focus: #e4bd68;
     --danger: #ef9180;
+    --danger-line: rgb(239 145 128 / 24%);
+    --danger-soft: rgb(239 145 128 / 8%);
   }
 }
 

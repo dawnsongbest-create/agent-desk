@@ -46,14 +46,19 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn applies_initial_migration_and_enables_foreign_keys() {
+    async fn applies_foundation_and_sticky_migrations_and_enables_foreign_keys() {
         let temp = tempfile::tempdir().expect("temp directory");
         let database = connect(&temp.path().join("agent-desk.sqlite3"))
             .await
             .expect("database should initialize");
 
         let table_count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'cards'",
+            r#"
+            SELECT COUNT(*)
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name IN ('cards', 'note_payloads', 'task_payloads', 'card_placements')
+            "#,
         )
         .fetch_one(&database.0)
         .await
@@ -63,7 +68,14 @@ mod tests {
             .await
             .expect("foreign key pragma");
 
-        assert_eq!(table_count, 1);
+        let applied_versions: Vec<i64> =
+            sqlx::query_scalar("SELECT version FROM _sqlx_migrations ORDER BY version")
+                .fetch_all(&database.0)
+                .await
+                .expect("migration history query");
+
+        assert_eq!(table_count, 4);
+        assert_eq!(applied_versions, vec![1, 2]);
         assert_eq!(foreign_keys, 1);
     }
 }

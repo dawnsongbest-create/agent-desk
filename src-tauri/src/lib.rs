@@ -3,6 +3,7 @@ pub mod domain;
 pub mod persistence;
 mod preferences;
 mod shell;
+mod sticky;
 
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
@@ -26,8 +27,11 @@ pub fn run() {
             let database_path = app_data_dir.join("agent-desk.sqlite3");
             let database =
                 tauri::async_runtime::block_on(persistence::sqlite::connect(&database_path))?;
+            let sticky_repository =
+                persistence::sticky_repository::SqliteStickyRepository::new(database.0.clone());
 
             app.manage(database);
+            app.manage(sticky::StickyState::new(sticky_repository));
             preferences::initialize(app.handle()).map_err(std::io::Error::other)?;
             shell::setup_tray(app)?;
             shell::restore_main_window(app.handle())?;
@@ -46,7 +50,14 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             preferences::get_preferences,
-            preferences::update_preferences
+            preferences::update_preferences,
+            sticky::list_sticky_cards,
+            sticky::create_sticky_card,
+            sticky::update_sticky_text,
+            sticky::set_task_completed,
+            sticky::set_task_due_date,
+            sticky::delete_sticky_card,
+            sticky::reorder_sticky_cards
         ])
         .run(tauri::generate_context!())
         .expect("error while running Agent Desk");
