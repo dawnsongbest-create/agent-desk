@@ -1,4 +1,4 @@
-* text=auto
+* text=auto eol=lf
 *.sql text eol=lf
 *.rs text eol=lf
 *.ts text eol=lf
