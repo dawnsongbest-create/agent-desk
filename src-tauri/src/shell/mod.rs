@@ -100,6 +100,30 @@ fn clamp_offscreen_geometry(window: &WebviewWindow) -> tauri::Result<()> {
     Ok(())
 }
 
+pub fn clamp_window_to_monitor(window: &WebviewWindow) -> tauri::Result<()> {
+    let position = window.outer_position()?;
+    let size = window.outer_size()?;
+    let target = window.current_monitor()?.or(window.primary_monitor()?);
+    if let Some(monitor) = target {
+        let monitor_position = monitor.position();
+        let monitor_size = monitor.size();
+        let target_position = Rect {
+            x: position.x,
+            y: position.y,
+            width: size.width,
+            height: size.height,
+        }
+        .clamped_origin(Rect {
+            x: monitor_position.x,
+            y: monitor_position.y,
+            width: monitor_size.width,
+            height: monitor_size.height,
+        });
+        window.set_position(target_position)?;
+    }
+    Ok(())
+}
+
 pub fn setup_tray(app: &App) -> tauri::Result<()> {
     let show = MenuItem::with_id(app, "show", "Show Agent Desk", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Agent Desk", true, None::<&str>)?;

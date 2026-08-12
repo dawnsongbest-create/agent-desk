@@ -10,4 +10,8 @@ export const tauriPreferences: PreferencesPort = {
   save(preferences) {
     return invoke<Preferences>("update_preferences", { preferences });
   },
+
+  applyWindowPreset(preset) {
+    return invoke<void>("apply_window_preset", { preset });
+  },
 };

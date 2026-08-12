@@ -66,6 +66,15 @@ function App() {
       preferenceSaveState={saveState}
       onThemeChange={(theme) => save({ ...preferencesRef.current, theme })}
       onAlwaysOnTopChange={(alwaysOnTop) => save({ ...preferencesRef.current, alwaysOnTop })}
+      onWindowPresetChange={(windowPreset) => {
+        void tauriPreferences
+          .applyWindowPreset(windowPreset)
+          .then(() => save({ ...preferencesRef.current, windowPreset }))
+          .catch(() => setSaveState("error"));
+      }}
+      onStickyPositionChange={(stickyPosition) =>
+        save({ ...preferencesRef.current, stickyPosition })
+      }
     />
   );
 }

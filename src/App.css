@@ -958,3 +958,358 @@ textarea:disabled {
     transition: none;
   }
 }
+
+/* M1-B3: Compact Sticky is a movable Reader overlay, not a dashboard. */
+.sticky-preview {
+  width: min(218px, calc(100vw - 40px));
+  min-height: 176px;
+  max-height: 214px;
+  transform: translate(-50%, -50%) rotate(-0.8deg);
+  padding: 24px 20px 16px;
+  user-select: none;
+  touch-action: none;
+}
+
+.sticky-preview:hover,
+.sticky-preview:focus-visible {
+  transform: translate(-50%, -50%) translateY(-2px) rotate(-0.25deg);
+}
+
+.sticky-preview[data-snap-hint]:not([data-snap-hint="free"]) {
+  box-shadow:
+    0 0 0 2px rgb(140 108 38 / 24%),
+    8px 14px 28px rgb(74 57 30 / 22%);
+}
+
+.sticky-preview > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  color: var(--sticky-muted);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.sticky-preview > header small {
+  font-size: 0.54rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+.compact-todo-viewport {
+  min-height: 70px;
+  max-height: 78px;
+  margin: 9px -2px 0;
+  overflow-y: auto;
+  overscroll-behavior: auto;
+  scrollbar-color: var(--sticky-line-strong) transparent;
+  scrollbar-width: thin;
+  touch-action: pan-y;
+}
+
+.compact-todo-viewport .preview-task {
+  display: grid;
+  grid-template-columns: 15px minmax(0, 1fr);
+  margin: 0;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--sticky-line);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.compact-todo-viewport .preview-task span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sticky-preview blockquote {
+  display: -webkit-box;
+  margin: 9px 0 0;
+  overflow: hidden;
+  color: var(--sticky-muted);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.67rem;
+  font-style: italic;
+  line-height: 1.42;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.sticky-preview .preview-open {
+  padding-top: 8px;
+}
+
+.settings-section {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.settings-section .settings-heading {
+  margin: 0;
+}
+
+.settings-section > small {
+  color: var(--popover-muted);
+  font-size: 0.58rem;
+}
+
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+}
+
+.preset-grid button {
+  border: 1px solid var(--popover-line);
+  border-radius: 7px;
+  padding: 6px 4px;
+  color: var(--popover-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.61rem;
+  cursor: pointer;
+}
+
+.preset-grid button[aria-pressed="true"] {
+  color: var(--popover-ink);
+  background: var(--popover-selected);
+  box-shadow: 0 1px 5px rgb(42 34 21 / 9%);
+}
+
+.quote-editor {
+  margin: 4px 4px 17px;
+  border-bottom: 1px solid var(--sticky-line);
+  padding: 7px 3px 15px;
+}
+
+.quote-editor > div:first-child {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.quote-editor > div:first-child span,
+.face-heading p {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.quote-editor small {
+  color: var(--sticky-muted);
+  font-size: 0.54rem;
+}
+
+.quote-value {
+  width: 100%;
+  margin-top: 8px;
+  border: 0;
+  padding: 7px 2px;
+  color: var(--sticky-ink);
+  background: transparent;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.82rem;
+  font-style: italic;
+  line-height: 1.5;
+  text-align: left;
+  cursor: text;
+}
+
+.quote-composer {
+  display: grid;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.quote-composer textarea,
+.record-create-sheet textarea,
+.record-editor textarea {
+  box-sizing: border-box;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  color: var(--sticky-ink);
+  background: transparent;
+  font: inherit;
+  line-height: 1.62;
+  resize: vertical;
+}
+
+.quote-composer > div,
+.record-create-sheet > div {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.quote-composer button,
+.record-create-sheet button,
+.record-editor button {
+  border: 0;
+  border-radius: 7px;
+  padding: 5px 8px;
+  color: var(--sticky-muted);
+  background: var(--sticky-soft);
+  font: inherit;
+  font-size: 0.62rem;
+  cursor: pointer;
+}
+
+.record-list {
+  display: grid;
+  margin: 0 3px;
+}
+
+.record-list > button {
+  display: grid;
+  gap: 3px;
+  border: 0;
+  border-bottom: 1px solid var(--sticky-line);
+  padding: 11px 4px;
+  color: var(--sticky-ink);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.record-list > button:hover,
+.record-list > button:focus-visible {
+  background: var(--sticky-soft);
+}
+
+.record-list strong {
+  overflow: hidden;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-list time {
+  color: var(--sticky-muted);
+  font-size: 0.54rem;
+}
+
+.record-list button > span {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--sticky-muted);
+  font-size: 0.64rem;
+  line-height: 1.42;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.record-create-sheet {
+  display: grid;
+  gap: 8px;
+  margin: 16px 4px 0;
+  border: 1px solid var(--sticky-line-strong);
+  border-radius: 8px;
+  padding: 11px;
+  background: var(--sticky-capture);
+}
+
+.record-create-sheet textarea {
+  min-height: 150px;
+  max-height: 360px;
+  font-size: 0.75rem;
+}
+
+.record-create-sheet > div {
+  justify-content: space-between;
+}
+
+.record-create-sheet small {
+  color: var(--sticky-muted);
+  font-size: 0.54rem;
+}
+
+.record-editor {
+  display: flex;
+  min-height: calc(100vh - 170px);
+  flex-direction: column;
+}
+
+.record-editor header,
+.record-editor footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  padding: 4px 2px 9px;
+}
+
+.record-editor header span,
+.record-editor footer > span {
+  color: var(--sticky-muted);
+  font-size: 0.55rem;
+}
+
+.record-editor textarea {
+  min-height: 280px;
+  flex: 1;
+  padding: 12px 5px 20px;
+  border-top: 1px solid var(--sticky-line);
+  border-bottom: 1px solid var(--sticky-line);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.8rem;
+  line-height: 1.72;
+  resize: none;
+}
+
+.record-editor footer {
+  padding-top: 9px;
+}
+
+.record-editor footer div {
+  display: flex;
+  gap: 4px;
+}
+
+.record-editor .record-delete {
+  color: var(--danger);
+}
+
+.record-editor .record-save {
+  color: var(--sticky-ink);
+  background: var(--sticky-raised);
+}
+
+.task-text {
+  display: block;
+  padding: 1px 0;
+  font-size: 0.76rem;
+  line-height: 1.48;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (min-height: 540px) {
+  .expanded-sticky {
+    top: 106px;
+    bottom: 18px;
+  }
+
+  .sticky-preview {
+    width: min(224px, calc(100vw - 54px));
+  }
+}
+
+@media (min-width: 390px) {
+  .expanded-sticky {
+    right: 20px;
+    left: 20px;
+  }
+
+  .sticky-preview {
+    width: 230px;
+  }
+}

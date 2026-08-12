@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { StickyCardsPort } from "../../application/ports/sticky";
-import type { CreateStickyCardInput, StickyCard } from "../../domain/sticky";
+import type { CreateStickyCardInput, StickyCard, StickyProfile } from "../../domain/sticky";
 
 export const tauriStickyCards: StickyCardsPort = {
   list() {
@@ -23,5 +23,14 @@ export const tauriStickyCards: StickyCardsPort = {
   },
   reorder(orderedIds: string[]) {
     return invoke<StickyCard[]>("reorder_sticky_cards", { input: { orderedIds } });
+  },
+  getProfile() {
+    return invoke<StickyProfile>("get_sticky_profile");
+  },
+  updateQuote(quoteText: string) {
+    return invoke<StickyProfile>("update_sticky_quote", { input: { quoteText } });
+  },
+  exportRecord(id: string) {
+    return invoke<boolean>("export_sticky_record", { input: { id } });
   },
 };

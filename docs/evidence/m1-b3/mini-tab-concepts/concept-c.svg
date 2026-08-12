@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="568" viewBox="0 0 320 568">
+  <defs><pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#ddd6c8" stroke-width=".6"/></pattern><filter id="s"><feDropShadow dx="4" dy="7" stdDeviation="5" flood-opacity=".2"/></filter></defs>
+  <rect width="320" height="568" fill="#eee8dc"/><rect width="320" height="568" fill="url(#grid)" opacity=".55"/>
+  <text x="22" y="30" font-family="Arial" font-size="9" letter-spacing="2" fill="#817b70">AGENT DESK · READER</text>
+  <text x="22" y="75" font-family="Georgia" font-size="20" fill="#38352f">A quiet chapter</text><path d="M22 92H286" stroke="#b9b1a2"/>
+  <g fill="#615d55" font-family="Georgia" font-size="12"><text x="22" y="126">一小片真正的 Sticky 留在正文之上。它保留熟悉的</text><text x="22" y="151">黄色纸张与 TODAY 标记，也能停在用户选择的位置。</text><text x="22" y="194">三种方案里，它的产品身份最明确。</text></g>
+  <g transform="translate(185 250) rotate(-1)" filter="url(#s)"><rect width="108" height="45" fill="#f3de82"/><rect x="34" y="-5" width="40" height="10" fill="#f3edcf" opacity=".8"/><text x="10" y="17" font-family="Arial" font-size="7" font-weight="700" letter-spacing="1.5" fill="#776b43">TODAY</text><g stroke="#776b43" fill="none"><rect x="10" y="26" width="7" height="7"/><path d="M23 29h38"/><rect x="72" y="26" width="7" height="7"/><path d="M85 29h12"/></g></g>
+  <text x="22" y="530" font-family="Arial" font-size="10" font-weight="700" fill="#8c6c26">CONCEPT C · TINY STICKY TAB</text><text x="22" y="548" font-family="Arial" font-size="9" fill="#817b70">108 × 45 · free / edge snap · two ticks</text>
+</svg>

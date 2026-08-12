@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="568" viewBox="0 0 320 568">
+  <defs><pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#ddd6c8" stroke-width=".6"/></pattern><filter id="s"><feDropShadow dx="-3" dy="5" stdDeviation="5" flood-opacity=".18"/></filter></defs>
+  <rect width="320" height="568" fill="#eee8dc"/><rect width="320" height="568" fill="url(#grid)" opacity=".55"/>
+  <text x="22" y="30" font-family="Arial" font-size="9" letter-spacing="2" fill="#817b70">AGENT DESK · READER</text>
+  <text x="22" y="75" font-family="Georgia" font-size="20" fill="#38352f">A quiet chapter</text><path d="M22 92H286" stroke="#b9b1a2"/>
+  <g fill="#615d55" font-family="Georgia" font-size="12"><text x="22" y="126">阅读内容从这里开始。Mini Tab 靠在书页边缘，</text><text x="22" y="151">像一枚始终可见、但不会打断正文的书签。</text><text x="22" y="194">它提醒你：个人信息层仍在身边。</text></g>
+  <g filter="url(#s)"><path d="M292 146h28v92l-14-10-14 10z" fill="#f3de82"/><rect x="297" y="154" width="18" height="18" rx="9" fill="#fff5c3"/><text x="306" y="167" text-anchor="middle" font-family="Arial" font-size="9" font-weight="700" fill="#6e5a26">3</text><path d="M299 185h14m-14 7h14m-14 7h10" stroke="#8c6c26" stroke-width="1.3"/></g>
+  <text x="22" y="530" font-family="Arial" font-size="10" font-weight="700" fill="#8c6c26">CONCEPT A · BOOKMARK STRIP</text><text x="22" y="548" font-family="Arial" font-size="9" fill="#817b70">28 × 92 · right edge · Todo count</text>
+</svg>

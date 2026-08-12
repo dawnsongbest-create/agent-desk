@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="568" viewBox="0 0 320 568">
+  <defs><pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#ddd6c8" stroke-width=".6"/></pattern><filter id="s"><feDropShadow dx="-3" dy="5" stdDeviation="5" flood-opacity=".18"/></filter></defs>
+  <rect width="320" height="568" fill="#eee8dc"/><rect width="320" height="568" fill="url(#grid)" opacity=".55"/>
+  <text x="22" y="30" font-family="Arial" font-size="9" letter-spacing="2" fill="#817b70">AGENT DESK · READER</text>
+  <text x="22" y="75" font-family="Georgia" font-size="20" fill="#38352f">A quiet chapter</text><path d="M22 92H286" stroke="#b9b1a2"/>
+  <g fill="#615d55" font-family="Georgia" font-size="12"><text x="22" y="126">折角几乎成为纸张本身的一部分。它不模拟按钮，</text><text x="22" y="151">而像有人把这一页轻轻折起，留下稍后回来的线索。</text><text x="22" y="194">点开时，Compact Sticky 从折角自然展开。</text></g>
+  <g filter="url(#s)"><path d="M262 0h58v58z" fill="#f3de82"/><path d="M262 0v58h58" fill="#d1b962"/><path d="M274 16h31l-31 31z" fill="#f8e9a7"/><text x="292" y="27" font-family="Arial" font-size="10" font-weight="700" fill="#6e5a26">3</text></g>
+  <text x="22" y="530" font-family="Arial" font-size="10" font-weight="700" fill="#8c6c26">CONCEPT B · FOLDED PAPER CORNER</text><text x="22" y="548" font-family="Arial" font-size="9" fill="#817b70">58 × 58 · page corner · subtle count</text>
+</svg>

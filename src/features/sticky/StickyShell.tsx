@@ -6,8 +6,6 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
-  type DragOverEvent,
-  type DragStartEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -16,37 +14,57 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
-import type { Preferences, ThemeMode } from "../../domain/preferences";
-import { themeModes } from "../../domain/preferences";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent,
+  type WheelEvent,
+} from "react";
+import type {
+  Preferences,
+  StickyPosition,
+  ThemeMode,
+  WindowPreset,
+} from "../../domain/preferences";
+import { settleCompactPosition, themeModes, windowPresets } from "../../domain/preferences";
 import {
   formatLocalDueDate,
   parseCapture,
+  recordDisplayTitle,
+  recordExcerpt,
   reorderCardIdsWithinKind,
   type CreateStickyCardInput,
   type StickyCard,
+  type StickyProfile,
 } from "../../domain/sticky";
 import { playPageTurnSound } from "./pageTurnSound";
 import type { StickyLoadState } from "./useStickyCards";
 
-type PreferenceSaveState = "loading" | "idle" | "saving" | "saved" | "error";
+type SaveState = "loading" | "idle" | "saving" | "saved" | "error";
 type StickyFace = "note" | "task";
 
 type StickyShellProps = {
   preferences: Preferences;
-  preferenceSaveState: PreferenceSaveState;
+  preferenceSaveState: SaveState;
   cards: StickyCard[];
+  profile: StickyProfile;
   stickyState: StickyLoadState;
   error: string | null;
   now?: Date;
   onThemeChange(theme: ThemeMode): void;
   onAlwaysOnTopChange(alwaysOnTop: boolean): void;
+  onWindowPresetChange(preset: WindowPreset): void;
+  onStickyPositionChange(position: StickyPosition): void;
   onCreate(input: CreateStickyCardInput): Promise<boolean>;
   onUpdateText(id: string, text: string): Promise<boolean>;
   onTaskCompleted(id: string, completed: boolean): Promise<void>;
   onTaskDueDate(id: string, dueDate: string | null): Promise<void>;
   onDelete(id: string): Promise<void>;
   onReorder(orderedIds: string[]): Promise<void>;
+  onUpdateQuote(text: string): Promise<boolean>;
+  onExportRecord(id: string): Promise<boolean>;
   onRetry(): Promise<void>;
   onDismissError(): void;
 };
@@ -57,30 +75,32 @@ const themeLabels: Record<ThemeMode, string> = {
   dark: "深色",
 };
 
-const faceLabels: Record<StickyFace, string> = {
-  note: "记录",
-  task: "待办",
+const presetLabels: Record<WindowPreset, string> = {
+  sticky: "Sticky",
+  iphone5: "iPhone 5",
+  pocket: "Pocket",
+  book: "Book",
+  custom: "Custom",
 };
+
+const faceLabels: Record<StickyFace, string> = { note: "Record", task: "待办" };
+const SNAP_DISTANCE = 28;
 
 function SettingsMenu({
   preferences,
   saveState,
   onThemeChange,
   onAlwaysOnTopChange,
+  onWindowPresetChange,
 }: {
   preferences: Preferences;
-  saveState: PreferenceSaveState;
+  saveState: SaveState;
   onThemeChange(theme: ThemeMode): void;
   onAlwaysOnTopChange(alwaysOnTop: boolean): void;
+  onWindowPresetChange(preset: WindowPreset): void;
 }) {
   const [open, setOpen] = useState(false);
   const disabled = saveState === "loading" || saveState === "saving";
-
-  function chooseTheme(theme: ThemeMode) {
-    onThemeChange(theme);
-    setOpen(false);
-  }
-
   return (
     <div className="settings-anchor">
       <button
@@ -96,7 +116,7 @@ function SettingsMenu({
         <div className="settings-panel" aria-label="外观与窗口设置面板">
           <div className="settings-heading">
             <strong>外观</strong>
-            <span>{saveState === "saving" ? "正在保存…" : "选择纸张明暗"}</span>
+            <span>纸张明暗</span>
           </div>
           <div className="theme-switcher" role="group" aria-label="主题">
             {themeModes.map((theme) => (
@@ -106,11 +126,33 @@ function SettingsMenu({
                 key={theme}
                 disabled={disabled}
                 aria-pressed={preferences.theme === theme}
-                onClick={() => chooseTheme(theme)}
+                onClick={() => onThemeChange(theme)}
               >
                 {themeLabels[theme]}
               </button>
             ))}
+          </div>
+          <div className="settings-section">
+            <div className="settings-heading">
+              <strong>窗口尺寸</strong>
+              <span>仍可自由调整</span>
+            </div>
+            <div className="preset-grid" role="group" aria-label="窗口尺寸模板">
+              {windowPresets
+                .filter((preset) => preset !== "custom")
+                .map((preset) => (
+                  <button
+                    type="button"
+                    key={preset}
+                    disabled={disabled}
+                    aria-pressed={preferences.windowPreset === preset}
+                    onClick={() => onWindowPresetChange(preset)}
+                  >
+                    {presetLabels[preset]}
+                  </button>
+                ))}
+            </div>
+            {preferences.windowPreset === "custom" ? <small>当前：Custom</small> : null}
           </div>
           <div className="settings-rule" />
           <button
@@ -129,191 +171,326 @@ function SettingsMenu({
   );
 }
 
-function FaceCapture({
-  kind,
+function QuoteEditor({
+  profile,
+  disabled,
+  onUpdate,
+}: {
+  profile: StickyProfile;
+  disabled: boolean;
+  onUpdate(text: string): Promise<boolean>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(profile.quoteText);
+  useEffect(() => {
+    if (!editing) setDraft(profile.quoteText);
+  }, [editing, profile.quoteText]);
+
+  async function save() {
+    if (await onUpdate(draft)) setEditing(false);
+  }
+
+  return (
+    <section className="quote-editor" aria-label="便签一句">
+      <div>
+        <span>便签一句</span>
+        <small>Compact Sticky 会一直显示</small>
+      </div>
+      {editing ? (
+        <div className="quote-composer">
+          <textarea
+            autoFocus
+            value={draft}
+            rows={3}
+            maxLength={10000}
+            aria-label="编辑便签一句"
+            placeholder="留一句愿意常常看到的话…"
+            onChange={(event) => setDraft(event.target.value)}
+          />
+          <div>
+            <button type="button" onClick={() => setEditing(false)}>
+              取消
+            </button>
+            <button type="button" disabled={disabled} onClick={() => void save()}>
+              保存
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          className="quote-value"
+          type="button"
+          disabled={disabled}
+          onClick={() => setEditing(true)}
+        >
+          {profile.quoteText || "写下你的便签一句"}
+        </button>
+      )}
+    </section>
+  );
+}
+
+function TaskCapture({
   disabled,
   onCreate,
 }: {
-  kind: StickyFace;
   disabled: boolean;
   onCreate(input: CreateStickyCardInput): Promise<boolean>;
 }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-  const captureId = `${kind}-capture`;
-
-  useEffect(() => {
-    if (open) inputRef.current?.focus();
-  }, [open]);
-
   async function submit() {
-    const input = parseCapture(text, kind, dueDate || null);
-    if (!input || disabled) return;
-    if (await onCreate(input)) {
+    const input = parseCapture(text, "task", dueDate || null);
+    if (input && !disabled && (await onCreate(input))) {
       setText("");
       setDueDate("");
       setOpen(false);
     }
   }
-
-  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Escape") {
-      setText("");
-      setDueDate("");
-      setOpen(false);
-      return;
-    }
-    const noteSubmit = kind === "note" && (event.metaKey || event.ctrlKey) && event.key === "Enter";
-    const taskSubmit = kind === "task" && event.key === "Enter" && !event.shiftKey;
-    if (noteSubmit || taskSubmit) {
-      event.preventDefault();
-      void submit();
-    }
-  }
-
-  if (!open) {
-    return (
-      <button
-        id={captureId}
-        className="face-capture-trigger"
-        type="button"
-        disabled={disabled}
-        onClick={() => setOpen(true)}
-      >
-        <span className="capture-plus" aria-hidden="true">
-          +
-        </span>
-        <span>
-          <strong>{kind === "note" ? "继续写一条记录" : "添加一个待办"}</strong>
-          <small>{kind === "note" ? "像在纸上接着往下写" : "写下下一件要做的事"}</small>
-        </span>
-      </button>
-    );
-  }
-
-  return (
-    <div id={captureId} className="face-capture-composer" data-kind={kind}>
+  return open ? (
+    <div id="task-capture" className="face-capture-composer" data-kind="task">
       <textarea
-        ref={inputRef}
+        autoFocus
         value={text}
-        rows={kind === "note" ? 4 : 2}
+        rows={2}
         maxLength={4000}
-        placeholder={kind === "note" ? "写下此刻想到的事…" : "要完成什么？"}
-        aria-label={kind === "note" ? "新记录" : "新待办"}
+        placeholder="要完成什么？"
+        aria-label="新待办"
         onChange={(event) => setText(event.target.value)}
-        onKeyDown={handleKeyDown}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") setOpen(false);
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            void submit();
+          }
+        }}
       />
       <div className="capture-actions">
-        {kind === "task" ? (
-          <label className="capture-due">
-            <span>日期（可选）</span>
-            <input
-              type="date"
-              value={dueDate}
-              aria-label="新待办日期"
-              onChange={(event) => setDueDate(event.target.value)}
-            />
-          </label>
-        ) : (
-          <span className="keyboard-hint">Ctrl/⌘ + Enter 保存 · 输入 [ ] 可快速建待办</span>
-        )}
+        <label className="capture-due">
+          <span>日期</span>
+          <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+        </label>
         <div className="capture-buttons">
-          <button type="button" className="capture-cancel" onClick={() => setOpen(false)}>
+          <button type="button" onClick={() => setOpen(false)}>
             取消
           </button>
-          <button
-            className="capture-submit"
-            type="button"
-            disabled={disabled || !text.trim()}
-            onClick={() => void submit()}
-          >
-            {kind === "note" ? "写下" : "添加"}
+          <button type="button" disabled={!text.trim()} onClick={() => void submit()}>
+            添加
           </button>
         </div>
       </div>
     </div>
+  ) : (
+    <button
+      id="task-capture"
+      className="face-capture-trigger"
+      type="button"
+      disabled={disabled}
+      onClick={() => setOpen(true)}
+    >
+      <span className="capture-plus">+</span>
+      <span>
+        <strong>添加一个待办</strong>
+        <small>写下下一件要做的事</small>
+      </span>
+    </button>
   );
 }
 
-function SortableStickyCard({
+function RecordCapture({
+  disabled,
+  onCreate,
+}: {
+  disabled: boolean;
+  onCreate(input: CreateStickyCardInput): Promise<boolean>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  async function submit() {
+    const input = parseCapture(text, "note", null);
+    if (input && !disabled && (await onCreate(input))) {
+      setText("");
+      setOpen(false);
+    }
+  }
+  return open ? (
+    <div id="note-capture" className="record-create-sheet">
+      <textarea
+        autoFocus
+        value={text}
+        rows={8}
+        maxLength={100000}
+        aria-label="新建长 Record"
+        placeholder="第一行会成为列表标题。继续往下写，正文可以很长…"
+        onChange={(event) => setText(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") setOpen(false);
+          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault();
+            void submit();
+          }
+        }}
+      />
+      <div>
+        <small>纯文本 · Ctrl/⌘ + Enter 保存</small>
+        <span>
+          <button type="button" onClick={() => setOpen(false)}>
+            取消
+          </button>
+          <button type="button" disabled={!text.trim()} onClick={() => void submit()}>
+            保存 Record
+          </button>
+        </span>
+      </div>
+    </div>
+  ) : (
+    <button
+      id="note-capture"
+      className="face-capture-trigger"
+      type="button"
+      disabled={disabled}
+      onClick={() => setOpen(true)}
+    >
+      <span className="capture-plus">+</span>
+      <span>
+        <strong>新建 Record</strong>
+        <small>在这张纸上写一篇长记录</small>
+      </span>
+    </button>
+  );
+}
+
+function RecordList({
+  records,
+  disabled,
+  onOpen,
+}: {
+  records: StickyCard[];
+  disabled: boolean;
+  onOpen(card: StickyCard): void;
+}) {
+  return (
+    <div className="record-list" aria-label="我的 Records">
+      {records.length === 0 ? (
+        <p className="face-empty">还没有 Record。让第一段文字从这里开始。</p>
+      ) : null}
+      {records.map((record) => (
+        <button type="button" key={record.id} disabled={disabled} onClick={() => onOpen(record)}>
+          <strong>{recordDisplayTitle(record.text)}</strong>
+          <time dateTime={record.updatedAt}>
+            {new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(
+              new Date(record.updatedAt),
+            )}{" "}
+            · 最近修改
+          </time>
+          <span>{recordExcerpt(record.text)}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function RecordEditor({
+  record,
+  disabled,
+  onClose,
+  onSave,
+  onDelete,
+  onExport,
+}: {
+  record: StickyCard;
+  disabled: boolean;
+  onClose(): void;
+  onSave(id: string, text: string): Promise<boolean>;
+  onDelete(id: string): Promise<void>;
+  onExport(id: string): Promise<boolean>;
+}) {
+  const [draft, setDraft] = useState(record.text);
+  const [saved, setSaved] = useState(true);
+  async function save() {
+    if (draft.trim() && (await onSave(record.id, draft))) setSaved(true);
+  }
+  return (
+    <section
+      className="record-editor"
+      aria-label={`编辑 Record：${recordDisplayTitle(record.text)}`}
+    >
+      <header>
+        <button type="button" onClick={onClose}>
+          ← Records
+        </button>
+        <span>{saved ? "已保存" : "有未保存修改"}</span>
+      </header>
+      <textarea
+        value={draft}
+        maxLength={100000}
+        aria-label="Record 正文"
+        onChange={(event) => {
+          setDraft(event.target.value);
+          setSaved(event.target.value === record.text);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault();
+            void save();
+          }
+        }}
+      />
+      <footer>
+        <span>{draft.length.toLocaleString()} 字符 · 纯文本</span>
+        <div>
+          <button type="button" disabled={disabled} onClick={() => void onExport(record.id)}>
+            导出 .md
+          </button>
+          <button
+            className="record-delete"
+            type="button"
+            disabled={disabled}
+            onClick={() => void onDelete(record.id).then(onClose)}
+          >
+            删除
+          </button>
+          <button
+            className="record-save"
+            type="button"
+            disabled={disabled || saved || !draft.trim()}
+            onClick={() => void save()}
+          >
+            保存
+          </button>
+        </div>
+      </footer>
+    </section>
+  );
+}
+
+function SortableTask({
   card,
   disabled,
-  over,
-  onUpdateText,
   onTaskCompleted,
   onTaskDueDate,
   onDelete,
 }: {
   card: StickyCard;
   disabled: boolean;
-  over: boolean;
-  onUpdateText(id: string, text: string): Promise<boolean>;
   onTaskCompleted(id: string, completed: boolean): Promise<void>;
   onTaskDueDate(id: string, dueDate: string | null): Promise<void>;
   onDelete(id: string): Promise<void>;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(card.text);
   const [actionsOpen, setActionsOpen] = useState(false);
-  const cancelledEdit = useRef(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
     disabled,
   });
-  const style: CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  useEffect(() => {
-    if (!editing) setDraft(card.text);
-  }, [card.text, editing]);
-
-  async function commitEdit() {
-    if (cancelledEdit.current) {
-      cancelledEdit.current = false;
-      setDraft(card.text);
-      setEditing(false);
-      return;
-    }
-    const normalized = draft.trim();
-    if (!normalized || normalized === card.text) {
-      setDraft(card.text);
-      setEditing(false);
-      return;
-    }
-    await onUpdateText(card.id, normalized);
-    setEditing(false);
-  }
-
-  function editKeyDown(event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) {
-    if (event.key === "Escape") {
-      cancelledEdit.current = true;
-      event.currentTarget.blur();
-      return;
-    }
-    if (card.kind === "task" && event.key === "Enter") {
-      event.preventDefault();
-      event.currentTarget.blur();
-      return;
-    }
-    if (card.kind === "note" && event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-      event.preventDefault();
-      event.currentTarget.blur();
-    }
-  }
-
+  const style: CSSProperties = { transform: CSS.Transform.toString(transform), transition };
   return (
     <article
       ref={setNodeRef}
       style={style}
       className="sticky-card-row"
-      data-kind={card.kind}
       data-completed={card.completed}
       data-dragging={isDragging}
-      data-drop-target={over && !isDragging}
     >
       <button
         className="drag-handle"
@@ -323,89 +500,43 @@ function SortableStickyCard({
         {...attributes}
         {...listeners}
       >
-        <span aria-hidden="true">⠿</span>
+        ⠿
       </button>
-
-      {card.kind === "task" ? (
-        <input
-          className="task-checkbox"
-          type="checkbox"
-          checked={card.completed}
-          disabled={disabled}
-          aria-label={card.completed ? `恢复待办：${card.text}` : `完成待办：${card.text}`}
-          onChange={(event) => void onTaskCompleted(card.id, event.target.checked)}
-        />
-      ) : (
-        <span className="note-mark" aria-hidden="true">
-          —
-        </span>
-      )}
-
+      <input
+        className="task-checkbox"
+        type="checkbox"
+        checked={card.completed}
+        disabled={disabled}
+        aria-label={`完成待办：${card.text}`}
+        onChange={(event) => void onTaskCompleted(card.id, event.target.checked)}
+      />
       <div className="card-body">
-        {editing ? (
-          card.kind === "note" ? (
-            <textarea
-              className="inline-editor note-editor"
-              value={draft}
-              rows={Math.max(2, draft.split("\n").length)}
-              autoFocus
-              aria-label="编辑记录"
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={editKeyDown}
-              onBlur={() => void commitEdit()}
-            />
-          ) : (
-            <input
-              className="inline-editor task-editor"
-              value={draft}
-              autoFocus
-              aria-label="编辑待办"
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={editKeyDown}
-              onBlur={() => void commitEdit()}
-            />
-          )
-        ) : (
-          <button
-            className="card-text-button"
-            type="button"
-            disabled={disabled}
-            onClick={() => setEditing(true)}
-          >
-            {card.text}
-          </button>
-        )}
-        {card.kind === "task" && card.dueDate ? (
+        <span className="task-text">{card.text}</span>
+        {card.dueDate ? (
           <time className="due-label" dateTime={card.dueDate}>
             {formatLocalDueDate(card.dueDate)}
           </time>
         ) : null}
       </div>
-
       <div className="card-actions">
         <button
           className="card-menu-button"
           type="button"
-          disabled={disabled}
-          aria-label={`更多操作：${card.text}`}
           aria-expanded={actionsOpen}
           onClick={() => setActionsOpen((value) => !value)}
         >
           •••
         </button>
         {actionsOpen ? (
-          <div className="card-action-panel" aria-label={`${card.text} 操作`}>
-            {card.kind === "task" ? (
-              <label>
-                <span>完成日期</span>
-                <input
-                  type="date"
-                  value={card.dueDate ?? ""}
-                  aria-label={`待办日期：${card.text}`}
-                  onChange={(event) => void onTaskDueDate(card.id, event.target.value || null)}
-                />
-              </label>
-            ) : null}
+          <div className="card-action-panel">
+            <label>
+              <span>完成日期</span>
+              <input
+                type="date"
+                value={card.dueDate ?? ""}
+                onChange={(event) => void onTaskDueDate(card.id, event.target.value || null)}
+              />
+            </label>
             <button className="delete-button" type="button" onClick={() => void onDelete(card.id)}>
               删除
             </button>
@@ -416,50 +547,184 @@ function SortableStickyCard({
   );
 }
 
+function consumeTodoWheel(event: WheelEvent<HTMLDivElement>) {
+  const element = event.currentTarget;
+  const canMoveUp = element.scrollTop > 0;
+  const canMoveDown = element.scrollTop + element.clientHeight < element.scrollHeight - 1;
+  if ((event.deltaY < 0 && canMoveUp) || (event.deltaY > 0 && canMoveDown)) event.stopPropagation();
+}
+
 function StickyPreview({
   cards,
+  quote,
   loading,
+  position,
   onExpand,
+  onPositionChange,
 }: {
   cards: StickyCard[];
+  quote: string;
   loading: boolean;
+  position: StickyPosition;
   onExpand(): void;
+  onPositionChange(position: StickyPosition): void;
 }) {
-  const notes = cards.filter((card) => card.kind === "note");
-  const tasks = cards.filter((card) => card.kind === "task");
-  const openTasks = tasks.filter((card) => !card.completed);
-  const previewTasks = openTasks.slice(0, 2);
+  const openTasks = cards.filter((card) => card.kind === "task" && !card.completed);
+  const drag = useRef<{
+    id: number;
+    startX: number;
+    startY: number;
+    left: number;
+    top: number;
+    moved: boolean;
+  } | null>(null);
+  const [live, setLive] = useState<{ left: number; top: number } | null>(null);
+  const [snapHint, setSnapHint] = useState<StickyPosition["snap"]>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+
+  const style: CSSProperties = live
+    ? { left: live.left, top: live.top, transform: "none" }
+    : position.snap
+      ? {
+          left: position.snap.endsWith("left") ? 12 : "auto",
+          right: position.snap.endsWith("right") ? 12 : "auto",
+          top: position.snap.startsWith("top") ? 76 : "auto",
+          bottom: position.snap.startsWith("bottom") ? 12 : "auto",
+          transform: "none",
+        }
+      : {
+          left: `clamp(121px, ${position.xRatio * 100}%, calc(100% - 121px))`,
+          top: `clamp(178px, ${position.yRatio * 100}%, calc(100% - 115px))`,
+        };
+
+  function pointerDown(event: PointerEvent<HTMLDivElement>) {
+    if ((event.target as HTMLElement).closest(".compact-todo-viewport")) return;
+    const preview = previewRef.current;
+    if (!preview) return;
+    const rect = preview.getBoundingClientRect();
+    drag.current = {
+      id: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      left: rect.left,
+      top: rect.top,
+      moved: false,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  function pointerMove(event: PointerEvent<HTMLDivElement>) {
+    const current = drag.current;
+    const preview = previewRef.current;
+    if (!current || current.id !== event.pointerId || !preview) return;
+    const dx = event.clientX - current.startX;
+    const dy = event.clientY - current.startY;
+    if (Math.hypot(dx, dy) >= 5) current.moved = true;
+    if (!current.moved) return;
+    const board = preview.parentElement?.getBoundingClientRect();
+    if (!board) return;
+    const width = preview.offsetWidth;
+    const height = preview.offsetHeight;
+    const left = Math.max(12, Math.min(board.width - width - 12, current.left - board.left + dx));
+    const top = Math.max(76, Math.min(board.height - height - 12, current.top - board.top + dy));
+    setLive({ left, top });
+    const horizontal =
+      left < SNAP_DISTANCE ? "left" : board.width - width - left < SNAP_DISTANCE ? "right" : null;
+    const vertical =
+      top - 76 < SNAP_DISTANCE
+        ? "top"
+        : board.height - height - top < SNAP_DISTANCE
+          ? "bottom"
+          : null;
+    setSnapHint(
+      horizontal && vertical ? (`${vertical}_${horizontal}` as StickyPosition["snap"]) : null,
+    );
+  }
+
+  function pointerUp(event: PointerEvent<HTMLDivElement>) {
+    const current = drag.current;
+    const preview = previewRef.current;
+    drag.current = null;
+    if (!current || current.id !== event.pointerId || !preview) return;
+    if (!current.moved) {
+      onExpand();
+      return;
+    }
+    const board = preview.parentElement?.getBoundingClientRect();
+    if (!board || !live) return;
+    const width = preview.offsetWidth;
+    const height = preview.offsetHeight;
+    onPositionChange(
+      settleCompactPosition({
+        boardWidth: board.width,
+        boardHeight: board.height,
+        stickyWidth: width,
+        stickyHeight: height,
+        left: live.left,
+        top: live.top,
+      }),
+    );
+    setLive(null);
+    setSnapHint(null);
+  }
 
   return (
-    <button className="sticky-preview" type="button" onClick={onExpand} aria-label="展开便利贴">
+    <div
+      ref={previewRef}
+      className="sticky-preview"
+      data-snap-hint={snapHint ?? "free"}
+      style={style}
+      role="button"
+      tabIndex={0}
+      aria-label="展开或拖动便利贴"
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") onExpand();
+      }}
+      onPointerDown={pointerDown}
+      onPointerMove={pointerMove}
+      onPointerUp={pointerUp}
+      onPointerCancel={() => {
+        drag.current = null;
+        setLive(null);
+        setSnapHint(null);
+      }}
+    >
       <span className="tape" aria-hidden="true" />
-      <span className="preview-kicker">今天的纸条</span>
+      <header>
+        <span>TODAY</span>
+        <small>
+          {openTasks.length ? `${Math.min(3, openTasks.length)} / ${openTasks.length}` : "quiet"}
+        </small>
+      </header>
       {loading ? (
-        <span className="preview-empty">正在翻开昨天留下的字迹…</span>
-      ) : cards.length === 0 ? (
-        <span className="preview-empty">
-          纸上还很安静。
-          <br />
-          点一下，写下第一件事。
-        </span>
+        <p className="preview-empty">正在翻开昨天留下的字迹…</p>
       ) : (
-        <>
-          <span className="preview-summary">
-            {notes.length} 条记录 · {openTasks.length} 件待办
-          </span>
-          <span className="preview-rule" />
-          {previewTasks.map((task) => (
-            <span className="preview-task" key={task.id}>
-              <span aria-hidden="true">○</span> {task.text}
-            </span>
-          ))}
-          {notes[0] ? <span className="preview-note">“{notes[0].text}”</span> : null}
-        </>
+        <div
+          className="compact-todo-viewport"
+          onWheel={consumeTodoWheel}
+          onClick={(event) => {
+            event.stopPropagation();
+            onExpand();
+          }}
+          aria-label="Compact Todo 列表"
+        >
+          {openTasks.length === 0 ? (
+            <p className="preview-empty">今天没有未完成待办。</p>
+          ) : (
+            openTasks.map((task) => (
+              <div className="preview-task" key={task.id}>
+                <span>□</span>
+                <span>{task.text}</span>
+              </div>
+            ))
+          )}
+        </div>
       )}
+      <blockquote>{quote || "留一句愿意常常看到的话。"}</blockquote>
       <span className="preview-open">
-        轻触展开 <span aria-hidden="true">↗</span>
+        轻触展开 <span aria-hidden="true">→</span>
       </span>
-    </button>
+    </div>
   );
 }
 
@@ -469,69 +734,63 @@ function jumpToCapture(face: StickyFace) {
   if (capture instanceof HTMLButtonElement) capture.click();
 }
 
-export function StickyShell({
-  preferences,
-  preferenceSaveState,
-  cards,
-  stickyState,
-  error,
-  now = new Date(),
-  onThemeChange,
-  onAlwaysOnTopChange,
-  onCreate,
-  onUpdateText,
-  onTaskCompleted,
-  onTaskDueDate,
-  onDelete,
-  onReorder,
-  onRetry,
-  onDismissError,
-}: StickyShellProps) {
+export function StickyShell(props: StickyShellProps) {
+  const {
+    preferences,
+    preferenceSaveState,
+    cards,
+    profile,
+    stickyState,
+    error,
+    now = new Date(),
+    onThemeChange,
+    onAlwaysOnTopChange,
+    onWindowPresetChange,
+    onStickyPositionChange,
+    onCreate,
+    onUpdateText,
+    onTaskCompleted,
+    onTaskDueDate,
+    onDelete,
+    onReorder,
+    onUpdateQuote,
+    onExportRecord,
+    onRetry,
+    onDismissError,
+  } = props;
   const [expanded, setExpanded] = useState(false);
   const [face, setFace] = useState<StickyFace>("note");
+  const [selectedRecord, setSelectedRecord] = useState<StickyCard | null>(null);
   const [turnSerial, setTurnSerial] = useState(0);
   const [turnDirection, setTurnDirection] = useState<"forward" | "backward">("forward");
-  const [overId, setOverId] = useState<string | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+  const records = cards.filter((card) => card.kind === "note");
+  const tasks = cards.filter((card) => card.kind === "task");
+  const openTaskCount = tasks.filter((card) => !card.completed).length;
+  const busy = stickyState === "loading" || stickyState === "saving";
   const date = new Intl.DateTimeFormat(undefined, {
     weekday: "long",
     month: "short",
     day: "numeric",
   }).format(now);
-  const busy = stickyState === "loading" || stickyState === "saving";
-  const visibleCards = cards.filter((card) => card.kind === face);
-  const noteCount = cards.filter((card) => card.kind === "note").length;
-  const openTaskCount = cards.filter((card) => card.kind === "task" && !card.completed).length;
 
   function switchFace(nextFace: StickyFace) {
     if (nextFace === face) return;
+    setSelectedRecord(null);
     setTurnDirection(nextFace === "task" ? "forward" : "backward");
     setFace(nextFace);
     setTurnSerial((value) => value + 1);
     playPageTurnSound(nextFace === "task" ? "note-to-todo" : "todo-to-note");
   }
 
-  function dragStart(event: DragStartEvent) {
-    setOverId(String(event.active.id));
-  }
-
-  function dragOver(event: DragOverEvent) {
-    setOverId(event.over ? String(event.over.id) : null);
-  }
-
-  function dragEnd(event: DragEndEvent) {
-    setOverId(null);
+  function taskDragEnd(event: DragEndEvent) {
     if (!event.over || event.active.id === event.over.id) return;
-    const orderedIds = reorderCardIdsWithinKind(
-      cards,
-      face,
-      String(event.active.id),
-      String(event.over.id),
+    void onReorder(
+      reorderCardIdsWithinKind(cards, "task", String(event.active.id), String(event.over.id)),
     );
-    void onReorder(orderedIds);
   }
 
   return (
@@ -542,23 +801,18 @@ export function StickyShell({
           <h1>{date}</h1>
         </div>
         <div className="board-actions">
-          <span
-            className="persistence-dot"
-            data-state={stickyState}
-            aria-label={stickyState === "saving" ? "正在保存" : "已存入本地"}
-          />
+          <span className="persistence-dot" data-state={stickyState} />
           <SettingsMenu
             preferences={preferences}
             saveState={preferenceSaveState}
             onThemeChange={onThemeChange}
             onAlwaysOnTopChange={onAlwaysOnTopChange}
+            onWindowPresetChange={onWindowPresetChange}
           />
         </div>
       </header>
-
       <div className="board-lines" aria-hidden="true" />
-      <p className="board-caption">A quiet place beside your reading.</p>
-
+      <p className="board-caption">A quiet layer beside your reading.</p>
       {expanded ? (
         <section className="expanded-sticky" aria-label="展开的便利贴">
           <span className="tape expanded-tape" aria-hidden="true" />
@@ -570,11 +824,11 @@ export function StickyShell({
                   type="button"
                   role="tab"
                   aria-selected={face === candidate}
-                  aria-controls="sticky-face-panel"
+                  disabled={selectedRecord !== null}
                   onClick={() => switchFace(candidate)}
                 >
                   {faceLabels[candidate]}
-                  <span>{candidate === "note" ? noteCount : openTaskCount}</span>
+                  <span>{candidate === "note" ? records.length : openTaskCount}</span>
                 </button>
               ))}
             </div>
@@ -582,14 +836,15 @@ export function StickyShell({
               <button
                 className="new-entry-shortcut"
                 type="button"
-                disabled={busy}
+                disabled={busy || selectedRecord !== null}
                 onClick={() => jumpToCapture(face)}
               >
-                + {face === "note" ? "新记录" : "新待办"}
+                + {face === "note" ? "新 Record" : "新待办"}
               </button>
               <button
                 className="collapse-button"
                 type="button"
+                disabled={selectedRecord !== null}
                 aria-label="收起便利贴"
                 onClick={() => setExpanded(false)}
               >
@@ -597,79 +852,73 @@ export function StickyShell({
               </button>
             </div>
           </header>
-
           <div className="face-scroll">
             <div
               key={`${face}-${turnSerial}`}
-              id="sticky-face-panel"
               className="sticky-face"
               data-face={face}
               data-turn={turnDirection}
               role="tabpanel"
-              aria-label={`${faceLabels[face]}面`}
             >
-              <div className="face-heading">
-                <p>{face === "note" ? "纸上的片刻" : "接下来要做的事"}</p>
-                <span>
-                  {face === "note" ? `${visibleCards.length} 条记录` : `${openTaskCount} 件未完成`}
-                </span>
-              </div>
-
-              {stickyState === "loading" ? (
-                <p className="quiet-state" role="status">
-                  正在打开便利贴…
-                </p>
-              ) : (
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragStart={dragStart}
-                  onDragOver={dragOver}
-                  onDragCancel={() => setOverId(null)}
-                  onDragEnd={dragEnd}
-                  accessibility={{
-                    screenReaderInstructions: {
-                      draggable:
-                        "按空格拿起内容，使用方向键移动，再按空格放下。按 Escape 取消，不会保存排序。",
-                    },
-                  }}
-                >
-                  <SortableContext
-                    items={visibleCards.map((card) => card.id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    <div className="sticky-list">
-                      {visibleCards.length === 0 ? (
-                        <p className="face-empty">
-                          {face === "note"
-                            ? "还没有记录。让第一句话从这里开始。"
-                            : "今天还没有待办。先写下一件小事。"}
-                        </p>
-                      ) : null}
-                      {visibleCards.map((card) => (
-                        <SortableStickyCard
-                          key={card.id}
-                          card={card}
-                          disabled={busy}
-                          over={overId === card.id}
-                          onUpdateText={onUpdateText}
-                          onTaskCompleted={onTaskCompleted}
-                          onTaskDueDate={onTaskDueDate}
-                          onDelete={onDelete}
-                        />
-                      ))}
+              {face === "note" ? (
+                selectedRecord ? (
+                  <RecordEditor
+                    record={cards.find((card) => card.id === selectedRecord.id) ?? selectedRecord}
+                    disabled={busy}
+                    onClose={() => setSelectedRecord(null)}
+                    onSave={onUpdateText}
+                    onDelete={onDelete}
+                    onExport={onExportRecord}
+                  />
+                ) : (
+                  <>
+                    <QuoteEditor profile={profile} disabled={busy} onUpdate={onUpdateQuote} />
+                    <div className="face-heading">
+                      <p>我的 Records</p>
+                      <span>{records.length} 篇</span>
                     </div>
-                  </SortableContext>
-                </DndContext>
+                    <RecordList records={records} disabled={busy} onOpen={setSelectedRecord} />
+                    <RecordCapture disabled={busy} onCreate={onCreate} />
+                  </>
+                )
+              ) : (
+                <>
+                  <div className="face-heading">
+                    <p>接下来要做的事</p>
+                    <span>{openTaskCount} 件未完成</span>
+                  </div>
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={taskDragEnd}
+                  >
+                    <SortableContext
+                      items={tasks.map((card) => card.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <div className="sticky-list">
+                        {tasks.length === 0 ? (
+                          <p className="face-empty">今天还没有待办。先写下一件小事。</p>
+                        ) : null}
+                        {tasks.map((card) => (
+                          <SortableTask
+                            key={card.id}
+                            card={card}
+                            disabled={busy}
+                            onTaskCompleted={onTaskCompleted}
+                            onTaskDueDate={onTaskDueDate}
+                            onDelete={onDelete}
+                          />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                  <TaskCapture disabled={busy} onCreate={onCreate} />
+                </>
               )}
-
-              <FaceCapture kind={face} disabled={busy} onCreate={onCreate} />
-              <p className="paper-end-mark" aria-hidden="true">
-                ✦
-              </p>
+              {!selectedRecord ? <p className="paper-end-mark">✦</p> : null}
             </div>
           </div>
-
           {error ? (
             <div className="mutation-error" role="alert">
               <span>{error}</span>
@@ -689,8 +938,11 @@ export function StickyShell({
       ) : (
         <StickyPreview
           cards={cards}
+          quote={profile.quoteText}
           loading={stickyState === "loading"}
+          position={preferences.stickyPosition}
           onExpand={() => setExpanded(true)}
+          onPositionChange={onStickyPositionChange}
         />
       )}
     </main>

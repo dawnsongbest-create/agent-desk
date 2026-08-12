@@ -17,6 +17,25 @@ export type CreateStickyCardInput = {
   dueDate: string | null;
 };
 
+export type StickyProfile = {
+  quoteText: string;
+  updatedAt: string;
+};
+
+export function recordDisplayTitle(text: string) {
+  return (
+    text
+      .split(/\r?\n/)
+      .find((line) => line.trim())
+      ?.trim() ?? "无标题记录"
+  );
+}
+
+export function recordExcerpt(text: string, maxLength = 96) {
+  const compact = text.replace(/\s+/g, " ").trim();
+  return compact.length > maxLength ? `${compact.slice(0, maxLength)}…` : compact;
+}
+
 export function parseCapture(
   text: string,
   selectedKind: StickyCardKind,

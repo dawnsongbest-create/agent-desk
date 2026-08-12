@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { StickyCardsPort } from "../../application/ports/sticky";
-import type { CreateStickyCardInput, StickyCard } from "../../domain/sticky";
+import type { CreateStickyCardInput, StickyCard, StickyProfile } from "../../domain/sticky";
 
 export type StickyLoadState = "loading" | "ready" | "saving" | "error";
 
@@ -8,6 +8,7 @@ export function useStickyCards(port: StickyCardsPort) {
   const [cards, setCards] = useState<StickyCard[]>([]);
   const [state, setState] = useState<StickyLoadState>("loading");
   const [error, setError] = useState<string | null>(null);
+  const [profile, setProfile] = useState<StickyProfile>({ quoteText: "", updatedAt: "" });
   const cardsRef = useRef<StickyCard[]>([]);
   const mountedRef = useRef(true);
 
@@ -20,9 +21,10 @@ export function useStickyCards(port: StickyCardsPort) {
     setState("loading");
     setError(null);
     try {
-      const stored = await port.list();
+      const [stored, storedProfile] = await Promise.all([port.list(), port.getProfile()]);
       if (!mountedRef.current) return;
       publish(stored);
+      setProfile(storedProfile);
       setState("ready");
     } catch {
       if (!mountedRef.current) return;
@@ -177,8 +179,44 @@ export function useStickyCards(port: StickyCardsPort) {
     [port, publish, recover],
   );
 
+  const updateQuote = useCallback(
+    async (quoteText: string) => {
+      const before = profile;
+      setProfile({ ...before, quoteText });
+      setState("saving");
+      setError(null);
+      try {
+        const stored = await port.updateQuote(quoteText);
+        if (!mountedRef.current) return false;
+        setProfile(stored);
+        setState("ready");
+        return true;
+      } catch {
+        if (!mountedRef.current) return false;
+        setProfile(before);
+        setState("error");
+        setError("便签一句未能保存，已恢复原文。");
+        return false;
+      }
+    },
+    [port, profile],
+  );
+
+  const exportRecord = useCallback(
+    async (id: string) => {
+      try {
+        return await port.exportRecord(id);
+      } catch {
+        if (mountedRef.current) setError("导出没有完成；Record 原文没有改变。");
+        return false;
+      }
+    },
+    [port],
+  );
+
   return {
     cards,
+    profile,
     state,
     error,
     isBusy: state === "loading" || state === "saving",
@@ -188,6 +226,8 @@ export function useStickyCards(port: StickyCardsPort) {
     setTaskDueDate,
     deleteCard,
     reorder,
+    updateQuote,
+    exportRecord,
     retry: load,
     dismissError: () => setError(null),
   };

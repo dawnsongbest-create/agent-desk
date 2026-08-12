@@ -21,6 +21,7 @@ pub fn run() {
                 .skip_initial_state("main")
                 .build(),
         )
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir()?;
@@ -51,13 +52,17 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             preferences::get_preferences,
             preferences::update_preferences,
+            preferences::apply_window_preset,
             sticky::list_sticky_cards,
             sticky::create_sticky_card,
             sticky::update_sticky_text,
             sticky::set_task_completed,
             sticky::set_task_due_date,
             sticky::delete_sticky_card,
-            sticky::reorder_sticky_cards
+            sticky::reorder_sticky_cards,
+            sticky::get_sticky_profile,
+            sticky::update_sticky_quote,
+            sticky::export_sticky_record
         ])
         .run(tauri::generate_context!())
         .expect("error while running Agent Desk");

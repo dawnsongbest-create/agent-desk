@@ -5,7 +5,7 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::{
     application::ports::sticky_repository::{StickyRepository, StickyRepositoryError},
-    domain::sticky::{NewStickyCard, StickyCard, StickyCardKind},
+    domain::sticky::{NewStickyCard, StickyCard, StickyCardKind, StickyProfile},
 };
 
 const SELECT_STICKY_CARD: &str = r#"
@@ -413,6 +413,55 @@ impl StickyRepository for SqliteStickyRepository {
         transaction.commit().await?;
         Ok(reordered)
     }
+
+    async fn get_profile(&self) -> Result<StickyProfile, StickyRepositoryError> {
+        let row: (String, String) = sqlx::query_as(
+            "SELECT quote_text, updated_at FROM sticky_surface_profile WHERE surface = 'sticky'",
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(StickyProfile {
+            quote_text: row.0,
+            updated_at: row.1,
+        })
+    }
+
+    async fn update_quote(&self, quote_text: &str) -> Result<StickyProfile, StickyRepositoryError> {
+        let mut transaction = self.pool.begin().await?;
+        let timestamp = Self::timestamp(&mut transaction).await?;
+        let result = sqlx::query(
+            "UPDATE sticky_surface_profile SET quote_text = ?, updated_at = ? WHERE surface = 'sticky'",
+        )
+        .bind(quote_text)
+        .bind(&timestamp)
+        .execute(&mut *transaction)
+        .await?;
+        if result.rows_affected() != 1 {
+            return Err(StickyRepositoryError::NotFound);
+        }
+        transaction.commit().await?;
+        Ok(StickyProfile {
+            quote_text: quote_text.to_owned(),
+            updated_at: timestamp,
+        })
+    }
+
+    async fn get_record_text(&self, id: &str) -> Result<String, StickyRepositoryError> {
+        sqlx::query_scalar(
+            r#"
+            SELECT note.body
+            FROM note_payloads AS note
+            INNER JOIN cards AS card ON card.id = note.card_id
+            WHERE note.card_id = ?
+              AND card.card_type = 'note'
+              AND card.lifecycle = 'active'
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(StickyRepositoryError::NotFound)
+    }
 }
 
 #[cfg(test)]
@@ -455,6 +504,66 @@ mod tests {
             .await
             .expect("note should delete");
         assert!(repository.list().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn persists_a_5000_character_record_update_and_delete() {
+        let repository = repository("long-record.sqlite3").await;
+        let original = "长".repeat(5_500);
+        let created = repository
+            .create(&NewStickyCard {
+                kind: StickyCardKind::Note,
+                text: original.clone(),
+                due_date: None,
+            })
+            .await
+            .expect("long record should be created");
+        assert_eq!(
+            repository.get_record_text(&created.id).await.unwrap(),
+            original
+        );
+
+        let updated = format!("更新后的第一行\n{}", "文".repeat(5_200));
+        repository.update_text(&created.id, &updated).await.unwrap();
+        assert_eq!(
+            repository.get_record_text(&created.id).await.unwrap(),
+            updated
+        );
+        repository.delete(&created.id).await.unwrap();
+        assert!(matches!(
+            repository.get_record_text(&created.id).await,
+            Err(StickyRepositoryError::NotFound)
+        ));
+    }
+
+    #[tokio::test]
+    async fn quote_create_update_and_restart_restore() {
+        let temp = tempfile::tempdir().expect("temp directory");
+        let path = temp.path().join("quote.sqlite3");
+        let database = crate::persistence::sqlite::connect(&path).await.unwrap();
+        let repository = SqliteStickyRepository::new(database.0.clone());
+        assert_eq!(repository.get_profile().await.unwrap().quote_text, "");
+        repository.update_quote("多花点时间玩。").await.unwrap();
+        database.0.close().await;
+
+        let reopened = crate::persistence::sqlite::connect(&path).await.unwrap();
+        let restored = SqliteStickyRepository::new(reopened.0);
+        assert_eq!(
+            restored.get_profile().await.unwrap().quote_text,
+            "多花点时间玩。"
+        );
+    }
+
+    #[tokio::test]
+    async fn invalid_profile_update_rolls_back() {
+        let repository = repository("quote-rollback.sqlite3").await;
+        repository.update_quote("保留原文").await.unwrap();
+        let invalid = "字".repeat(10_001);
+        assert!(repository.update_quote(&invalid).await.is_err());
+        assert_eq!(
+            repository.get_profile().await.unwrap().quote_text,
+            "保留原文"
+        );
     }
 
     #[tokio::test]

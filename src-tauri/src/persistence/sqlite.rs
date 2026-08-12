@@ -166,7 +166,7 @@ mod tests {
             SELECT COUNT(*)
             FROM sqlite_master
             WHERE type = 'table'
-              AND name IN ('cards', 'note_payloads', 'task_payloads', 'card_placements')
+              AND name IN ('cards', 'note_payloads', 'task_payloads', 'card_placements', 'sticky_surface_profile')
             "#,
         )
         .fetch_one(&database.0)
@@ -183,8 +183,8 @@ mod tests {
                 .await
                 .expect("migration history query");
 
-        assert_eq!(table_count, 4);
-        assert_eq!(applied_versions, vec![1, 2]);
+        assert_eq!(table_count, 5);
+        assert_eq!(applied_versions, vec![1, 2, 3]);
         assert_eq!(foreign_keys, 1);
     }
 
@@ -195,6 +195,28 @@ mod tests {
         let database = connect(&database_path)
             .await
             .expect("database should initialize");
+        sqlx::raw_sql(
+            r#"
+            DROP TABLE sticky_surface_profile;
+            DROP TRIGGER note_payloads_require_note;
+            DROP TABLE note_payloads;
+            DELETE FROM _sqlx_migrations WHERE version = 3;
+            "#,
+        )
+        .execute(&database.0)
+        .await
+        .expect("pre-0003 legacy fixture");
+        for name in ["note_payloads", "note_payloads_require_note"] {
+            let sql = EXPECTED_STICKY_SCHEMA
+                .iter()
+                .find(|(candidate, _)| *candidate == name)
+                .expect("frozen 0002 schema definition")
+                .1;
+            sqlx::raw_sql(sql)
+                .execute(&database.0)
+                .await
+                .expect("exact frozen 0002 schema fixture");
+        }
         sqlx::query("UPDATE _sqlx_migrations SET checksum = ? WHERE version = 2")
             .bind(legacy_sticky_checksum())
             .execute(&database.0)

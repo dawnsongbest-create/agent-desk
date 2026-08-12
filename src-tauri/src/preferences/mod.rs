@@ -1,7 +1,7 @@
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, LogicalSize, Manager, Size};
 use tauri_plugin_store::StoreExt;
 
-use crate::domain::preferences::Preferences;
+use crate::domain::preferences::{Preferences, WindowPreset};
 
 const PREFERENCES_FILE: &str = "preferences.json";
 const PREFERENCES_KEY: &str = "preferences";
@@ -39,7 +39,8 @@ fn apply_window_preferences(app: &AppHandle, preferences: &Preferences) -> Resul
         .ok_or_else(|| "main window is unavailable".to_string())?;
     window
         .set_always_on_top(preferences.always_on_top)
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -56,4 +57,18 @@ pub fn update_preferences(app: AppHandle, preferences: Preferences) -> Result<Pr
     apply_window_preferences(&app, &preferences)?;
     write(&app, &preferences)?;
     Ok(preferences)
+}
+
+#[tauri::command]
+pub fn apply_window_preset(app: AppHandle, preset: WindowPreset) -> Result<(), String> {
+    let (width, height) = preset
+        .logical_size()
+        .ok_or_else(|| "Custom is not an applicable window preset".to_string())?;
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "main window is unavailable".to_string())?;
+    window
+        .set_size(Size::Logical(LogicalSize::new(width, height)))
+        .map_err(|error| error.to_string())?;
+    crate::shell::clamp_window_to_monitor(&window).map_err(|error| error.to_string())
 }

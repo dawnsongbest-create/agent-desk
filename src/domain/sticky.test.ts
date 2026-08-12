@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { parseCapture, reorderCardIds, reorderCardIdsWithinKind, type StickyCard } from "./sticky";
+import {
+  parseCapture,
+  recordDisplayTitle,
+  recordExcerpt,
+  reorderCardIds,
+  reorderCardIdsWithinKind,
+  type StickyCard,
+} from "./sticky";
 
 function card(id: string, position: number): StickyCard {
   return {
@@ -58,5 +65,12 @@ describe("Sticky domain helpers", () => {
       "note-2",
       "task-1",
     ]);
+  });
+
+  it("derives a Record title and excerpt without changing the source text", () => {
+    const source = "\n  第一行标题  \n第二段有很多内容";
+    expect(recordDisplayTitle(source)).toBe("第一行标题");
+    expect(recordExcerpt(source, 12)).toBe("第一行标题 第二段有很多…");
+    expect(source).toBe("\n  第一行标题  \n第二段有很多内容");
   });
 });

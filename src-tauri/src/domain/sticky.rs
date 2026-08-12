@@ -37,11 +37,18 @@ pub struct NewStickyCard {
     pub due_date: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StickyProfile {
+    pub quote_text: String,
+    pub updated_at: String,
+}
+
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum StickyValidationError {
     #[error("Text cannot be empty.")]
     EmptyText,
-    #[error("Text must be 4000 characters or fewer.")]
+    #[error("Text is longer than this card type allows.")]
     TextTooLong,
     #[error("Only tasks can have a due date.")]
     NoteDueDate,
@@ -49,17 +56,29 @@ pub enum StickyValidationError {
     InvalidDueDate,
     #[error("A reorder request cannot contain duplicate card IDs.")]
     DuplicatePlacement,
+    #[error("Sticky quote must be 10000 characters or fewer.")]
+    QuoteTooLong,
 }
 
-pub fn normalize_text(text: String) -> Result<String, StickyValidationError> {
+pub fn normalize_text(
+    text: String,
+    max_characters: usize,
+) -> Result<String, StickyValidationError> {
     let normalized = text.trim().to_string();
     if normalized.is_empty() {
         return Err(StickyValidationError::EmptyText);
     }
-    if normalized.chars().count() > 4000 {
+    if normalized.chars().count() > max_characters {
         return Err(StickyValidationError::TextTooLong);
     }
     Ok(normalized)
+}
+
+pub fn validate_quote(text: String) -> Result<String, StickyValidationError> {
+    if text.chars().count() > 10_000 {
+        return Err(StickyValidationError::QuoteTooLong);
+    }
+    Ok(text)
 }
 
 pub fn validate_due_date(
@@ -113,7 +132,7 @@ mod tests {
     #[test]
     fn normalizes_lightweight_text_without_flattening_lines() {
         assert_eq!(
-            normalize_text("  first line\nsecond line  ".to_string()).unwrap(),
+            normalize_text("  first line\nsecond line  ".to_string(), 100_000).unwrap(),
             "first line\nsecond line"
         );
     }

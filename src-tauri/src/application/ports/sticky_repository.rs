@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use thiserror::Error;
 
-use crate::domain::sticky::{NewStickyCard, StickyCard};
+use crate::domain::sticky::{NewStickyCard, StickyCard, StickyProfile};
 
 #[derive(Debug, Error)]
 pub enum StickyRepositoryError {
@@ -41,4 +41,7 @@ pub trait StickyRepository: Send + Sync {
         &self,
         ordered_ids: &[String],
     ) -> Result<Vec<StickyCard>, StickyRepositoryError>;
+    async fn get_profile(&self) -> Result<StickyProfile, StickyRepositoryError>;
+    async fn update_quote(&self, quote_text: &str) -> Result<StickyProfile, StickyRepositoryError>;
+    async fn get_record_text(&self, id: &str) -> Result<String, StickyRepositoryError>;
 }
