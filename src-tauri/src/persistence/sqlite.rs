@@ -4,6 +4,51 @@ use sqlx::{migrate::MigrateError, sqlite::SqlitePoolOptions, SqlitePool};
 use thiserror::Error;
 
 static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
+const STICKY_MIGRATION_VERSION: i64 = 2;
+const LEGACY_STICKY_CHECKSUM: &str =
+    "C961BDB6248072EB5DD92E0C28ABE80CE220D2350B05531DB961FB72B10384FC3099213B127B901FA666E42BC9FD9297";
+
+const EXPECTED_STICKY_SCHEMA: [(&str, &str); 6] = [
+    (
+        "card_placements",
+        "CREATE TABLE card_placements (\n    card_id TEXT PRIMARY KEY NOT NULL\n        REFERENCES cards(id) ON DELETE CASCADE,\n    surface TEXT NOT NULL\n        CHECK (surface = 'sticky'),\n    position INTEGER NOT NULL\n        CHECK (position >= 0),\n    created_at TEXT NOT NULL,\n    updated_at TEXT NOT NULL,\n    UNIQUE (surface, position)\n)",
+    ),
+    (
+        "note_payloads",
+        "CREATE TABLE note_payloads (\n    card_id TEXT PRIMARY KEY NOT NULL\n        REFERENCES cards(id) ON DELETE CASCADE,\n    body TEXT NOT NULL\n        CHECK (length(trim(body)) BETWEEN 1 AND 4000)\n)",
+    ),
+    (
+        "note_payloads_require_note",
+        "CREATE TRIGGER note_payloads_require_note\nBEFORE INSERT ON note_payloads\nFOR EACH ROW\nWHEN COALESCE((SELECT card_type FROM cards WHERE id = NEW.card_id), '') <> 'note'\nBEGIN\n    SELECT RAISE(ABORT, 'note payload requires a note card');\nEND",
+    ),
+    (
+        "sticky_placements_require_sticky_card",
+        "CREATE TRIGGER sticky_placements_require_sticky_card\nBEFORE INSERT ON card_placements\nFOR EACH ROW\nWHEN COALESCE((SELECT card_type FROM cards WHERE id = NEW.card_id), '') NOT IN ('note', 'task')\nBEGIN\n    SELECT RAISE(ABORT, 'sticky placement requires a note or task card');\nEND",
+    ),
+    (
+        "task_payloads",
+        "CREATE TABLE task_payloads (\n    card_id TEXT PRIMARY KEY NOT NULL\n        REFERENCES cards(id) ON DELETE CASCADE,\n    text TEXT NOT NULL\n        CHECK (length(trim(text)) BETWEEN 1 AND 4000),\n    due_date TEXT\n        CHECK (\n            due_date IS NULL\n            OR (\n                length(due_date) = 10\n                AND due_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'\n            )\n        )\n)",
+    ),
+    (
+        "task_payloads_require_task",
+        "CREATE TRIGGER task_payloads_require_task\nBEFORE INSERT ON task_payloads\nFOR EACH ROW\nWHEN COALESCE((SELECT card_type FROM cards WHERE id = NEW.card_id), '') <> 'task'\nBEGIN\n    SELECT RAISE(ABORT, 'task payload requires a task card');\nEND",
+    ),
+];
+
+fn legacy_sticky_checksum() -> Vec<u8> {
+    LEGACY_STICKY_CHECKSUM
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|pair| {
+            let hex_digit = |digit: u8| match digit {
+                b'0'..=b'9' => digit - b'0',
+                b'A'..=b'F' => digit - b'A' + 10,
+                _ => unreachable!("checksum constant contains only uppercase hex digits"),
+            };
+            (hex_digit(pair[0]) << 4) | hex_digit(pair[1])
+        })
+        .collect()
+}
 
 #[derive(Debug, Error)]
 pub enum PersistenceError {
@@ -33,12 +78,76 @@ pub async fn connect(database_path: &Path) -> Result<Database, PersistenceError>
         .connect_with(options)
         .await?;
 
+    reconcile_legacy_sticky_checksum(&pool).await?;
     MIGRATOR.run(&pool).await?;
     sqlx::query("PRAGMA foreign_keys = ON")
         .execute(&pool)
         .await?;
 
     Ok(Database(pool))
+}
+
+async fn reconcile_legacy_sticky_checksum(pool: &SqlitePool) -> Result<(), sqlx::Error> {
+    let migration_table_exists: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '_sqlx_migrations'",
+    )
+    .fetch_one(pool)
+    .await?;
+    if migration_table_exists == 0 {
+        return Ok(());
+    }
+
+    let migration: Option<(bool, Vec<u8>)> =
+        sqlx::query_as("SELECT success, checksum FROM _sqlx_migrations WHERE version = ?")
+            .bind(STICKY_MIGRATION_VERSION)
+            .fetch_optional(pool)
+            .await?;
+    let Some((true, checksum)) = migration else {
+        return Ok(());
+    };
+    if checksum != legacy_sticky_checksum() {
+        return Ok(());
+    }
+
+    let schema_rows: Vec<(String, String)> = sqlx::query_as(
+        r#"
+        SELECT name, sql
+        FROM sqlite_master
+        WHERE name IN (
+            'note_payloads',
+            'task_payloads',
+            'card_placements',
+            'note_payloads_require_note',
+            'task_payloads_require_task',
+            'sticky_placements_require_sticky_card'
+        )
+        ORDER BY name
+        "#,
+    )
+    .fetch_all(pool)
+    .await?;
+    let expected = EXPECTED_STICKY_SCHEMA
+        .iter()
+        .map(|(name, sql)| ((*name).to_owned(), (*sql).to_owned()))
+        .collect::<Vec<_>>();
+    if schema_rows != expected {
+        return Ok(());
+    }
+
+    let current_checksum = MIGRATOR
+        .iter()
+        .find(|migration| migration.version == STICKY_MIGRATION_VERSION)
+        .expect("sticky migration is embedded")
+        .checksum
+        .as_ref();
+    sqlx::query("UPDATE _sqlx_migrations SET checksum = ? WHERE version = ? AND checksum = ?")
+        .bind(current_checksum)
+        .bind(STICKY_MIGRATION_VERSION)
+        .bind(checksum)
+        .execute(pool)
+        .await?;
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -77,5 +186,61 @@ mod tests {
         assert_eq!(table_count, 4);
         assert_eq!(applied_versions, vec![1, 2]);
         assert_eq!(foreign_keys, 1);
+    }
+
+    #[tokio::test]
+    async fn reconciles_the_schema_equivalent_m1_b1_preview_checksum() {
+        let temp = tempfile::tempdir().expect("temp directory");
+        let database_path = temp.path().join("agent-desk.sqlite3");
+        let database = connect(&database_path)
+            .await
+            .expect("database should initialize");
+        sqlx::query("UPDATE _sqlx_migrations SET checksum = ? WHERE version = 2")
+            .bind(legacy_sticky_checksum())
+            .execute(&database.0)
+            .await
+            .expect("legacy checksum fixture");
+        database.0.close().await;
+
+        let reopened = connect(&database_path)
+            .await
+            .expect("schema-equivalent preview database should reopen");
+        let stored: Vec<u8> =
+            sqlx::query_scalar("SELECT checksum FROM _sqlx_migrations WHERE version = 2")
+                .fetch_one(&reopened.0)
+                .await
+                .expect("stored checksum");
+        let current = MIGRATOR
+            .iter()
+            .find(|migration| migration.version == 2)
+            .expect("sticky migration")
+            .checksum
+            .as_ref();
+        assert_eq!(stored, current);
+    }
+
+    #[tokio::test]
+    async fn refuses_to_reconcile_a_legacy_checksum_when_the_schema_differs() {
+        let temp = tempfile::tempdir().expect("temp directory");
+        let database_path = temp.path().join("agent-desk.sqlite3");
+        let database = connect(&database_path)
+            .await
+            .expect("database should initialize");
+        sqlx::query("DROP TRIGGER task_payloads_require_task")
+            .execute(&database.0)
+            .await
+            .expect("schema drift fixture");
+        sqlx::query("UPDATE _sqlx_migrations SET checksum = ? WHERE version = 2")
+            .bind(legacy_sticky_checksum())
+            .execute(&database.0)
+            .await
+            .expect("legacy checksum fixture");
+        database.0.close().await;
+
+        let error = match connect(&database_path).await {
+            Ok(_) => panic!("schema drift must keep failing migration validation"),
+            Err(error) => error,
+        };
+        assert!(matches!(error, PersistenceError::Migration(_)));
     }
 }

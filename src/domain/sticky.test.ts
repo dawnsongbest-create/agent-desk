@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCapture, reorderCardIds, type StickyCard } from "./sticky";
+import { parseCapture, reorderCardIds, reorderCardIdsWithinKind, type StickyCard } from "./sticky";
 
 function card(id: string, position: number): StickyCard {
   return {
@@ -12,6 +12,10 @@ function card(id: string, position: number): StickyCard {
     createdAt: "2026-08-10T00:00:00Z",
     updatedAt: "2026-08-10T00:00:00Z",
   };
+}
+
+function kindCard(id: string, kind: "note" | "task", position: number): StickyCard {
+  return { ...card(id, position), kind };
 }
 
 describe("Sticky domain helpers", () => {
@@ -38,5 +42,21 @@ describe("Sticky domain helpers", () => {
     const cards = [card("first", 0), card("second", 1)];
     expect(reorderCardIds(cards, "first", "first")).toEqual(["first", "second"]);
     expect(reorderCardIds(cards, "first", "missing")).toEqual(["first", "second"]);
+  });
+
+  it("reorders one face while preserving the other kind's unified placement slots", () => {
+    const cards = [
+      kindCard("note-1", "note", 0),
+      kindCard("task-1", "task", 1),
+      kindCard("note-2", "note", 2),
+      kindCard("task-2", "task", 3),
+    ];
+
+    expect(reorderCardIdsWithinKind(cards, "task", "task-2", "task-1")).toEqual([
+      "note-1",
+      "task-2",
+      "note-2",
+      "task-1",
+    ]);
   });
 });

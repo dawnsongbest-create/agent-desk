@@ -45,6 +45,7 @@ function App() {
     const saveSequence = ++latestSave.current;
 
     saveQueue.current = saveQueue.current
+      .catch(() => undefined)
       .then(() => tauriPreferences.save(next))
       .then((stored) => {
         if (saveSequence !== latestSave.current) return;

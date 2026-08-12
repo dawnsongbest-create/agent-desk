@@ -54,6 +54,22 @@ export function reorderCardIds(cards: StickyCard[], activeId: string, overId: st
   return ids;
 }
 
+export function reorderCardIdsWithinKind(
+  cards: StickyCard[],
+  kind: StickyCardKind,
+  activeId: string,
+  overId: string,
+) {
+  const visibleCards = cards.filter((card) => card.kind === kind);
+  const reorderedVisibleIds = reorderCardIds(visibleCards, activeId, overId);
+  let nextVisibleIndex = 0;
+
+  return cards.map((card) => {
+    if (card.kind !== kind) return card.id;
+    return reorderedVisibleIds[nextVisibleIndex++];
+  });
+}
+
 export function formatLocalDueDate(value: string, locale?: string) {
   const [year, month, day] = value.split("-").map(Number);
   return new Intl.DateTimeFormat(locale, {
