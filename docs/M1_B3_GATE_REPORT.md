@@ -192,7 +192,7 @@ Native Save As exact-content behavior is proven at the Rust/native file boundary
 
 ## M. Windows/macOS CI
 
-Pending final push. The implementation commit will be followed by real Windows and macOS GitHub Actions results; no workflow check is skipped, weakened or marked `continue-on-error`.
+Implementation run `31621073762` compiled and completed all macOS gates successfully. Windows reached frontend tests, where the first cold-start Compact render took 6.447 seconds and exceeded Vitest's default 5-second per-test timeout; its remaining 20 tests passed. The focused follow-up raises only that complete test's timeout to 15 seconds without changing assertions, skipping a check or weakening the workflow. Final confirmation results are recorded in the handoff.
 
 ## N. Product Preview Evidence
 

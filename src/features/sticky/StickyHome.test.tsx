@@ -124,7 +124,7 @@ describe("StickyHome M1-B3", () => {
     expect(within(compact).getByLabelText("Compact Todo 列表")).toHaveClass(
       "compact-todo-viewport",
     );
-  });
+  }, 15_000);
 
   it("opens a Record list, creates 5000+ Chinese characters, and reopens the editor", async () => {
     const user = userEvent.setup();
