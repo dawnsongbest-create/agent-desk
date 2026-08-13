@@ -133,7 +133,35 @@ D:\agent-desk-target\release\agent-desk.exe
 
 ## L. Windows/macOS CI
 
-Pending the first pushed M1-B4 commit. This section will be replaced with real GitHub Actions run and job results; workflow presence alone is not treated as PASS.
+Real GitHub Actions run for M1-B4 implementation commit `fd3ed203e983a0602254068a1b5ca21c3ccd899f`:
+
+- Workflow: `CI`
+- Run ID: `31668516011`
+- Event: `push`
+- Started: `2026-08-13T04:54:38Z`
+- Completed: `2026-08-13T05:04:24Z`
+- Run conclusion: **PASS** (`success`)
+- URL: <https://github.com/dawnsongbest-create/agent-desk/actions/runs/31668516011>
+
+`macos-latest` — **PASS** (`success`), job `94348205815`:
+
+- pnpm setup and Node setup: PASS
+- `pnpm install --frozen-lockfile`: PASS
+- frontend format/typecheck/lint/test: PASS
+- Rust fmt: PASS
+- Rust Clippy with `-D warnings`: PASS
+- Rust tests: PASS
+- `pnpm tauri build --no-bundle`: PASS
+
+`windows-latest` — **PASS** (`success`), job `94348205924`:
+
+- pnpm setup and Node setup: PASS
+- `pnpm install --frozen-lockfile`: PASS
+- frontend format/typecheck/lint/test: PASS
+- Rust fmt: PASS
+- Rust Clippy with `-D warnings`: PASS
+- Rust tests: PASS
+- `pnpm tauri build --no-bundle`: PASS
 
 ## M. Product Preview Evidence
 
@@ -166,14 +194,14 @@ Reproducible transition steps:
 
 ## P. Git State
 
-Pre-push state:
-
 - Branch: `main`
 - Baseline: `a0d0a03d07f8142c6e043c41a865b6e0910093d2`
-- M1-B4 implementation and evidence: pending commit
+- M1-B4 implementation/evidence commit: `fd3ed203e983a0602254068a1b5ca21c3ccd899f`
+- Remote implementation ref verified at `origin/main`: `fd3ed203e983a0602254068a1b5ca21c3ccd899f`
 - Existing B3 Recovery Report is intentionally retained.
-- Working tree and remote state will be finalized after real GitHub Actions results are recorded.
+- Final Gate Report is committed separately after the successful implementation CI run.
+- Origin: `https://github.com/dawnsongbest-create/agent-desk.git`
 
 ```text
-M1_B4_GATE_STATUS: CI_PENDING
+M1_B4_GATE_STATUS: AWAITING_PRODUCT_AND_TECH_REVIEW
 ```
