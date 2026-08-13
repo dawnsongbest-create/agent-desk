@@ -1,6 +1,7 @@
 import type { StickyCardsPort } from "../../application/ports/sticky";
 import type {
   Preferences,
+  StickyMode,
   StickyPosition,
   ThemeMode,
   WindowPreset,
@@ -17,6 +18,7 @@ type StickyHomeProps = {
   onAlwaysOnTopChange(alwaysOnTop: boolean): void;
   onWindowPresetChange(windowPreset: WindowPreset): void;
   onStickyPositionChange(position: StickyPosition): void;
+  onStickyModeChange(mode: StickyMode): void;
 };
 
 export function StickyHome({
@@ -28,6 +30,7 @@ export function StickyHome({
   onAlwaysOnTopChange,
   onWindowPresetChange,
   onStickyPositionChange,
+  onStickyModeChange,
 }: StickyHomeProps) {
   const sticky = useStickyCards(port);
 
@@ -44,6 +47,7 @@ export function StickyHome({
       onAlwaysOnTopChange={onAlwaysOnTopChange}
       onWindowPresetChange={onWindowPresetChange}
       onStickyPositionChange={onStickyPositionChange}
+      onStickyModeChange={onStickyModeChange}
       onCreate={sticky.create}
       onUpdateText={sticky.updateText}
       onTaskCompleted={sticky.setTaskCompleted}

@@ -1,8 +1,8 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { StickyCardsPort } from "../../application/ports/sticky";
-import { defaultPreferences } from "../../domain/preferences";
+import { defaultPreferences, type Preferences } from "../../domain/preferences";
 import type { CreateStickyCardInput, StickyCard, StickyProfile } from "../../domain/sticky";
 import { playPageTurnSound } from "./pageTurnSound";
 import { StickyHome } from "./StickyHome";
@@ -83,19 +83,36 @@ class MemoryStickyPort implements StickyCardsPort {
   }
 }
 
-function renderHome(port: StickyCardsPort, positionChange = vi.fn()) {
+function renderHome(
+  port: StickyCardsPort,
+  positionChange = vi.fn(),
+  preferences: Preferences = defaultPreferences,
+  modeChange = vi.fn(),
+) {
   return render(
     <StickyHome
       port={port}
-      preferences={defaultPreferences}
+      preferences={preferences}
       preferenceSaveState="idle"
       now={new Date("2026-08-12T12:00:00")}
       onThemeChange={vi.fn()}
       onAlwaysOnTopChange={vi.fn()}
       onWindowPresetChange={vi.fn()}
       onStickyPositionChange={positionChange}
+      onStickyModeChange={modeChange}
     />,
   );
+}
+
+function dispatchPointer(
+  element: Element,
+  type: "pointerDown" | "pointerMove" | "pointerUp",
+  values: { pointerId: number; clientX: number; clientY: number },
+) {
+  const event = createEvent[type](element);
+  for (const [key, value] of Object.entries(values))
+    Object.defineProperty(event, key, { configurable: true, value });
+  fireEvent(element, event);
 }
 
 async function expand(user: ReturnType<typeof userEvent.setup>) {
@@ -103,7 +120,7 @@ async function expand(user: ReturnType<typeof userEvent.setup>) {
   return screen.getByRole("region", { name: "展开的便利贴" });
 }
 
-describe("StickyHome M1-B3", () => {
+describe("StickyHome M1-B4", () => {
   it("renders a compact Todo + Quote overlay with only open Todo priority", async () => {
     const port = new MemoryStickyPort([
       makeCard("done", "task", "已完成，不应抢占", 0, true),
@@ -117,13 +134,15 @@ describe("StickyHome M1-B3", () => {
     renderHome(port);
     const compact = await screen.findByRole("button", { name: "展开或拖动便利贴" });
     expect(compact).toHaveTextContent("第一件");
-    expect(compact).toHaveTextContent("第四件");
+    const viewport = within(compact).getByLabelText("Compact Todo 列表");
+    expect(viewport.children).toHaveLength(4);
+    expect(viewport.children[0]).toHaveTextContent("第一件");
+    expect(viewport.children[3]).toHaveTextContent("第四件");
+    expect(within(viewport).getAllByText("", { selector: ".preview-check" })).toHaveLength(4);
     expect(compact).toHaveTextContent("多花点时间玩。");
     expect(compact).not.toHaveTextContent("不应出现在 Compact");
     expect(compact).not.toHaveTextContent("已完成，不应抢占");
-    expect(within(compact).getByLabelText("Compact Todo 列表")).toHaveClass(
-      "compact-todo-viewport",
-    );
+    expect(viewport).toHaveClass("compact-todo-viewport");
   }, 15_000);
 
   it("opens a Record list, creates 5000+ Chinese characters, and reopens the editor", async () => {
@@ -160,6 +179,25 @@ describe("StickyHome M1-B3", () => {
       expect(port.updateText).toHaveBeenCalledWith("record", "修改后标题\n修改后的正文"),
     );
     expect(screen.getByText("已保存")).toBeInTheDocument();
+  });
+
+  it("pastes 6000+ Chinese characters, saves, and collapses without controlled rerenders", async () => {
+    const user = userEvent.setup();
+    const original = "原始长记录";
+    const pasted = `稳定性记录\n${"大段中文内容".repeat(1100)}`;
+    const port = new MemoryStickyPort([makeCard("record", "note", original, 0)]);
+    renderHome(port);
+    await expand(user);
+    await user.click(screen.getByRole("button", { name: /原始长记录/ }));
+    const editor = screen.getByRole("textbox", { name: "Record 正文" });
+    fireEvent.change(editor, { target: { value: pasted } });
+    expect(screen.getByText(pasted.length.toLocaleString())).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "保存并收起" }));
+    await waitFor(() => expect(port.updateText).toHaveBeenCalledWith("record", pasted));
+    expect(screen.getByRole("button", { name: "展开或拖动便利贴" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "展开或拖动便利贴" }));
+    await user.click(screen.getByRole("button", { name: /稳定性记录/ }));
+    expect(screen.getByRole("textbox", { name: "Record 正文" })).toHaveValue(pasted);
   });
 
   it("updates the single Sticky Quote and shows it after collapse", async () => {
@@ -205,12 +243,123 @@ describe("StickyHome M1-B3", () => {
     expect(screen.getByRole("region", { name: "展开的便利贴" })).toBeInTheDocument();
   });
 
-  it("offers all four Window Size Presets without implementing Mini Tab", async () => {
+  it("keeps Compact drag continuous and does not expand after crossing the threshold", async () => {
+    const positionChange = vi.fn();
+    renderHome(new MemoryStickyPort(), positionChange);
+    const compact = await screen.findByRole("button", { name: "展开或拖动便利贴" });
+    const board = compact.parentElement!;
+    vi.spyOn(compact, "getBoundingClientRect").mockReturnValue({
+      x: 80,
+      y: 120,
+      left: 80,
+      top: 120,
+      right: 324,
+      bottom: 370,
+      width: 244,
+      height: 250,
+      toJSON: () => ({}),
+    });
+    vi.spyOn(board, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 420,
+      bottom: 594,
+      width: 420,
+      height: 594,
+      toJSON: () => ({}),
+    });
+    Object.defineProperties(compact, {
+      offsetWidth: { configurable: true, value: 244 },
+      offsetHeight: { configurable: true, value: 250 },
+    });
+    dispatchPointer(compact, "pointerDown", { pointerId: 2, clientX: 100, clientY: 140 });
+    dispatchPointer(compact, "pointerMove", { pointerId: 2, clientX: 106, clientY: 148 });
+    expect(compact).toHaveStyle({ left: "86px", top: "128px" });
+    dispatchPointer(compact, "pointerUp", { pointerId: 2, clientX: 106, clientY: 148 });
+    expect(positionChange).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("region", { name: "展开的便利贴" })).not.toBeInTheDocument();
+  });
+
+  it("switches Compact to Mini Tab and restores Compact without state conflict", async () => {
+    const user = userEvent.setup();
+    const modeChange = vi.fn();
+    const port = new MemoryStickyPort([makeCard("todo", "task", "一件事", 0)]);
+    const view = renderHome(port, vi.fn(), defaultPreferences, modeChange);
+    await user.click(await screen.findByRole("button", { name: "缩成 Mini Tab" }));
+    expect(modeChange).toHaveBeenCalledWith("mini");
+    view.rerender(
+      <StickyHome
+        port={port}
+        preferences={{ ...defaultPreferences, stickyMode: "mini" }}
+        preferenceSaveState="idle"
+        now={new Date("2026-08-12T12:00:00")}
+        onThemeChange={vi.fn()}
+        onAlwaysOnTopChange={vi.fn()}
+        onWindowPresetChange={vi.fn()}
+        onStickyPositionChange={vi.fn()}
+        onStickyModeChange={modeChange}
+      />,
+    );
+    const mini = screen.getByRole("button", { name: "恢复 Compact Sticky 或拖动 Mini Tab" });
+    expect(mini).toHaveTextContent("TODAY1");
+    await user.click(mini);
+    expect(modeChange).toHaveBeenLastCalledWith("compact");
+  });
+
+  it("drags Mini Tab without restoring Compact", async () => {
+    const modeChange = vi.fn();
+    const positionChange = vi.fn();
+    renderHome(
+      new MemoryStickyPort(),
+      positionChange,
+      { ...defaultPreferences, stickyMode: "mini" },
+      modeChange,
+    );
+    const mini = await screen.findByRole("button", {
+      name: "恢复 Compact Sticky 或拖动 Mini Tab",
+    });
+    const board = mini.parentElement!;
+    vi.spyOn(mini, "getBoundingClientRect").mockReturnValue({
+      x: 100,
+      y: 200,
+      left: 100,
+      top: 200,
+      right: 178,
+      bottom: 246,
+      width: 78,
+      height: 46,
+      toJSON: () => ({}),
+    });
+    vi.spyOn(board, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 420,
+      bottom: 594,
+      width: 420,
+      height: 594,
+      toJSON: () => ({}),
+    });
+    Object.defineProperties(mini, {
+      offsetWidth: { configurable: true, value: 78 },
+      offsetHeight: { configurable: true, value: 46 },
+    });
+    dispatchPointer(mini, "pointerDown", { pointerId: 3, clientX: 110, clientY: 210 });
+    dispatchPointer(mini, "pointerMove", { pointerId: 3, clientX: 140, clientY: 240 });
+    dispatchPointer(mini, "pointerUp", { pointerId: 3, clientX: 140, clientY: 240 });
+    expect(positionChange).toHaveBeenCalledOnce();
+    expect(modeChange).not.toHaveBeenCalled();
+  });
+
+  it("offers all four Window Size Presets with Mini Tab production behavior", async () => {
     const user = userEvent.setup();
     renderHome(new MemoryStickyPort());
     await user.click(screen.getByRole("button", { name: "外观与窗口设置" }));
     for (const label of ["Sticky", "iPhone 5", "Pocket", "Book"])
       expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
-    expect(screen.queryByText(/Mini Tab/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "缩成 Mini Tab" })).toBeInTheDocument();
   });
 });

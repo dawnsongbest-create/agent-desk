@@ -4,6 +4,8 @@ export type ThemeMode = (typeof themeModes)[number];
 export type WindowBehavior = "hide_to_tray";
 export const windowPresets = ["sticky", "iphone5", "pocket", "book", "custom"] as const;
 export type WindowPreset = (typeof windowPresets)[number];
+export const stickyModes = ["compact", "mini"] as const;
+export type StickyMode = (typeof stickyModes)[number];
 
 export type StickyPosition = {
   xRatio: number;
@@ -18,6 +20,7 @@ export type Preferences = {
   windowBehavior: WindowBehavior;
   windowPreset: WindowPreset;
   stickyPosition: StickyPosition;
+  stickyMode: StickyMode;
 };
 
 export const defaultPreferences: Preferences = {
@@ -27,6 +30,7 @@ export const defaultPreferences: Preferences = {
   windowBehavior: "hide_to_tray",
   windowPreset: "sticky",
   stickyPosition: { xRatio: 0.5, yRatio: 0.28, snap: null },
+  stickyMode: "compact",
 };
 
 export type CompactGeometry = {
@@ -37,6 +41,29 @@ export type CompactGeometry = {
   left: number;
   top: number;
 };
+
+export type DragFrame = Pick<
+  CompactGeometry,
+  "boardWidth" | "boardHeight" | "stickyWidth" | "stickyHeight"
+> & {
+  originLeft: number;
+  originTop: number;
+  deltaX: number;
+  deltaY: number;
+};
+
+export function compactDragFrame(frame: DragFrame) {
+  return {
+    left: Math.max(
+      12,
+      Math.min(frame.boardWidth - frame.stickyWidth - 12, frame.originLeft + frame.deltaX),
+    ),
+    top: Math.max(
+      76,
+      Math.min(frame.boardHeight - frame.stickyHeight - 12, frame.originTop + frame.deltaY),
+    ),
+  };
+}
 
 export function settleCompactPosition(
   geometry: CompactGeometry,

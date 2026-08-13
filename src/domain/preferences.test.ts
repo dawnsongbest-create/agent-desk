@@ -1,9 +1,38 @@
 import { describe, expect, it } from "vitest";
-import { settleCompactPosition } from "./preferences";
+import { compactDragFrame, settleCompactPosition } from "./preferences";
 
 const base = { boardWidth: 420, boardHeight: 594, stickyWidth: 218, stickyHeight: 176 };
 
 describe("Compact Sticky position", () => {
+  it("keeps the first drag frame continuous with the pointer delta", () => {
+    expect(
+      compactDragFrame({
+        boardWidth: 420,
+        boardHeight: 594,
+        stickyWidth: 244,
+        stickyHeight: 250,
+        originLeft: 80,
+        originTop: 120,
+        deltaX: 6,
+        deltaY: 8,
+      }),
+    ).toEqual({ left: 86, top: 128 });
+  });
+
+  it("uses the same clamped drag geometry for the 78px Mini Tab", () => {
+    expect(
+      compactDragFrame({
+        boardWidth: 320,
+        boardHeight: 420,
+        stickyWidth: 78,
+        stickyHeight: 46,
+        originLeft: 290,
+        originTop: 390,
+        deltaX: 20,
+        deltaY: 20,
+      }),
+    ).toEqual({ left: 230, top: 362 });
+  });
   it("preserves a normalized free position", () => {
     expect(settleCompactPosition({ ...base, left: 100, top: 210 })).toEqual({
       xRatio: 209 / 420,

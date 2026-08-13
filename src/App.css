@@ -1313,3 +1313,282 @@ textarea:disabled {
     width: 230px;
   }
 }
+
+/* M1-B4: stable geometry lives outside the paper transform so drag never changes coordinate space. */
+.sticky-surface {
+  --sticky-surface-width: 244px;
+  --sticky-surface-height: 250px;
+  --sticky-surface-half-width: 122px;
+  --sticky-surface-half-height: 125px;
+  position: absolute;
+  z-index: 8;
+  width: var(--sticky-surface-width);
+  height: var(--sticky-surface-height);
+  user-select: none;
+  touch-action: none;
+}
+
+.sticky-surface[data-mode="mini"] {
+  --sticky-surface-width: 78px;
+  --sticky-surface-height: 46px;
+  --sticky-surface-half-width: 39px;
+  --sticky-surface-half-height: 23px;
+  width: var(--sticky-surface-width);
+  height: var(--sticky-surface-height);
+}
+
+.sticky-surface:focus-visible {
+  outline: 2px solid var(--sticky-accent);
+  outline-offset: 4px;
+}
+
+.sticky-surface[data-snap-hint]:not([data-snap-hint="free"]) > div {
+  box-shadow:
+    0 0 0 2px rgb(140 108 38 / 24%),
+    8px 14px 28px rgb(74 57 30 / 22%);
+}
+
+.sticky-surface .sticky-preview {
+  position: relative;
+  top: auto;
+  left: auto;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  transform: rotate(-0.7deg);
+  padding: 27px 22px 17px;
+  cursor: grab;
+}
+
+.sticky-surface:hover .sticky-preview,
+.sticky-surface:focus-visible .sticky-preview {
+  transform: translateY(-2px) rotate(-0.2deg);
+}
+
+.sticky-surface:active .sticky-preview,
+.sticky-surface:active .mini-tab {
+  cursor: grabbing;
+}
+
+.compact-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.compact-header-actions button {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  padding: 0 0 2px;
+  color: var(--sticky-muted);
+  background: var(--sticky-soft);
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.compact-todo-viewport {
+  min-height: 84px;
+  max-height: 84px;
+  margin: 11px -4px 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-color: transparent transparent;
+  scrollbar-width: thin;
+}
+
+.compact-todo-viewport:hover,
+.compact-todo-viewport:focus-within {
+  scrollbar-color: var(--sticky-line-strong) transparent;
+}
+
+.compact-todo-viewport::-webkit-scrollbar {
+  width: 6px;
+}
+
+.compact-todo-viewport::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: transparent;
+}
+
+.compact-todo-viewport:hover::-webkit-scrollbar-thumb,
+.compact-todo-viewport:focus-within::-webkit-scrollbar-thumb {
+  background: var(--sticky-line-strong);
+}
+
+.compact-todo-viewport .preview-task {
+  box-sizing: border-box;
+  height: 28px;
+  grid-template-columns: 17px minmax(0, 1fr);
+  align-items: center;
+  padding: 4px 1px;
+  font-size: 0.7rem;
+  line-height: 20px;
+}
+
+.preview-check {
+  box-sizing: border-box;
+  width: 11px;
+  height: 11px;
+  margin-right: 0 !important;
+  border: 1.4px solid var(--sticky-muted);
+  border-radius: 50%;
+}
+
+.sticky-surface .sticky-preview blockquote {
+  margin-top: 16px;
+  padding-top: 10px;
+  border-top: 1px solid rgb(115 88 37 / 9%);
+  font-size: 0.69rem;
+  line-height: 1.45;
+}
+
+.sticky-surface .sticky-preview .preview-open {
+  padding-top: 7px;
+}
+
+.task-checkbox {
+  appearance: none;
+  display: grid;
+  place-content: center;
+  border: 1.5px solid var(--sticky-muted);
+  border-radius: 50%;
+  background: transparent;
+}
+
+.task-checkbox::before {
+  width: 8px;
+  height: 8px;
+  transform: scale(0);
+  transform-origin: center;
+  border-radius: 50%;
+  background: var(--sticky-accent);
+  content: "";
+  transition: transform 120ms ease;
+}
+
+.task-checkbox:checked::before {
+  transform: scale(1);
+}
+
+.record-editor {
+  min-height: 0;
+  height: 100%;
+}
+
+.record-editor textarea {
+  min-height: 0;
+  contain: layout paint;
+}
+
+.record-editor footer {
+  flex-wrap: wrap;
+}
+
+.record-editor footer div {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.record-editor .record-collapse {
+  color: var(--sticky-ink);
+  background: var(--sticky-capture);
+  font-weight: 750;
+}
+
+.mini-tab {
+  position: relative;
+  display: grid;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-1.2deg);
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto 1fr;
+  gap: 1px 7px;
+  overflow: hidden;
+  border-radius: 3px 6px 5px 3px;
+  padding: 8px 12px 7px 10px;
+  color: var(--sticky-ink);
+  background: linear-gradient(160deg, rgb(255 255 255 / 22%), transparent 38%), var(--sticky-paper);
+  box-shadow:
+    0 1px 0 var(--sticky-edge),
+    5px 7px 15px rgb(74 57 30 / 18%);
+  cursor: grab;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.sticky-surface:hover .mini-tab,
+.sticky-surface:focus-visible .mini-tab {
+  transform: translateY(-1px) rotate(-0.35deg);
+  box-shadow:
+    0 1px 0 var(--sticky-edge),
+    7px 10px 19px rgb(74 57 30 / 22%);
+}
+
+.mini-label {
+  color: var(--sticky-muted);
+  font-size: 0.47rem;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+}
+
+.mini-tab strong {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  align-self: center;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.mini-dot {
+  align-self: center;
+  width: 16px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--sticky-accent);
+  opacity: 0.54;
+}
+
+.mini-fold {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 12px;
+  height: 12px;
+  background: linear-gradient(135deg, transparent 47%, var(--sticky-fold) 50%);
+}
+
+@media (max-height: 470px) {
+  .sticky-surface {
+    --sticky-surface-height: 234px;
+    --sticky-surface-half-height: 117px;
+  }
+
+  .sticky-surface[data-mode="mini"] {
+    --sticky-surface-height: 46px;
+    --sticky-surface-half-height: 23px;
+  }
+
+  .sticky-surface .sticky-preview {
+    padding-top: 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sticky-surface .sticky-preview,
+  .sticky-surface .mini-tab,
+  .task-checkbox::before {
+    transition: none;
+  }
+}

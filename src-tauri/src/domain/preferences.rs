@@ -27,6 +27,14 @@ pub enum WindowPreset {
     Custom,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StickyMode {
+    #[default]
+    Compact,
+    Mini,
+}
+
 impl WindowPreset {
     pub const fn logical_size(self) -> Option<(f64, f64)> {
         match self {
@@ -79,6 +87,8 @@ pub struct Preferences {
     pub window_preset: WindowPreset,
     #[serde(default)]
     pub sticky_position: StickyPosition,
+    #[serde(default)]
+    pub sticky_mode: StickyMode,
 }
 
 impl Default for Preferences {
@@ -90,6 +100,7 @@ impl Default for Preferences {
             window_behavior: WindowBehavior::HideToTray,
             window_preset: WindowPreset::Sticky,
             sticky_position: StickyPosition::default(),
+            sticky_mode: StickyMode::Compact,
         }
     }
 }
@@ -108,5 +119,21 @@ mod tests {
         assert_eq!(value["windowBehavior"], "hide_to_tray");
         assert_eq!(value["windowPreset"], "sticky");
         assert_eq!(value["stickyPosition"]["xRatio"], 0.5);
+        assert_eq!(value["stickyMode"], "compact");
+    }
+
+    #[test]
+    fn defaults_legacy_preferences_to_compact_mode() {
+        let preferences: Preferences = serde_json::from_value(serde_json::json!({
+            "schemaVersion": 1,
+            "theme": "light",
+            "alwaysOnTop": false,
+            "windowBehavior": "hide_to_tray",
+            "windowPreset": "book",
+            "stickyPosition": { "xRatio": 0.7, "yRatio": 0.4, "snap": null }
+        }))
+        .expect("deserialize legacy preferences");
+
+        assert_eq!(preferences.sticky_mode, StickyMode::Compact);
     }
 }

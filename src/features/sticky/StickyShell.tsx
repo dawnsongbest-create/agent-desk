@@ -20,15 +20,22 @@ import {
   useState,
   type CSSProperties,
   type PointerEvent,
+  type ReactNode,
   type WheelEvent,
 } from "react";
 import type {
   Preferences,
+  StickyMode,
   StickyPosition,
   ThemeMode,
   WindowPreset,
 } from "../../domain/preferences";
-import { settleCompactPosition, themeModes, windowPresets } from "../../domain/preferences";
+import {
+  compactDragFrame,
+  settleCompactPosition,
+  themeModes,
+  windowPresets,
+} from "../../domain/preferences";
 import {
   formatLocalDueDate,
   parseCapture,
@@ -57,6 +64,7 @@ type StickyShellProps = {
   onAlwaysOnTopChange(alwaysOnTop: boolean): void;
   onWindowPresetChange(preset: WindowPreset): void;
   onStickyPositionChange(position: StickyPosition): void;
+  onStickyModeChange(mode: StickyMode): void;
   onCreate(input: CreateStickyCardInput): Promise<boolean>;
   onUpdateText(id: string, text: string): Promise<boolean>;
   onTaskCompleted(id: string, completed: boolean): Promise<void>;
@@ -306,24 +314,29 @@ function RecordCapture({
   onCreate(input: CreateStickyCardInput): Promise<boolean>;
 }) {
   const [open, setOpen] = useState(false);
-  const [text, setText] = useState("");
+  const [hasText, setHasText] = useState(false);
+  const textRef = useRef<HTMLTextAreaElement>(null);
   async function submit() {
+    const text = textRef.current?.value ?? "";
     const input = parseCapture(text, "note", null);
     if (input && !disabled && (await onCreate(input))) {
-      setText("");
+      setHasText(false);
       setOpen(false);
     }
   }
   return open ? (
     <div id="note-capture" className="record-create-sheet">
       <textarea
+        ref={textRef}
         autoFocus
-        value={text}
         rows={8}
         maxLength={100000}
         aria-label="新建长 Record"
         placeholder="第一行会成为列表标题。继续往下写，正文可以很长…"
-        onChange={(event) => setText(event.target.value)}
+        onChange={(event) => {
+          const nextHasText = Boolean(event.target.value.trim());
+          if (nextHasText !== hasText) setHasText(nextHasText);
+        }}
         onKeyDown={(event) => {
           if (event.key === "Escape") setOpen(false);
           if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
@@ -338,7 +351,7 @@ function RecordCapture({
           <button type="button" onClick={() => setOpen(false)}>
             取消
           </button>
-          <button type="button" disabled={!text.trim()} onClick={() => void submit()}>
+          <button type="button" disabled={!hasText} onClick={() => void submit()}>
             保存 Record
           </button>
         </span>
@@ -398,6 +411,7 @@ function RecordEditor({
   onSave,
   onDelete,
   onExport,
+  onCollapse,
 }: {
   record: StickyCard;
   disabled: boolean;
@@ -405,11 +419,21 @@ function RecordEditor({
   onSave(id: string, text: string): Promise<boolean>;
   onDelete(id: string): Promise<void>;
   onExport(id: string): Promise<boolean>;
+  onCollapse(): void;
 }) {
-  const [draft, setDraft] = useState(record.text);
+  const draftRef = useRef<HTMLTextAreaElement>(null);
+  const countRef = useRef<HTMLSpanElement>(null);
   const [saved, setSaved] = useState(true);
   async function save() {
-    if (draft.trim() && (await onSave(record.id, draft))) setSaved(true);
+    const draft = draftRef.current?.value ?? "";
+    if (draft.trim() && (await onSave(record.id, draft))) {
+      setSaved(true);
+      return true;
+    }
+    return false;
+  }
+  async function saveAndCollapse() {
+    if ((saved || (await save())) && draftRef.current?.value.trim()) onCollapse();
   }
   return (
     <section
@@ -423,12 +447,14 @@ function RecordEditor({
         <span>{saved ? "已保存" : "有未保存修改"}</span>
       </header>
       <textarea
-        value={draft}
+        ref={draftRef}
+        defaultValue={record.text}
         maxLength={100000}
         aria-label="Record 正文"
         onChange={(event) => {
-          setDraft(event.target.value);
-          setSaved(event.target.value === record.text);
+          if (saved) setSaved(false);
+          if (countRef.current)
+            countRef.current.textContent = event.target.value.length.toLocaleString();
         }}
         onKeyDown={(event) => {
           if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
@@ -438,7 +464,9 @@ function RecordEditor({
         }}
       />
       <footer>
-        <span>{draft.length.toLocaleString()} 字符 · 纯文本</span>
+        <span>
+          <span ref={countRef}>{record.text.length.toLocaleString()}</span> 字符 · 纯文本
+        </span>
         <div>
           <button type="button" disabled={disabled} onClick={() => void onExport(record.id)}>
             导出 .md
@@ -454,10 +482,18 @@ function RecordEditor({
           <button
             className="record-save"
             type="button"
-            disabled={disabled || saved || !draft.trim()}
+            disabled={disabled || saved}
             onClick={() => void save()}
           >
             保存
+          </button>
+          <button
+            className="record-collapse"
+            type="button"
+            disabled={disabled}
+            onClick={() => void saveAndCollapse()}
+          >
+            {saved ? "收起" : "保存并收起"}
           </button>
         </div>
       </footer>
@@ -554,22 +590,23 @@ function consumeTodoWheel(event: WheelEvent<HTMLDivElement>) {
   if ((event.deltaY < 0 && canMoveUp) || (event.deltaY > 0 && canMoveDown)) event.stopPropagation();
 }
 
-function StickyPreview({
-  cards,
-  quote,
-  loading,
-  position,
-  onExpand,
-  onPositionChange,
-}: {
-  cards: StickyCard[];
-  quote: string;
-  loading: boolean;
+type StickySurfaceProps = {
+  mode: StickyMode;
   position: StickyPosition;
-  onExpand(): void;
+  label: string;
+  onActivate(): void;
   onPositionChange(position: StickyPosition): void;
-}) {
-  const openTasks = cards.filter((card) => card.kind === "task" && !card.completed);
+  children: ReactNode;
+};
+
+function StickySurface({
+  mode,
+  position,
+  label,
+  onActivate,
+  onPositionChange,
+  children,
+}: StickySurfaceProps) {
   const drag = useRef<{
     id: number;
     startX: number;
@@ -580,7 +617,7 @@ function StickyPreview({
   } | null>(null);
   const [live, setLive] = useState<{ left: number; top: number } | null>(null);
   const [snapHint, setSnapHint] = useState<StickyPosition["snap"]>(null);
-  const previewRef = useRef<HTMLDivElement>(null);
+  const surfaceRef = useRef<HTMLDivElement>(null);
 
   const style: CSSProperties = live
     ? { left: live.left, top: live.top, transform: "none" }
@@ -593,15 +630,16 @@ function StickyPreview({
           transform: "none",
         }
       : {
-          left: `clamp(121px, ${position.xRatio * 100}%, calc(100% - 121px))`,
-          top: `clamp(178px, ${position.yRatio * 100}%, calc(100% - 115px))`,
+          left: `clamp(12px, calc(${position.xRatio * 100}% - var(--sticky-surface-half-width)), calc(100% - var(--sticky-surface-width) - 12px))`,
+          top: `clamp(76px, calc(${position.yRatio * 100}% - var(--sticky-surface-half-height)), calc(100% - var(--sticky-surface-height) - 12px))`,
+          transform: "none",
         };
 
   function pointerDown(event: PointerEvent<HTMLDivElement>) {
-    if ((event.target as HTMLElement).closest(".compact-todo-viewport")) return;
-    const preview = previewRef.current;
-    if (!preview) return;
-    const rect = preview.getBoundingClientRect();
+    if ((event.target as HTMLElement).closest("[data-no-drag]")) return;
+    const surface = surfaceRef.current;
+    if (!surface) return;
+    const rect = surface.getBoundingClientRect();
     drag.current = {
       id: event.pointerId,
       startX: event.clientX,
@@ -615,18 +653,26 @@ function StickyPreview({
 
   function pointerMove(event: PointerEvent<HTMLDivElement>) {
     const current = drag.current;
-    const preview = previewRef.current;
-    if (!current || current.id !== event.pointerId || !preview) return;
+    const surface = surfaceRef.current;
+    if (!current || current.id !== event.pointerId || !surface) return;
     const dx = event.clientX - current.startX;
     const dy = event.clientY - current.startY;
     if (Math.hypot(dx, dy) >= 5) current.moved = true;
     if (!current.moved) return;
-    const board = preview.parentElement?.getBoundingClientRect();
+    const board = surface.parentElement?.getBoundingClientRect();
     if (!board) return;
-    const width = preview.offsetWidth;
-    const height = preview.offsetHeight;
-    const left = Math.max(12, Math.min(board.width - width - 12, current.left - board.left + dx));
-    const top = Math.max(76, Math.min(board.height - height - 12, current.top - board.top + dy));
+    const width = surface.offsetWidth;
+    const height = surface.offsetHeight;
+    const { left, top } = compactDragFrame({
+      boardWidth: board.width,
+      boardHeight: board.height,
+      stickyWidth: width,
+      stickyHeight: height,
+      originLeft: current.left - board.left,
+      originTop: current.top - board.top,
+      deltaX: dx,
+      deltaY: dy,
+    });
     setLive({ left, top });
     const horizontal =
       left < SNAP_DISTANCE ? "left" : board.width - width - left < SNAP_DISTANCE ? "right" : null;
@@ -643,17 +689,17 @@ function StickyPreview({
 
   function pointerUp(event: PointerEvent<HTMLDivElement>) {
     const current = drag.current;
-    const preview = previewRef.current;
+    const surface = surfaceRef.current;
     drag.current = null;
-    if (!current || current.id !== event.pointerId || !preview) return;
+    if (!current || current.id !== event.pointerId || !surface) return;
     if (!current.moved) {
-      onExpand();
+      onActivate();
       return;
     }
-    const board = preview.parentElement?.getBoundingClientRect();
+    const board = surface.parentElement?.getBoundingClientRect();
     if (!board || !live) return;
-    const width = preview.offsetWidth;
-    const height = preview.offsetHeight;
+    const width = surface.offsetWidth;
+    const height = surface.offsetHeight;
     onPositionChange(
       settleCompactPosition({
         boardWidth: board.width,
@@ -670,15 +716,16 @@ function StickyPreview({
 
   return (
     <div
-      ref={previewRef}
-      className="sticky-preview"
+      ref={surfaceRef}
+      className="sticky-surface"
+      data-mode={mode}
       data-snap-hint={snapHint ?? "free"}
       style={style}
       role="button"
       tabIndex={0}
-      aria-label="展开或拖动便利贴"
+      aria-label={label}
       onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") onExpand();
+        if (event.key === "Enter" || event.key === " ") onActivate();
       }}
       onPointerDown={pointerDown}
       onPointerMove={pointerMove}
@@ -689,18 +736,64 @@ function StickyPreview({
         setSnapHint(null);
       }}
     >
+      <div className={mode === "mini" ? "mini-tab" : "sticky-preview"}>{children}</div>
+    </div>
+  );
+}
+
+function StickyPreview({
+  cards,
+  quote,
+  loading,
+  position,
+  onExpand,
+  onMinimize,
+  onPositionChange,
+}: {
+  cards: StickyCard[];
+  quote: string;
+  loading: boolean;
+  position: StickyPosition;
+  onExpand(): void;
+  onMinimize(): void;
+  onPositionChange(position: StickyPosition): void;
+}) {
+  const openTasks = cards.filter((card) => card.kind === "task" && !card.completed);
+
+  return (
+    <StickySurface
+      mode="compact"
+      position={position}
+      label="展开或拖动便利贴"
+      onActivate={onExpand}
+      onPositionChange={onPositionChange}
+    >
       <span className="tape" aria-hidden="true" />
       <header>
         <span>TODAY</span>
-        <small>
-          {openTasks.length ? `${Math.min(3, openTasks.length)} / ${openTasks.length}` : "quiet"}
-        </small>
+        <span className="compact-header-actions">
+          <small>
+            {openTasks.length ? `${Math.min(3, openTasks.length)} / ${openTasks.length}` : "quiet"}
+          </small>
+          <button
+            type="button"
+            data-no-drag
+            aria-label="缩成 Mini Tab"
+            onClick={(event) => {
+              event.stopPropagation();
+              onMinimize();
+            }}
+          >
+            −
+          </button>
+        </span>
       </header>
       {loading ? (
         <p className="preview-empty">正在翻开昨天留下的字迹…</p>
       ) : (
         <div
           className="compact-todo-viewport"
+          data-no-drag
           onWheel={consumeTodoWheel}
           onClick={(event) => {
             event.stopPropagation();
@@ -713,7 +806,7 @@ function StickyPreview({
           ) : (
             openTasks.map((task) => (
               <div className="preview-task" key={task.id}>
-                <span>□</span>
+                <span className="preview-check" aria-hidden="true" />
                 <span>{task.text}</span>
               </div>
             ))
@@ -724,7 +817,34 @@ function StickyPreview({
       <span className="preview-open">
         轻触展开 <span aria-hidden="true">→</span>
       </span>
-    </div>
+    </StickySurface>
+  );
+}
+
+function MiniStickyTab({
+  openTaskCount,
+  position,
+  onRestore,
+  onPositionChange,
+}: {
+  openTaskCount: number;
+  position: StickyPosition;
+  onRestore(): void;
+  onPositionChange(position: StickyPosition): void;
+}) {
+  return (
+    <StickySurface
+      mode="mini"
+      position={position}
+      label="恢复 Compact Sticky 或拖动 Mini Tab"
+      onActivate={onRestore}
+      onPositionChange={onPositionChange}
+    >
+      <span className="mini-fold" aria-hidden="true" />
+      <span className="mini-label">TODAY</span>
+      <strong>{openTaskCount}</strong>
+      <span className="mini-dot" aria-hidden="true" />
+    </StickySurface>
   );
 }
 
@@ -747,6 +867,7 @@ export function StickyShell(props: StickyShellProps) {
     onAlwaysOnTopChange,
     onWindowPresetChange,
     onStickyPositionChange,
+    onStickyModeChange,
     onCreate,
     onUpdateText,
     onTaskCompleted,
@@ -869,6 +990,10 @@ export function StickyShell(props: StickyShellProps) {
                     onSave={onUpdateText}
                     onDelete={onDelete}
                     onExport={onExportRecord}
+                    onCollapse={() => {
+                      setSelectedRecord(null);
+                      setExpanded(false);
+                    }}
                   />
                 ) : (
                   <>
@@ -935,6 +1060,13 @@ export function StickyShell(props: StickyShellProps) {
             </div>
           ) : null}
         </section>
+      ) : preferences.stickyMode === "mini" ? (
+        <MiniStickyTab
+          openTaskCount={openTaskCount}
+          position={preferences.stickyPosition}
+          onRestore={() => onStickyModeChange("compact")}
+          onPositionChange={onStickyPositionChange}
+        />
       ) : (
         <StickyPreview
           cards={cards}
@@ -942,6 +1074,7 @@ export function StickyShell(props: StickyShellProps) {
           loading={stickyState === "loading"}
           position={preferences.stickyPosition}
           onExpand={() => setExpanded(true)}
+          onMinimize={() => onStickyModeChange("mini")}
           onPositionChange={onStickyPositionChange}
         />
       )}

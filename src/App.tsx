@@ -75,6 +75,7 @@ function App() {
       onStickyPositionChange={(stickyPosition) =>
         save({ ...preferencesRef.current, stickyPosition })
       }
+      onStickyModeChange={(stickyMode) => save({ ...preferencesRef.current, stickyMode })}
     />
   );
 }
