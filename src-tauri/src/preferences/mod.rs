@@ -2,13 +2,20 @@ use tauri::{AppHandle, LogicalSize, Manager, Size};
 use tauri_plugin_store::StoreExt;
 
 use crate::domain::preferences::{Preferences, WindowPreset};
+use std::path::PathBuf;
 
 const PREFERENCES_FILE: &str = "preferences.json";
 const PREFERENCES_KEY: &str = "preferences";
 
+fn preferences_file() -> PathBuf {
+    crate::audit_data_dir()
+        .map(|data_dir| data_dir.join(PREFERENCES_FILE))
+        .unwrap_or_else(|| PathBuf::from(PREFERENCES_FILE))
+}
+
 fn read(app: &AppHandle) -> Result<Preferences, String> {
     let store = app
-        .store(PREFERENCES_FILE)
+        .store(preferences_file())
         .map_err(|error| error.to_string())?;
     let Some(value) = store.get(PREFERENCES_KEY) else {
         return Ok(Preferences::default());
@@ -19,7 +26,7 @@ fn read(app: &AppHandle) -> Result<Preferences, String> {
 
 fn write(app: &AppHandle, preferences: &Preferences) -> Result<(), String> {
     let store = app
-        .store(PREFERENCES_FILE)
+        .store(preferences_file())
         .map_err(|error| error.to_string())?;
     let value = serde_json::to_value(preferences).map_err(|error| error.to_string())?;
     store.set(PREFERENCES_KEY.to_string(), value);
