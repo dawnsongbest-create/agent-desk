@@ -412,6 +412,7 @@ function RecordEditor({
   onDelete,
   onExport,
   onCollapse,
+  onDirtyChange,
 }: {
   record: StickyCard;
   disabled: boolean;
@@ -420,6 +421,7 @@ function RecordEditor({
   onDelete(id: string): Promise<void>;
   onExport(id: string): Promise<boolean>;
   onCollapse(): void;
+  onDirtyChange(dirty: boolean): void;
 }) {
   const draftRef = useRef<HTMLTextAreaElement>(null);
   const countRef = useRef<HTMLSpanElement>(null);
@@ -428,6 +430,7 @@ function RecordEditor({
     const draft = draftRef.current?.value ?? "";
     if (draft.trim() && (await onSave(record.id, draft))) {
       setSaved(true);
+      onDirtyChange(false);
       return true;
     }
     return false;
@@ -439,6 +442,8 @@ function RecordEditor({
     <section
       className="record-editor"
       aria-label={`编辑 Record：${recordDisplayTitle(record.text)}`}
+      aria-busy={disabled}
+      data-dirty={!saved}
     >
       <header>
         <button type="button" onClick={onClose}>
@@ -452,7 +457,10 @@ function RecordEditor({
         maxLength={100000}
         aria-label="Record 正文"
         onChange={(event) => {
-          if (saved) setSaved(false);
+          if (saved) {
+            setSaved(false);
+            onDirtyChange(true);
+          }
           if (countRef.current)
             countRef.current.textContent = event.target.value.length.toLocaleString();
         }}
@@ -850,7 +858,7 @@ function MiniStickyTab({
 
 function jumpToCapture(face: StickyFace) {
   const capture = document.getElementById(`${face}-capture`);
-  capture?.scrollIntoView({ behavior: "smooth", block: "center" });
+  capture?.scrollIntoView?.({ behavior: "smooth", block: "center" });
   if (capture instanceof HTMLButtonElement) capture.click();
 }
 
@@ -882,6 +890,8 @@ export function StickyShell(props: StickyShellProps) {
   const [expanded, setExpanded] = useState(false);
   const [face, setFace] = useState<StickyFace>("note");
   const [selectedRecord, setSelectedRecord] = useState<StickyCard | null>(null);
+  const [recordDirty, setRecordDirty] = useState(false);
+  const [pendingCapture, setPendingCapture] = useState<StickyFace | null>(null);
   const [turnSerial, setTurnSerial] = useState(0);
   const [turnDirection, setTurnDirection] = useState<"forward" | "backward">("forward");
   const sensors = useSensors(
@@ -898,13 +908,33 @@ export function StickyShell(props: StickyShellProps) {
     day: "numeric",
   }).format(now);
 
+  useEffect(() => {
+    if (!pendingCapture || selectedRecord) return;
+    const frame = requestAnimationFrame(() => {
+      jumpToCapture(pendingCapture);
+      setPendingCapture(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [pendingCapture, selectedRecord]);
+
   function switchFace(nextFace: StickyFace) {
     if (nextFace === face) return;
     setSelectedRecord(null);
+    setRecordDirty(false);
     setTurnDirection(nextFace === "task" ? "forward" : "backward");
     setFace(nextFace);
     setTurnSerial((value) => value + 1);
     playPageTurnSound(nextFace === "task" ? "note-to-todo" : "todo-to-note");
+  }
+
+  function openCapture() {
+    if (!selectedRecord) {
+      jumpToCapture(face);
+      return;
+    }
+    setSelectedRecord(null);
+    setRecordDirty(false);
+    setPendingCapture(face);
   }
 
   function taskDragEnd(event: DragEndEvent) {
@@ -945,7 +975,7 @@ export function StickyShell(props: StickyShellProps) {
                   type="button"
                   role="tab"
                   aria-selected={face === candidate}
-                  disabled={selectedRecord !== null}
+                  disabled={busy || (selectedRecord !== null && recordDirty)}
                   onClick={() => switchFace(candidate)}
                 >
                   {faceLabels[candidate]}
@@ -957,23 +987,27 @@ export function StickyShell(props: StickyShellProps) {
               <button
                 className="new-entry-shortcut"
                 type="button"
-                disabled={busy || selectedRecord !== null}
-                onClick={() => jumpToCapture(face)}
+                disabled={busy || (selectedRecord !== null && recordDirty)}
+                onClick={openCapture}
               >
                 + {face === "note" ? "新 Record" : "新待办"}
               </button>
               <button
                 className="collapse-button"
                 type="button"
-                disabled={selectedRecord !== null}
+                disabled={busy || (selectedRecord !== null && recordDirty)}
                 aria-label="收起便利贴"
-                onClick={() => setExpanded(false)}
+                onClick={() => {
+                  setSelectedRecord(null);
+                  setRecordDirty(false);
+                  setExpanded(false);
+                }}
               >
                 ↙
               </button>
             </div>
           </header>
-          <div className="face-scroll">
+          <div className="face-scroll" data-editor={selectedRecord ? "record" : "none"}>
             <div
               key={`${face}-${turnSerial}`}
               className="sticky-face"
@@ -986,14 +1020,19 @@ export function StickyShell(props: StickyShellProps) {
                   <RecordEditor
                     record={cards.find((card) => card.id === selectedRecord.id) ?? selectedRecord}
                     disabled={busy}
-                    onClose={() => setSelectedRecord(null)}
+                    onClose={() => {
+                      setSelectedRecord(null);
+                      setRecordDirty(false);
+                    }}
                     onSave={onUpdateText}
                     onDelete={onDelete}
                     onExport={onExportRecord}
                     onCollapse={() => {
                       setSelectedRecord(null);
+                      setRecordDirty(false);
                       setExpanded(false);
                     }}
+                    onDirtyChange={setRecordDirty}
                   />
                 ) : (
                   <>
@@ -1002,7 +1041,14 @@ export function StickyShell(props: StickyShellProps) {
                       <p>我的 Records</p>
                       <span>{records.length} 篇</span>
                     </div>
-                    <RecordList records={records} disabled={busy} onOpen={setSelectedRecord} />
+                    <RecordList
+                      records={records}
+                      disabled={busy}
+                      onOpen={(record) => {
+                        setRecordDirty(false);
+                        setSelectedRecord(record);
+                      }}
+                    />
                     <RecordCapture disabled={busy} onCreate={onCreate} />
                   </>
                 )

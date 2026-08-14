@@ -181,6 +181,57 @@ describe("StickyHome M1-B4", () => {
     expect(screen.getByText("已保存")).toBeInTheDocument();
   });
 
+  it("releases Record navigation after an ordinary Save completes", async () => {
+    const user = userEvent.setup();
+    const port = new MemoryStickyPort([
+      makeCard("record", "note", "需要保存的 Record", 0),
+      makeCard("todo", "task", "保存后可以打开", 1),
+    ]);
+    renderHome(port);
+    await expand(user);
+    await user.click(screen.getByRole("button", { name: /需要保存的 Record/ }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Record 正文" }), {
+      target: { value: "普通保存后的内容" },
+    });
+    expect(screen.getByRole("tab", { name: /待办/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /新 Record/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "收起便利贴" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() => expect(screen.getByText("已保存")).toBeInTheDocument());
+
+    const todoTab = screen.getByRole("tab", { name: /待办/ });
+    expect(todoTab).toBeEnabled();
+    const newRecord = screen.getByRole("button", { name: /新 Record/ });
+    expect(newRecord).toBeEnabled();
+    expect(screen.getByRole("button", { name: "收起便利贴" })).toBeEnabled();
+    await user.click(newRecord);
+    expect(await screen.findByRole("textbox", { name: "新建长 Record" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "取消" }));
+    await user.click(todoTab);
+    expect(screen.getByText("保存后可以打开")).toBeInTheDocument();
+  });
+
+  it("releases and persists a 6000+ character Record after ordinary Save", async () => {
+    const user = userEvent.setup();
+    const body = `长 Record 普通保存\n${"六千字中文保存状态验证".repeat(650)}`;
+    const port = new MemoryStickyPort([makeCard("record", "note", "长 Record 原文", 0)]);
+    renderHome(port);
+    await expand(user);
+    await user.click(screen.getByRole("button", { name: /长 Record 原文/ }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Record 正文" }), {
+      target: { value: body },
+    });
+    await user.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() => expect(port.updateText).toHaveBeenCalledWith("record", body));
+    await waitFor(() => expect(screen.getByText("已保存")).toBeInTheDocument());
+    const collapse = screen.getByRole("button", { name: "收起便利贴" });
+    expect(collapse).toBeEnabled();
+    await user.click(collapse);
+    await user.click(screen.getByRole("button", { name: "展开或拖动便利贴" }));
+    await user.click(screen.getByRole("button", { name: /长 Record 普通保存/ }));
+    expect(screen.getByRole("textbox", { name: "Record 正文" })).toHaveValue(body);
+  });
+
   it("pastes 6000+ Chinese characters, saves, and collapses without controlled rerenders", async () => {
     const user = userEvent.setup();
     const original = "原始长记录";

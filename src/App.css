@@ -920,7 +920,7 @@ textarea:focus-visible {
 button:disabled,
 input:disabled,
 textarea:disabled {
-  cursor: wait;
+  cursor: not-allowed;
   opacity: 0.52;
 }
 
@@ -1433,6 +1433,10 @@ textarea:disabled {
   line-height: 20px;
 }
 
+.compact-todo-viewport .preview-task:last-child {
+  border-bottom: 0;
+}
+
 .preview-check {
   box-sizing: border-box;
   width: 11px;
@@ -1443,9 +1447,9 @@ textarea:disabled {
 }
 
 .sticky-surface .sticky-preview blockquote {
-  margin-top: 16px;
-  padding-top: 10px;
-  border-top: 1px solid rgb(115 88 37 / 9%);
+  margin-top: 20px;
+  padding-top: 0;
+  border-top: 0;
   font-size: 0.69rem;
   line-height: 1.45;
 }
@@ -1459,18 +1463,22 @@ textarea:disabled {
   display: grid;
   place-content: center;
   border: 1.5px solid var(--sticky-muted);
-  border-radius: 50%;
+  border-radius: 2px;
   background: transparent;
 }
 
 .task-checkbox::before {
-  width: 8px;
-  height: 8px;
+  width: 12px;
+  height: 12px;
   transform: scale(0);
   transform-origin: center;
-  border-radius: 50%;
-  background: var(--sticky-accent);
-  content: "";
+  color: var(--sticky-accent);
+  content: "✓";
+  font-family: sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 12px;
+  text-align: center;
   transition: transform 120ms ease;
 }
 
@@ -1480,15 +1488,18 @@ textarea:disabled {
 
 .record-editor {
   min-height: 0;
-  height: 100%;
+  height: auto;
+  flex: 1;
 }
 
 .record-editor textarea {
   min-height: 0;
+  overflow: auto;
   contain: layout paint;
 }
 
 .record-editor footer {
+  padding-bottom: 2px;
   flex-wrap: wrap;
 }
 
@@ -1501,6 +1512,18 @@ textarea:disabled {
   color: var(--sticky-ink);
   background: var(--sticky-capture);
   font-weight: 750;
+}
+
+.face-scroll[data-editor="record"] {
+  overflow: hidden;
+  padding-bottom: 10px;
+}
+
+.face-scroll[data-editor="record"] .sticky-face {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
 }
 
 .mini-tab {
