@@ -1,5 +1,10 @@
 # Agent Desk — M1-B4 Gate Report
 
+> **Gate status: REVOKED.** Product Owner runtime observations invalidated this report's
+> original Product Preview conclusion. The replacement artifact/runtime evidence is in
+> [M1_B4_ARTIFACT_TRUTH_AUDIT.md](M1_B4_ARTIFACT_TRUTH_AUDIT.md). Historical implementation
+> details below are retained for traceability and must not be read as an active Gate approval.
+
 ## A. Implementation Summary
 
 M1-B4 is implemented on `main` without starting Reader, Inbox, Agent integration, Scheduled Tasks, or any other post-B4 feature.
