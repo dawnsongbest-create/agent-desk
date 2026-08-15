@@ -1,0 +1,35 @@
+{
+  "page": {
+    "title": "Agent Desk",
+    "url": "http://tauri.localhost/"
+  },
+  "currentDocumentId": "reader_builtin_foundation_v1",
+  "safeMetrics": {
+    "viewport": {
+      "width": 320,
+      "height": 568
+    },
+    "safeHeight": 136.3125,
+    "mini": {
+      "left": 120.5268783569336,
+      "top": 75.18828582763672,
+      "right": 199.4731216430664,
+      "bottom": 122.81170654296875
+    },
+    "header": {
+      "left": 22.399999618530273,
+      "top": 136.3125,
+      "right": 287.20001792907715,
+      "bottom": 217.7375030517578
+    },
+    "headerBoundsOverlap": false,
+    "textOverlap": false
+  },
+  "trustedSelection": "读并不总是为了更快",
+  "copyExpected": "阅读并不总是为了更快得到答案。",
+  "multilineSelected": "哪一句改变了你原来的判断\n哪个概念需要回到上下文再次确认\n哪些事实彼此支持，哪些只是看起来相近\n哪个问题值得放进旁边的 Sticky，而不是打断正文",
+  "openedRecordText": "哪一句改变了你原来的判断\n哪个概念需要回到上下文再次确认\n哪些事实彼此支持，哪些只是看起来相近\n哪个问题值得放进旁边的 Sticky，而不是打断正文",
+  "codeSelected": "return moment.question.trim();",
+  "recordCount": 1,
+  "horizontalOverflow": false
+}

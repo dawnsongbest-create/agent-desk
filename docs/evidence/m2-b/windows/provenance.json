@@ -1,0 +1,36 @@
+{
+  "gate": "M2-B Reader Document & Selection Capture",
+  "implementationCommit": "cd480d425f201f07c8699f589858df84930b5f73",
+  "finalHandoffCommit": "cd480d425f201f07c8699f589858df84930b5f73",
+  "node": "22.23.2",
+  "pnpm": "11.16.0",
+  "frontendBundles": [
+    {
+      "path": "dist/assets/index-CdXTOSFz.css",
+      "sha256": "E1355FF421FF182CFA28BE6AAB1A75C9CBD3C9A4E7C33D8ADE410EB308A6310C"
+    },
+    {
+      "path": "dist/assets/index-p1bZNjm-.js",
+      "sha256": "E219F8BE445301E911B78F73E8FA63813B6DD733120CF961E4DA5859CA6F0FC1"
+    }
+  ],
+  "truthExecutable": "D:\\agent-desk-m2-b-truth-target\\release\\agent-desk.exe",
+  "canonicalExecutable": "D:\\agent-desk-target\\release\\agent-desk.exe",
+  "executableSha256": "0D3B5739CA255E619AE45AFC56F29B34F55884483BDCE4953F2C8BF1BA7BF6B0",
+  "executableSizeBytes": 14153728,
+  "executableBuiltAtUtc": "2026-08-15T09:21:08Z",
+  "truthCanonicalExactMatch": true,
+  "canonicalRuntimeSeconds": 28.3,
+  "nativePage": "http://tauri.localhost/",
+  "currentDocumentId": "reader_builtin_foundation_v1",
+  "viewport": {
+    "width": 320,
+    "height": 568
+  },
+  "safeAreaHeight": 136.3125,
+  "miniReaderTextOverlap": false,
+  "clipboardExactMatch": true,
+  "multilineRecordExactMatch": true,
+  "restartDocumentAndRecordsPass": true,
+  "productOwnerAppDataUnchanged": true
+}
