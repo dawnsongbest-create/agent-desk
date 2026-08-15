@@ -87,6 +87,17 @@
   background: color-mix(in srgb, var(--board-soft) 64%, transparent);
 }
 
+.inbox-shelf-label {
+  position: absolute;
+  top: 50%;
+  left: clamp(18px, 6vw, 28px);
+  color: var(--reader-muted);
+  font-family: Georgia, "Noto Serif CJK SC", "Songti SC", "SimSun", serif;
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  transform: translateY(-50%);
+}
+
 .reader-mini-shelf-slot {
   position: absolute;
   top: var(--reader-safe-shelf-mini-inset);
@@ -165,6 +176,154 @@
   width: min(100%, 640px);
   margin: 0 auto;
   padding: 10px clamp(18px, 7vw, 38px) clamp(68px, 13vh, 96px);
+}
+
+.inbox-list,
+.inbox-empty,
+.inbox-state {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  width: min(100%, 640px);
+  margin: 0 auto;
+  padding-right: clamp(18px, 7vw, 38px);
+  padding-left: clamp(18px, 7vw, 38px);
+}
+
+.inbox-list {
+  display: grid;
+  padding-top: 4px;
+  padding-bottom: clamp(68px, 13vh, 96px);
+}
+
+.inbox-item {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--reader-rule) 45%, transparent);
+  padding: 17px 2px 16px;
+  color: var(--reader-ink);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.inbox-item:hover,
+.inbox-item:focus-visible {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--board-soft) 58%, transparent),
+    transparent 92%
+  );
+}
+
+.inbox-item:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid color-mix(in srgb, var(--focus) 68%, transparent);
+  outline-offset: 2px;
+}
+
+.inbox-item:disabled {
+  cursor: wait;
+}
+
+.inbox-item[data-unread="false"] {
+  color: color-mix(in srgb, var(--reader-ink) 62%, var(--reader-muted));
+}
+
+.inbox-unread-mark {
+  width: 5px;
+  height: 5px;
+  margin-top: 7px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.inbox-item[data-unread="true"] .inbox-unread-mark {
+  background: var(--reader-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--reader-accent) 13%, transparent);
+}
+
+.inbox-item-body {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+}
+
+.inbox-item-body strong {
+  overflow: hidden;
+  font-family: Georgia, "Noto Serif CJK SC", "Songti SC", "SimSun", serif;
+  font-size: 0.91rem;
+  font-weight: 560;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inbox-item[data-unread="true"] .inbox-item-body strong {
+  font-weight: 680;
+}
+
+.inbox-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  color: var(--reader-muted);
+  font-size: 0.63rem;
+  letter-spacing: 0.025em;
+}
+
+.inbox-item-state {
+  margin-top: 3px;
+  color: var(--reader-muted);
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+}
+
+.inbox-item[data-unread="true"] .inbox-item-state {
+  color: var(--reader-accent);
+  font-weight: 700;
+}
+
+.inbox-empty,
+.inbox-state {
+  padding-top: clamp(42px, 12vh, 88px);
+  color: var(--reader-muted);
+  text-align: center;
+}
+
+.inbox-empty p,
+.inbox-state p {
+  margin: 0 0 8px;
+  color: var(--reader-ink);
+  font-family: Georgia, "Noto Serif CJK SC", "Songti SC", "SimSun", serif;
+  font-size: 0.92rem;
+}
+
+.inbox-empty span {
+  font-size: 0.68rem;
+  line-height: 1.65;
+}
+
+.inbox-state button {
+  border: 1px solid var(--popover-line);
+  border-radius: 5px;
+  padding: 5px 10px;
+  color: var(--popover-ink);
+  background: var(--popover);
+  cursor: pointer;
+}
+
+.inbox-open-error {
+  margin: 6px 0 2px;
+  border-radius: 4px;
+  padding: 8px 10px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  font-size: 0.68rem;
 }
 
 .reader-context {
@@ -468,6 +627,24 @@
   align-items: center;
   gap: 6px;
   pointer-events: auto;
+}
+
+.inbox-nav-button {
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 8px;
+  color: var(--board-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.64rem;
+  letter-spacing: 0.045em;
+  cursor: pointer;
+}
+
+.inbox-nav-button:hover,
+.inbox-nav-button:focus-visible {
+  color: var(--board-ink);
+  background: var(--board-soft);
 }
 
 .persistence-dot {

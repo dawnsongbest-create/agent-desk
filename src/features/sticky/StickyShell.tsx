@@ -33,6 +33,7 @@ import type {
   WindowPreset,
 } from "../../domain/preferences";
 import type { ReaderDocument } from "../../domain/reader";
+import type { InboxDelivery } from "../../domain/delivery";
 import {
   compactDragFrame,
   readerFontSizes,
@@ -52,17 +53,24 @@ import {
   type StickyProfile,
 } from "../../domain/sticky";
 import { ReaderCanvas } from "../reader/ReaderCanvas";
+import type { InboxLoadState } from "../inbox/useInbox";
 import type { ReaderLoadState } from "../reader/useReaderDocument";
 import { playPageTurnSound } from "./pageTurnSound";
 import type { StickyLoadState } from "./useStickyCards";
 
 type SaveState = "loading" | "idle" | "saving" | "saved" | "error";
 type StickyFace = "note" | "task";
+type ReaderSurfaceMode = "reader" | "inbox";
 
 type StickyShellProps = {
   preferences: Preferences;
   readerDocument: ReaderDocument | null;
   readerState: ReaderLoadState;
+  inboxItems: InboxDelivery[];
+  inboxUnreadCount: number;
+  inboxState: InboxLoadState;
+  inboxOpeningId: string | null;
+  inboxOpenError: string | null;
   preferenceSaveState: SaveState;
   cards: StickyCard[];
   profile: StickyProfile;
@@ -78,6 +86,8 @@ type StickyShellProps = {
   onReaderLineSpacingChange(spacing: ReaderLineSpacing): void;
   onReaderContentVisibilityChange(visible: boolean): void;
   onRetryReader(): void;
+  onRetryInbox(): void;
+  onOpenDelivery(id: string): Promise<boolean>;
   onCopyReaderSelection(text: string): Promise<void>;
   onCaptureReaderSelection(documentId: string, text: string): Promise<boolean>;
   onCreate(input: CreateStickyCardInput): Promise<boolean>;
@@ -959,6 +969,11 @@ export function StickyShell(props: StickyShellProps) {
     preferences,
     readerDocument,
     readerState,
+    inboxItems,
+    inboxUnreadCount,
+    inboxState,
+    inboxOpeningId,
+    inboxOpenError,
     preferenceSaveState,
     cards,
     profile,
@@ -974,6 +989,8 @@ export function StickyShell(props: StickyShellProps) {
     onReaderLineSpacingChange,
     onReaderContentVisibilityChange,
     onRetryReader,
+    onRetryInbox,
+    onOpenDelivery,
     onCopyReaderSelection,
     onCaptureReaderSelection,
     onCreate,
@@ -988,6 +1005,8 @@ export function StickyShell(props: StickyShellProps) {
     onDismissError,
   } = props;
   const [expanded, setExpanded] = useState(false);
+  const [readerSurfaceMode, setReaderSurfaceMode] = useState<ReaderSurfaceMode>("reader");
+  const readerScrollTopRef = useRef(0);
   const [face, setFace] = useState<StickyFace>("note");
   const [selectedRecord, setSelectedRecord] = useState<StickyCard | null>(null);
   const [recordDirty, setRecordDirty] = useState(false);
@@ -1048,6 +1067,12 @@ export function StickyShell(props: StickyShellProps) {
     onStickyModeChange(nextMode);
   }
 
+  async function openDelivery(id: string) {
+    if (!(await onOpenDelivery(id))) return;
+    readerScrollTopRef.current = 0;
+    setReaderSurfaceMode("reader");
+  }
+
   return (
     <main className="desk-board" aria-label="Agent Desk Sticky Home">
       <ReaderCanvas
@@ -1057,8 +1082,19 @@ export function StickyShell(props: StickyShellProps) {
         windowPreset={preferences.windowPreset}
         document={readerDocument}
         state={readerState}
+        surfaceMode={readerSurfaceMode}
+        readerScrollTop={readerScrollTopRef.current}
+        inboxItems={inboxItems}
+        inboxState={inboxState}
+        inboxOpeningId={inboxOpeningId}
+        inboxOpenError={inboxOpenError}
         contentVisible={preferences.readerContentVisible}
         onRetry={onRetryReader}
+        onRetryInbox={onRetryInbox}
+        onOpenDelivery={(id) => void openDelivery(id)}
+        onReaderScrollPositionChange={(scrollTop) => {
+          readerScrollTopRef.current = scrollTop;
+        }}
         onContentVisibilityChange={onReaderContentVisibilityChange}
         onCopy={onCopyReaderSelection}
         onCaptureSelection={onCaptureReaderSelection}
@@ -1070,6 +1106,31 @@ export function StickyShell(props: StickyShellProps) {
         </div>
         <div className="board-actions">
           <span className="persistence-dot" data-state={stickyState} />
+          <button
+            className="inbox-nav-button"
+            type="button"
+            aria-label={
+              readerSurfaceMode === "inbox"
+                ? "返回阅读"
+                : inboxUnreadCount > 0
+                  ? `打开收件箱，${inboxUnreadCount} 件未打开`
+                  : "打开收件箱"
+            }
+            onClick={() => {
+              if (readerSurfaceMode === "reader") {
+                onRetryInbox();
+                setReaderSurfaceMode("inbox");
+              } else {
+                setReaderSurfaceMode("reader");
+              }
+            }}
+          >
+            {readerSurfaceMode === "inbox"
+              ? "阅读"
+              : inboxUnreadCount > 0
+                ? `收件 ${inboxUnreadCount}`
+                : "收件"}
+          </button>
           <SettingsMenu
             preferences={preferences}
             saveState={preferenceSaveState}

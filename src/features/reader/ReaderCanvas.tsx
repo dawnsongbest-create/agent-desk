@@ -7,6 +7,9 @@ import type {
   WindowPreset,
 } from "../../domain/preferences";
 import type { ReaderDocument } from "../../domain/reader";
+import type { InboxDelivery } from "../../domain/delivery";
+import { InboxList } from "../inbox/InboxList";
+import type { InboxLoadState } from "../inbox/useInbox";
 import type { ReaderLoadState } from "./useReaderDocument";
 
 type ReaderCanvasProps = {
@@ -16,8 +19,17 @@ type ReaderCanvasProps = {
   windowPreset: WindowPreset;
   document: ReaderDocument | null;
   state: ReaderLoadState;
+  surfaceMode: "reader" | "inbox";
+  readerScrollTop: number;
+  inboxItems: InboxDelivery[];
+  inboxState: InboxLoadState;
+  inboxOpeningId: string | null;
+  inboxOpenError: string | null;
   contentVisible: boolean;
   onRetry(): void;
+  onRetryInbox(): void;
+  onOpenDelivery(id: string): void;
+  onReaderScrollPositionChange(scrollTop: number): void;
   onContentVisibilityChange(visible: boolean): void;
   onCopy(text: string): Promise<void>;
   onCaptureSelection(documentId: string, text: string): Promise<boolean>;
@@ -67,8 +79,17 @@ export function ReaderCanvas({
   windowPreset,
   document,
   state,
+  surfaceMode,
+  readerScrollTop,
+  inboxItems,
+  inboxState,
+  inboxOpeningId,
+  inboxOpenError,
   contentVisible,
   onRetry,
+  onRetryInbox,
+  onOpenDelivery,
+  onReaderScrollPositionChange,
   onContentVisibilityChange,
   onCopy,
   onCaptureSelection,
@@ -79,6 +100,7 @@ export function ReaderCanvas({
   const closeTimerRef = useRef<number | null>(null);
   const hiddenScrollTopRef = useRef(0);
   const restoreScrollRef = useRef(false);
+  const surfaceIdentityRef = useRef({ mode: surfaceMode, documentId: document?.id ?? null });
   const [popover, setPopover] = useState<SelectionPopover | null>(null);
 
   function closePopover() {
@@ -134,12 +156,25 @@ export function ReaderCanvas({
   }, [document?.id]);
 
   useEffect(() => {
-    if (contentVisible) return;
+    if (contentVisible && surfaceMode === "reader") return;
     if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
     closeTimerRef.current = null;
     setPopover(null);
     window.getSelection()?.removeAllRanges();
-  }, [contentVisible]);
+  }, [contentVisible, surfaceMode]);
+
+  useLayoutEffect(() => {
+    const viewport = scrollViewportRef.current;
+    if (!viewport) return;
+    const previous = surfaceIdentityRef.current;
+    const next = { mode: surfaceMode, documentId: document?.id ?? null };
+    surfaceIdentityRef.current = next;
+    if (previous.mode === next.mode && previous.documentId === next.documentId) return;
+    const frame = window.requestAnimationFrame(() => {
+      viewport.scrollTop = surfaceMode === "reader" ? readerScrollTop : 0;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [document?.id, readerScrollTop, surfaceMode]);
 
   useLayoutEffect(() => {
     if (!contentVisible || !restoreScrollRef.current) return;
@@ -213,29 +248,47 @@ export function ReaderCanvas({
       data-window-preset={windowPreset}
       data-current-document-id={document?.id ?? ""}
       data-content-visible={contentVisible}
+      data-surface-mode={surfaceMode}
       aria-label="Reader Canvas"
     >
       <div className="reader-safe-shelf" data-testid="reader-safe-shelf">
-        <button
-          className="reader-visibility-control"
-          type="button"
-          aria-pressed={!contentVisible}
-          onClick={toggleContentVisibility}
-        >
-          {contentVisible ? "隐藏正文" : "显示正文"}
-        </button>
+        {surfaceMode === "reader" ? (
+          <button
+            className="reader-visibility-control"
+            type="button"
+            aria-pressed={!contentVisible}
+            onClick={toggleContentVisibility}
+          >
+            {contentVisible ? "隐藏正文" : "显示正文"}
+          </button>
+        ) : (
+          <span className="inbox-shelf-label">收件箱</span>
+        )}
         <span className="reader-mini-shelf-slot" data-testid="reader-mini-shelf-slot" aria-hidden />
       </div>
       <div
         ref={scrollViewportRef}
         className="reader-scroll-viewport"
-        data-content-visible={contentVisible}
+        data-content-visible={surfaceMode === "inbox" || contentVisible}
         role="region"
-        aria-label="Reader scroll viewport"
-        tabIndex={contentVisible ? 0 : -1}
-        onScroll={closePopover}
+        aria-label={surfaceMode === "reader" ? "Reader scroll viewport" : "Inbox scroll viewport"}
+        tabIndex={surfaceMode === "inbox" || contentVisible ? 0 : -1}
+        onScroll={(event) => {
+          if (surfaceMode === "reader") onReaderScrollPositionChange(event.currentTarget.scrollTop);
+          closePopover();
+        }}
       >
-        {contentVisible && state === "error" ? (
+        {surfaceMode === "inbox" ? (
+          <InboxList
+            items={inboxItems}
+            state={inboxState}
+            openingId={inboxOpeningId}
+            openError={inboxOpenError}
+            onRetry={onRetryInbox}
+            onOpen={onOpenDelivery}
+          />
+        ) : null}
+        {surfaceMode === "reader" && contentVisible && state === "error" ? (
           <div className="reader-load-state" role="alert">
             <p>无法读取本地阅读文档。</p>
             <button type="button" onClick={onRetry}>
@@ -243,7 +296,7 @@ export function ReaderCanvas({
             </button>
           </div>
         ) : null}
-        {contentVisible && document ? (
+        {surfaceMode === "reader" && contentVisible && document ? (
           <article
             ref={contentRef}
             className="reader-content"
@@ -268,13 +321,13 @@ export function ReaderCanvas({
               ✦
             </p>
           </article>
-        ) : contentVisible && state === "loading" ? (
+        ) : surfaceMode === "reader" && contentVisible && state === "loading" ? (
           <div className="reader-load-state" aria-label="正在读取文档">
             正在展开纸张…
           </div>
         ) : null}
       </div>
-      {contentVisible && popover ? (
+      {surfaceMode === "reader" && contentVisible && popover ? (
         <div
           ref={popoverRef}
           className="reader-selection-popover"

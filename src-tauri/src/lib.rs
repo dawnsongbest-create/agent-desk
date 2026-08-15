@@ -1,4 +1,5 @@
 pub mod application;
+mod delivery;
 pub mod domain;
 pub mod persistence;
 mod preferences;
@@ -54,10 +55,13 @@ pub fn run() {
                 persistence::reader_document_repository::SqliteReaderDocumentRepository::new(
                     database.0.clone(),
                 );
+            let delivery_repository =
+                persistence::delivery_repository::SqliteDeliveryRepository::new(database.0.clone());
 
             app.manage(database);
             app.manage(sticky::StickyState::new(sticky_repository));
             app.manage(reader::ReaderState::new(reader_repository));
+            app.manage(delivery::DeliveryState::new(delivery_repository));
             preferences::initialize(app.handle()).map_err(std::io::Error::other)?;
             shell::setup_tray(app)?;
             shell::restore_main_window(app.handle())?;
@@ -92,7 +96,11 @@ pub fn run() {
             reader::get_reader_document,
             reader::list_reader_documents,
             reader::create_reader_document,
-            reader::capture_reader_selection
+            reader::capture_reader_selection,
+            delivery::ingest_delivery,
+            delivery::list_inbox,
+            delivery::get_inbox_unread_count,
+            delivery::open_delivery
         ])
         .run(tauri::generate_context!())
         .expect("error while running Agent Desk");

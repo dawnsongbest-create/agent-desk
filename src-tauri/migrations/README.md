@@ -13,3 +13,5 @@
 `0003_sticky_record_profile.sql` expands the shipped long-record capacity and adds the Sticky quote profile. It remains frozen.
 
 `0004_reader_documents.sql` adds the minimal durable ReaderDocument table and the one-to-one Reader selection provenance for existing note cards. It does not add delivery, Inbox, progress, annotation, or cursor state.
+
+`0005_delivery_inbox.sql` adds the minimal Delivery envelope linked one-to-one to a durable ReaderDocument, with a unique idempotency key and nullable first-open timestamp. It does not add Gateway, Agent, notification, archive, status, progress, or cursor state.

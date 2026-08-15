@@ -3,6 +3,7 @@ import type { Preferences } from "./domain/preferences";
 import { defaultPreferences } from "./domain/preferences";
 import { StickyHome } from "./features/sticky/StickyHome";
 import { tauriPreferences } from "./infrastructure/tauri/preferences";
+import { tauriDeliveries } from "./infrastructure/tauri/delivery";
 import { tauriReaderDocuments } from "./infrastructure/tauri/reader";
 import { tauriStickyCards } from "./infrastructure/tauri/sticky";
 import { applyTheme } from "./styles/theme";
@@ -64,6 +65,7 @@ function App() {
     <StickyHome
       port={tauriStickyCards}
       readerPort={tauriReaderDocuments}
+      deliveryPort={tauriDeliveries}
       preferences={preferences}
       preferenceSaveState={saveState}
       onThemeChange={(theme) => save({ ...preferencesRef.current, theme })}

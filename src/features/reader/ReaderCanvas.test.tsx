@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import appCss from "../../App.css?raw";
 import type { WindowPreset } from "../../domain/preferences";
 import type { ReaderDocument } from "../../domain/reader";
+import type { InboxDelivery } from "../../domain/delivery";
 import { ReaderCanvas } from "./ReaderCanvas";
 
 const typographyFixture = `# 文中主标题
@@ -44,6 +45,17 @@ const readerDocument: ReaderDocument = {
   updatedAt: "2026-08-15T00:00:00Z",
 };
 
+const inboxItem: InboxDelivery = {
+  delivery: {
+    id: "delivery-test",
+    documentId: readerDocument.id,
+    idempotencyKey: "reader-canvas-inbox",
+    deliveredAt: "2026-08-15T08:30:00.000Z",
+    openedAt: null,
+  },
+  document: readerDocument,
+};
+
 function renderReader(
   windowPreset: WindowPreset = "iphone5",
   document: ReaderDocument = readerDocument,
@@ -61,8 +73,17 @@ function renderReader(
         windowPreset={windowPreset}
         document={document}
         state="ready"
+        surfaceMode="reader"
+        readerScrollTop={0}
+        inboxItems={[]}
+        inboxState="ready"
+        inboxOpeningId={null}
+        inboxOpenError={null}
         contentVisible={contentVisible}
         onRetry={vi.fn()}
+        onRetryInbox={vi.fn()}
+        onOpenDelivery={vi.fn()}
+        onReaderScrollPositionChange={vi.fn()}
         onContentVisibilityChange={onContentVisibilityChange}
         onCopy={onCopy}
         onCaptureSelection={onCaptureSelection}
@@ -92,12 +113,54 @@ function VisibilityHarness({
       windowPreset="iphone5"
       document={readerDocument}
       state="ready"
+      surfaceMode="reader"
+      readerScrollTop={0}
+      inboxItems={[]}
+      inboxState="ready"
+      inboxOpeningId={null}
+      inboxOpenError={null}
       contentVisible={contentVisible}
       onRetry={vi.fn()}
+      onRetryInbox={vi.fn()}
+      onOpenDelivery={vi.fn()}
+      onReaderScrollPositionChange={vi.fn()}
       onContentVisibilityChange={setContentVisible}
       onCopy={onCopy}
       onCaptureSelection={onCaptureSelection}
     />
+  );
+}
+
+function SurfaceHarness() {
+  const [surfaceMode, setSurfaceMode] = useState<"reader" | "inbox">("reader");
+  return (
+    <>
+      <button type="button" onClick={() => setSurfaceMode("inbox")}>
+        切换到收件
+      </button>
+      <ReaderCanvas
+        skin="grid"
+        fontSize="standard"
+        lineSpacing="standard"
+        windowPreset="iphone5"
+        document={readerDocument}
+        state="ready"
+        surfaceMode={surfaceMode}
+        readerScrollTop={0}
+        inboxItems={[]}
+        inboxState="ready"
+        inboxOpeningId={null}
+        inboxOpenError={null}
+        contentVisible
+        onRetry={vi.fn()}
+        onRetryInbox={vi.fn()}
+        onOpenDelivery={vi.fn()}
+        onReaderScrollPositionChange={vi.fn()}
+        onContentVisibilityChange={vi.fn()}
+        onCopy={vi.fn()}
+        onCaptureSelection={vi.fn(async () => true)}
+      />
+    </>
   );
 }
 
@@ -182,6 +245,42 @@ describe("ReaderCanvas document and selection", () => {
     },
   );
 
+  it.each(["sticky", "iphone5", "pocket", "book"] as const)(
+    "renders Inbox through the same %s paper viewport and Safe Shelf",
+    (preset) => {
+      render(
+        <ReaderCanvas
+          skin="grid"
+          fontSize="standard"
+          lineSpacing="standard"
+          windowPreset={preset}
+          document={readerDocument}
+          state="ready"
+          surfaceMode="inbox"
+          readerScrollTop={0}
+          inboxItems={[inboxItem]}
+          inboxState="ready"
+          inboxOpeningId={null}
+          inboxOpenError={null}
+          contentVisible
+          onRetry={vi.fn()}
+          onRetryInbox={vi.fn()}
+          onOpenDelivery={vi.fn()}
+          onReaderScrollPositionChange={vi.fn()}
+          onContentVisibilityChange={vi.fn()}
+          onCopy={vi.fn()}
+          onCaptureSelection={vi.fn(async () => true)}
+        />,
+      );
+      expect(screen.getByRole("region", { name: "Reader Canvas" })).toHaveAttribute(
+        "data-window-preset",
+        preset,
+      );
+      expect(screen.getByText("收件箱")).toBeVisible();
+      expect(screen.getByRole("button", { name: /^未读/ })).toBeVisible();
+    },
+  );
+
   it.each(["", " \n\t "])("does not show actions for empty selection %j", (selectedText) => {
     renderReader();
     const article = screen.getByRole("article", { name: "真实 Reader 文档" });
@@ -238,6 +337,19 @@ describe("ReaderCanvas document and selection", () => {
     selection.mockReturnValue(null);
     fireEvent(globalThis.document, new Event("selectionchange"));
     expect(screen.queryByRole("toolbar", { name: "所选文字操作" })).not.toBeInTheDocument();
+  });
+
+  it("clears the DOM selection and popover when entering Inbox", async () => {
+    const user = userEvent.setup();
+    render(<SurfaceHarness />);
+    const article = screen.getByRole("article", { name: readerDocument.title });
+    mockSelection(article.firstChild!, "切换前选择");
+    fireEvent.mouseUp(article);
+    expect(screen.getByRole("toolbar", { name: "所选文字操作" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "切换到收件" }));
+    expect(screen.queryByRole("toolbar", { name: "所选文字操作" })).not.toBeInTheDocument();
+    expect(window.getSelection()?.removeAllRanges).toHaveBeenCalled();
+    expect(screen.getByRole("region", { name: "Inbox scroll viewport" })).toBeVisible();
   });
 
   it.each(["中文原文", "English exact text", "第一行\n\n第二行", "const exact = true;"])(

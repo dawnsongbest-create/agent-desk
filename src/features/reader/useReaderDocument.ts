@@ -54,5 +54,10 @@ export function useReaderDocument(
     [port],
   );
 
-  return { document, state, retry: load, captureSelection, copyText: port.copyText };
+  const acceptOpened = useCallback((opened: ReaderDocument) => {
+    setDocument(opened);
+    setState("ready");
+  }, []);
+
+  return { document, state, retry: load, captureSelection, copyText: port.copyText, acceptOpened };
 }

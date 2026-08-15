@@ -3,9 +3,11 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { StickyCardsPort } from "../../application/ports/sticky";
 import type { ReaderDocumentsPort } from "../../application/ports/reader";
+import type { DeliveriesPort } from "../../application/ports/delivery";
 import { defaultPreferences, type Preferences } from "../../domain/preferences";
 import type { ReaderDocument } from "../../domain/reader";
 import type { CreateStickyCardInput, StickyCard, StickyProfile } from "../../domain/sticky";
+import type { InboxDelivery } from "../../domain/delivery";
 import { playPageTurnSound } from "./pageTurnSound";
 import { StickyHome } from "./StickyHome";
 
@@ -30,6 +32,13 @@ const readerPort: ReaderDocumentsPort = {
   create: vi.fn(async () => readerDocument),
   captureSelection: vi.fn(),
   copyText: vi.fn(),
+};
+
+const deliveryPort: DeliveriesPort = {
+  ingest: vi.fn(),
+  listInbox: vi.fn(async () => []),
+  getUnreadCount: vi.fn(async () => 0),
+  open: vi.fn(),
 };
 
 function makeCard(
@@ -114,11 +123,13 @@ function renderHome(
   readerFontSizeChange = vi.fn(),
   readerLineSpacingChange = vi.fn(),
   readerDocuments: ReaderDocumentsPort = readerPort,
+  deliveries: DeliveriesPort = deliveryPort,
 ) {
   return render(
     <StickyHome
       port={port}
       readerPort={readerDocuments}
+      deliveryPort={deliveries}
       preferences={preferences}
       preferenceSaveState="idle"
       now={new Date("2026-08-12T12:00:00")}
@@ -133,6 +144,53 @@ function renderHome(
       onCurrentReaderDocumentChange={vi.fn()}
     />,
   );
+}
+
+class MemoryDeliveryPort implements DeliveriesPort {
+  items: InboxDelivery[];
+  constructor(items: InboxDelivery[]) {
+    this.items = items;
+  }
+  ingest = vi.fn();
+  listInbox = vi.fn(async () =>
+    this.items.map((item) => ({
+      ...item,
+      delivery: { ...item.delivery },
+      document: { ...item.document },
+    })),
+  );
+  getUnreadCount = vi.fn(
+    async () => this.items.filter((item) => item.delivery.openedAt === null).length,
+  );
+  open = vi.fn(async (id: string) => {
+    const item = this.items.find((candidate) => candidate.delivery.id === id);
+    if (!item) throw new Error("missing delivery");
+    item.delivery.openedAt ??= "2026-08-15T10:00:00.000Z";
+    return { ...item, delivery: { ...item.delivery }, document: { ...item.document } };
+  });
+}
+
+function inboxDelivery(id: string, title: string): InboxDelivery {
+  return {
+    delivery: {
+      id,
+      documentId: `reader-${id}`,
+      idempotencyKey: `key-${id}`,
+      deliveredAt: "2026-08-15T08:00:00.000Z",
+      openedAt: null,
+    },
+    document: {
+      id: `reader-${id}`,
+      documentType: "brief",
+      title,
+      subtitle: "由 Delivery 送达",
+      contentMarkdown: "# 新文档\n\n这是从收件箱打开的正文。",
+      sourceType: "agent",
+      sourceLabel: "Daily Brief",
+      createdAt: "2026-08-15T08:00:00.000Z",
+      updatedAt: "2026-08-15T08:00:00.000Z",
+    },
+  };
 }
 
 function dispatchPointer(
@@ -152,6 +210,88 @@ async function expand(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("StickyHome M1-B4", () => {
+  it("navigates Reader to Inbox and opens a Delivery into visible Reader content", async () => {
+    const user = userEvent.setup();
+    const deliveries = new MemoryDeliveryPort([inboxDelivery("a", "Agent 今日简报")]);
+    renderHome(
+      new MemoryStickyPort(),
+      vi.fn(),
+      defaultPreferences,
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      readerPort,
+      deliveries,
+    );
+    const inboxButton = await screen.findByRole("button", {
+      name: "打开收件箱，1 件未打开",
+    });
+    const readerViewport = screen.getByRole("region", { name: "Reader scroll viewport" });
+    readerViewport.scrollTop = 640;
+    fireEvent.scroll(readerViewport);
+    expect(inboxButton).toHaveTextContent("收件 1");
+    await user.click(inboxButton);
+    expect(screen.getByText("收件箱")).toBeVisible();
+    expect(screen.getByRole("region", { name: "Inbox scroll viewport" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /未读，Agent 今日简报/ }));
+    expect(deliveries.open).toHaveBeenCalledWith("a");
+    expect(await screen.findByRole("article", { name: "Agent 今日简报" })).toBeVisible();
+    await waitFor(() => expect(readerViewport.scrollTop).toBe(0));
+    expect(screen.getByText("这是从收件箱打开的正文。")).toBeVisible();
+    expect(screen.getByRole("button", { name: "打开收件箱" })).toHaveTextContent("收件");
+  });
+
+  it("keeps Inbox unread and active when opening a Delivery fails", async () => {
+    const user = userEvent.setup();
+    const deliveries = new MemoryDeliveryPort([inboxDelivery("broken", "无法打开的简报")]);
+    deliveries.open.mockRejectedValueOnce(new Error("fixture failure"));
+    renderHome(
+      new MemoryStickyPort(),
+      vi.fn(),
+      defaultPreferences,
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      readerPort,
+      deliveries,
+    );
+    await user.click(await screen.findByRole("button", { name: "打开收件箱，1 件未打开" }));
+    await user.click(screen.getByRole("button", { name: /未读，无法打开的简报/ }));
+    expect(screen.getByRole("alert")).toHaveTextContent("无法打开这份内容，请重试。");
+    expect(screen.getByRole("region", { name: "Inbox scroll viewport" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "返回阅读" })).toHaveTextContent("阅读");
+  });
+
+  it("restores the same Reader scroll after an Inbox round trip", async () => {
+    const user = userEvent.setup();
+    renderHome(new MemoryStickyPort());
+    const viewport = await screen.findByRole("region", { name: "Reader scroll viewport" });
+    viewport.scrollTop = 518;
+    fireEvent.scroll(viewport);
+    await user.click(screen.getByRole("button", { name: "打开收件箱" }));
+    expect(screen.getByRole("region", { name: "Inbox scroll viewport" })).toBe(viewport);
+    await user.click(screen.getByRole("button", { name: "返回阅读" }));
+    await waitFor(() => expect(viewport.scrollTop).toBe(518));
+  });
+
+  it("preserves Blank Reader when visiting Inbox and returning with 阅读", async () => {
+    const user = userEvent.setup();
+    renderHome(
+      new MemoryStickyPort(),
+      vi.fn(),
+      { ...defaultPreferences, readerContentVisible: false },
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      readerPort,
+      new MemoryDeliveryPort([]),
+    );
+    await user.click(await screen.findByRole("button", { name: "打开收件箱" }));
+    expect(screen.getByText("暂时没有新内容。")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "返回阅读" }));
+    expect(screen.queryByRole("article")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "显示正文" })).toBeVisible();
+  });
   it("adds a Reader selection capture to the existing 记录 list without opening Sticky", async () => {
     const user = userEvent.setup();
     const port = new MemoryStickyPort();
@@ -422,6 +562,7 @@ describe("StickyHome M1-B4", () => {
       <StickyHome
         port={port}
         readerPort={readerPort}
+        deliveryPort={deliveryPort}
         preferences={{ ...defaultPreferences, stickyMode: "mini" }}
         preferenceSaveState="idle"
         now={new Date("2026-08-12T12:00:00")}

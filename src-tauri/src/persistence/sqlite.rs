@@ -168,7 +168,7 @@ mod tests {
             WHERE type = 'table'
               AND name IN (
                   'cards', 'note_payloads', 'task_payloads', 'card_placements',
-                  'sticky_surface_profile', 'reader_documents', 'record_source_refs'
+                  'sticky_surface_profile', 'reader_documents', 'record_source_refs', 'deliveries'
               )
             "#,
         )
@@ -186,8 +186,8 @@ mod tests {
                 .await
                 .expect("migration history query");
 
-        assert_eq!(table_count, 7);
-        assert_eq!(applied_versions, vec![1, 2, 3, 4]);
+        assert_eq!(table_count, 8);
+        assert_eq!(applied_versions, vec![1, 2, 3, 4, 5]);
         assert_eq!(foreign_keys, 1);
     }
 
@@ -261,7 +261,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3, 4]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5]);
         assert_eq!(note, "保留的记录");
         assert_eq!(
             task,
@@ -269,6 +269,75 @@ mod tests {
         );
         assert_eq!(quote, "保留的便签一句");
         assert_eq!(placements, 2);
+    }
+
+    #[tokio::test]
+    async fn upgrades_a_0004_database_without_changing_reader_or_sticky_data() {
+        let temp = tempfile::tempdir().expect("temp directory");
+        let database_path = temp.path().join("upgrade-0004.sqlite3");
+        let database = connect(&database_path).await.unwrap();
+        sqlx::raw_sql(
+            r#"
+            DROP TABLE deliveries;
+            DELETE FROM _sqlx_migrations WHERE version = 5;
+
+            INSERT INTO cards (
+                id, card_type, title, lifecycle, attention, source_kind,
+                source_agent_id, source_delivery_id, metadata_json,
+                created_at, updated_at
+            ) VALUES (
+                'existing-note-0004', 'note', NULL, 'active', NULL, 'user',
+                NULL, NULL, '{}', '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z'
+            );
+            INSERT INTO note_payloads (card_id, body)
+                VALUES ('existing-note-0004', '0004 保留记录');
+            INSERT INTO card_placements (card_id, surface, position, created_at, updated_at)
+                VALUES ('existing-note-0004', 'sticky', 0,
+                        '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z');
+            INSERT INTO reader_documents (
+                id, document_type, title, subtitle, content_markdown,
+                source_type, source_label, created_at, updated_at
+            ) VALUES (
+                'existing-reader-0004', 'article', '0004 保留文章', NULL,
+                '正文保持不变', 'local', '迁移测试',
+                '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z'
+            );
+            "#,
+        )
+        .execute(&database.0)
+        .await
+        .unwrap();
+        database.0.close().await;
+
+        let upgraded = connect(&database_path).await.unwrap();
+        let versions: Vec<i64> =
+            sqlx::query_scalar("SELECT version FROM _sqlx_migrations ORDER BY version")
+                .fetch_all(&upgraded.0)
+                .await
+                .unwrap();
+        let note: String = sqlx::query_scalar(
+            "SELECT body FROM note_payloads WHERE card_id = 'existing-note-0004'",
+        )
+        .fetch_one(&upgraded.0)
+        .await
+        .unwrap();
+        let reader: (String, String) = sqlx::query_as(
+            "SELECT title, content_markdown FROM reader_documents WHERE id = 'existing-reader-0004'",
+        )
+        .fetch_one(&upgraded.0)
+        .await
+        .unwrap();
+        let delivery_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM deliveries")
+            .fetch_one(&upgraded.0)
+            .await
+            .unwrap();
+        assert_eq!(versions, vec![1, 2, 3, 4, 5]);
+        assert_eq!(note, "0004 保留记录");
+        assert_eq!(
+            reader,
+            ("0004 保留文章".to_owned(), "正文保持不变".to_owned())
+        );
+        assert_eq!(delivery_count, 0);
     }
 
     #[tokio::test]

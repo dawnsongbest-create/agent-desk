@@ -1,5 +1,6 @@
 import type { StickyCardsPort } from "../../application/ports/sticky";
 import type { ReaderDocumentsPort } from "../../application/ports/reader";
+import type { DeliveriesPort } from "../../application/ports/delivery";
 import type {
   Preferences,
   ReaderFontSize,
@@ -12,10 +13,12 @@ import type {
 import { StickyShell } from "./StickyShell";
 import { useStickyCards } from "./useStickyCards";
 import { useReaderDocument } from "../reader/useReaderDocument";
+import { useInbox } from "../inbox/useInbox";
 
 type StickyHomeProps = {
   port: StickyCardsPort;
   readerPort: ReaderDocumentsPort;
+  deliveryPort: DeliveriesPort;
   preferences: Preferences;
   preferenceSaveState: "loading" | "idle" | "saving" | "saved" | "error";
   now?: Date;
@@ -33,6 +36,7 @@ type StickyHomeProps = {
 export function StickyHome({
   port,
   readerPort,
+  deliveryPort,
   preferences,
   preferenceSaveState,
   now,
@@ -53,6 +57,7 @@ export function StickyHome({
     preferences.currentReaderDocumentId,
     onCurrentReaderDocumentChange,
   );
+  const inbox = useInbox(deliveryPort, preferenceSaveState !== "loading");
 
   async function captureSelection(documentId: string, text: string) {
     try {
@@ -64,11 +69,25 @@ export function StickyHome({
     }
   }
 
+  async function openDelivery(id: string) {
+    const opened = await inbox.open(id);
+    if (!opened) return false;
+    reader.acceptOpened(opened.document);
+    onCurrentReaderDocumentChange(opened.document.id);
+    onReaderContentVisibilityChange(true);
+    return true;
+  }
+
   return (
     <StickyShell
       preferences={preferences}
       readerDocument={reader.document}
       readerState={reader.state}
+      inboxItems={inbox.items}
+      inboxUnreadCount={inbox.unreadCount}
+      inboxState={inbox.state}
+      inboxOpeningId={inbox.openingId}
+      inboxOpenError={inbox.openError}
       preferenceSaveState={preferenceSaveState}
       cards={sticky.cards}
       profile={sticky.profile}
@@ -84,6 +103,8 @@ export function StickyHome({
       onReaderLineSpacingChange={onReaderLineSpacingChange}
       onReaderContentVisibilityChange={onReaderContentVisibilityChange}
       onRetryReader={reader.retry}
+      onRetryInbox={inbox.retry}
+      onOpenDelivery={openDelivery}
       onCopyReaderSelection={reader.copyText}
       onCaptureReaderSelection={captureSelection}
       onCreate={sticky.create}
