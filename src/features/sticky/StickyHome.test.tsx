@@ -129,6 +129,7 @@ function renderHome(
       onStickyModeChange={modeChange}
       onReaderFontSizeChange={readerFontSizeChange}
       onReaderLineSpacingChange={readerLineSpacingChange}
+      onReaderContentVisibilityChange={vi.fn()}
       onCurrentReaderDocumentChange={vi.fn()}
     />,
   );
@@ -411,10 +412,12 @@ describe("StickyHome M1-B4", () => {
   it("switches Compact to Mini Tab and restores Compact without state conflict", async () => {
     const user = userEvent.setup();
     const modeChange = vi.fn();
+    const positionChange = vi.fn();
     const port = new MemoryStickyPort([makeCard("todo", "task", "一件事", 0)]);
-    const view = renderHome(port, vi.fn(), defaultPreferences, modeChange);
+    const view = renderHome(port, positionChange, defaultPreferences, modeChange);
     await user.click(await screen.findByRole("button", { name: "缩成 Mini Tab" }));
     expect(modeChange).toHaveBeenCalledWith("mini");
+    expect(positionChange).not.toHaveBeenCalled();
     view.rerender(
       <StickyHome
         port={port}
@@ -429,16 +432,18 @@ describe("StickyHome M1-B4", () => {
         onStickyModeChange={modeChange}
         onReaderFontSizeChange={vi.fn()}
         onReaderLineSpacingChange={vi.fn()}
+        onReaderContentVisibilityChange={vi.fn()}
         onCurrentReaderDocumentChange={vi.fn()}
       />,
     );
-    const mini = screen.getByRole("button", { name: "恢复 Compact Sticky 或拖动 Mini Tab" });
+    const mini = screen.getByRole("button", { name: "恢复 Compact Sticky" });
     expect(mini).toHaveTextContent("TODAY1");
+    expect(mini).toHaveAttribute("data-pinned-to-shelf", "true");
     await user.click(mini);
     expect(modeChange).toHaveBeenLastCalledWith("compact");
   });
 
-  it("drags Mini Tab without restoring Compact", async () => {
+  it("pins Mini to the Safe Shelf without changing the saved Compact position", async () => {
     const modeChange = vi.fn();
     const positionChange = vi.fn();
     renderHome(
@@ -448,40 +453,14 @@ describe("StickyHome M1-B4", () => {
       modeChange,
     );
     const mini = await screen.findByRole("button", {
-      name: "恢复 Compact Sticky 或拖动 Mini Tab",
-    });
-    const board = mini.parentElement!;
-    vi.spyOn(mini, "getBoundingClientRect").mockReturnValue({
-      x: 100,
-      y: 200,
-      left: 100,
-      top: 200,
-      right: 178,
-      bottom: 246,
-      width: 78,
-      height: 46,
-      toJSON: () => ({}),
-    });
-    vi.spyOn(board, "getBoundingClientRect").mockReturnValue({
-      x: 0,
-      y: 0,
-      left: 0,
-      top: 0,
-      right: 420,
-      bottom: 594,
-      width: 420,
-      height: 594,
-      toJSON: () => ({}),
-    });
-    Object.defineProperties(mini, {
-      offsetWidth: { configurable: true, value: 78 },
-      offsetHeight: { configurable: true, value: 46 },
+      name: "恢复 Compact Sticky",
     });
     dispatchPointer(mini, "pointerDown", { pointerId: 3, clientX: 110, clientY: 210 });
     dispatchPointer(mini, "pointerMove", { pointerId: 3, clientX: 140, clientY: 240 });
     dispatchPointer(mini, "pointerUp", { pointerId: 3, clientX: 140, clientY: 240 });
-    expect(positionChange).toHaveBeenCalledOnce();
+    expect(positionChange).not.toHaveBeenCalled();
     expect(modeChange).not.toHaveBeenCalled();
+    expect(mini).toHaveAttribute("data-pinned-to-shelf", "true");
   });
 
   it("offers all four Window Size Presets with Mini Tab production behavior", async () => {
@@ -502,6 +481,7 @@ describe("StickyHome M1-B4", () => {
     ]);
     renderHome(port);
     const reader = await screen.findByRole("region", { name: "Reader Canvas" });
+    const readerViewport = screen.getByRole("region", { name: "Reader scroll viewport" });
     const compact = screen.getByRole("button", { name: "展开或拖动便利贴" });
     expect(reader).toHaveAttribute("data-reader-layer", "1");
     expect(compact.parentElement).toHaveAttribute("data-reader-layer", "2");
@@ -512,14 +492,14 @@ describe("StickyHome M1-B4", () => {
       scrollHeight: { configurable: true, value: 140 },
       scrollTop: { configurable: true, writable: true, value: 20 },
     });
-    reader.scrollTop = 100;
+    readerViewport.scrollTop = 100;
     fireEvent.wheel(todo, { deltaY: 18 });
     expect(todo.scrollTop).toBe(38);
-    expect(reader.scrollTop).toBe(100);
+    expect(readerViewport.scrollTop).toBe(100);
 
     todo.scrollTop = 70;
     fireEvent.wheel(todo, { deltaY: 18 });
-    expect(reader.scrollTop).toBe(118);
+    expect(readerViewport.scrollTop).toBe(118);
   });
 
   it("offers keyboard-accessible Reader font size and line spacing controls", async () => {

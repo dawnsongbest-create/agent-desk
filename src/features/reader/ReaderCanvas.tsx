@@ -16,7 +16,9 @@ type ReaderCanvasProps = {
   windowPreset: WindowPreset;
   document: ReaderDocument | null;
   state: ReaderLoadState;
+  contentVisible: boolean;
   onRetry(): void;
+  onContentVisibilityChange(visible: boolean): void;
   onCopy(text: string): Promise<void>;
   onCaptureSelection(documentId: string, text: string): Promise<boolean>;
 };
@@ -65,13 +67,18 @@ export function ReaderCanvas({
   windowPreset,
   document,
   state,
+  contentVisible,
   onRetry,
+  onContentVisibilityChange,
   onCopy,
   onCaptureSelection,
 }: ReaderCanvasProps) {
   const contentRef = useRef<HTMLElement>(null);
+  const scrollViewportRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const closeTimerRef = useRef<number | null>(null);
+  const hiddenScrollTopRef = useRef(0);
+  const restoreScrollRef = useRef(false);
   const [popover, setPopover] = useState<SelectionPopover | null>(null);
 
   function closePopover() {
@@ -126,6 +133,25 @@ export function ReaderCanvas({
     };
   }, [document?.id]);
 
+  useEffect(() => {
+    if (contentVisible) return;
+    if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = null;
+    setPopover(null);
+    window.getSelection()?.removeAllRanges();
+  }, [contentVisible]);
+
+  useLayoutEffect(() => {
+    if (!contentVisible || !restoreScrollRef.current) return;
+    restoreScrollRef.current = false;
+    const frame = window.requestAnimationFrame(() => {
+      if (scrollViewportRef.current) {
+        scrollViewportRef.current.scrollTop = hiddenScrollTopRef.current;
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [contentVisible]);
+
   useLayoutEffect(() => {
     if (!popover || !popoverRef.current) return;
     const bounds = popoverRef.current.getBoundingClientRect();
@@ -161,6 +187,18 @@ export function ReaderCanvas({
     closeTimerRef.current = window.setTimeout(closePopover, 920);
   }
 
+  function toggleContentVisibility() {
+    if (contentVisible) {
+      hiddenScrollTopRef.current = scrollViewportRef.current?.scrollTop ?? 0;
+      closePopover();
+      window.getSelection()?.removeAllRanges();
+      onContentVisibilityChange(false);
+      return;
+    }
+    restoreScrollRef.current = true;
+    onContentVisibilityChange(true);
+  }
+
   const popoverStyle: CSSProperties | undefined = popover
     ? { left: popover.left, top: popover.top }
     : undefined;
@@ -174,50 +212,69 @@ export function ReaderCanvas({
       data-line-spacing={lineSpacing}
       data-window-preset={windowPreset}
       data-current-document-id={document?.id ?? ""}
+      data-content-visible={contentVisible}
       aria-label="Reader Canvas"
-      tabIndex={0}
-      onScroll={closePopover}
     >
-      <div className="reader-top-safe-area" data-testid="reader-top-safe-area" aria-hidden="true" />
-      {state === "error" ? (
-        <div className="reader-load-state" role="alert">
-          <p>无法读取本地阅读文档。</p>
-          <button type="button" onClick={onRetry}>
-            重试
-          </button>
-        </div>
-      ) : null}
-      {document ? (
-        <article
-          ref={contentRef}
-          className="reader-content"
-          aria-label={document.title}
-          onMouseUp={detectSelection}
-          onKeyUp={detectSelection}
+      <div className="reader-safe-shelf" data-testid="reader-safe-shelf">
+        <button
+          className="reader-visibility-control"
+          type="button"
+          aria-pressed={!contentVisible}
+          onClick={toggleContentVisibility}
         >
-          <header className="reader-document-header">
-            <p className="reader-context">
-              {documentTypeLabels[document.documentType]} ·{" "}
-              {document.sourceLabel ?? document.sourceType}
-            </p>
-            <h1>{document.title}</h1>
-            {document.subtitle ? <p className="reader-subtitle">{document.subtitle}</p> : null}
-          </header>
-          <div className="reader-article">
-            <ReactMarkdown skipHtml components={markdownComponents}>
-              {document.contentMarkdown}
-            </ReactMarkdown>
+          {contentVisible ? "隐藏正文" : "显示正文"}
+        </button>
+        <span className="reader-mini-shelf-slot" data-testid="reader-mini-shelf-slot" aria-hidden />
+      </div>
+      <div
+        ref={scrollViewportRef}
+        className="reader-scroll-viewport"
+        data-content-visible={contentVisible}
+        role="region"
+        aria-label="Reader scroll viewport"
+        tabIndex={contentVisible ? 0 : -1}
+        onScroll={closePopover}
+      >
+        {contentVisible && state === "error" ? (
+          <div className="reader-load-state" role="alert">
+            <p>无法读取本地阅读文档。</p>
+            <button type="button" onClick={onRetry}>
+              重试
+            </button>
           </div>
-          <p className="reader-end-mark" aria-hidden="true">
-            ✦
-          </p>
-        </article>
-      ) : state === "loading" ? (
-        <div className="reader-load-state" aria-label="正在读取文档">
-          正在展开纸张…
-        </div>
-      ) : null}
-      {popover ? (
+        ) : null}
+        {contentVisible && document ? (
+          <article
+            ref={contentRef}
+            className="reader-content"
+            aria-label={document.title}
+            onMouseUp={detectSelection}
+            onKeyUp={detectSelection}
+          >
+            <header className="reader-document-header">
+              <p className="reader-context">
+                {documentTypeLabels[document.documentType]} ·{" "}
+                {document.sourceLabel ?? document.sourceType}
+              </p>
+              <h1>{document.title}</h1>
+              {document.subtitle ? <p className="reader-subtitle">{document.subtitle}</p> : null}
+            </header>
+            <div className="reader-article">
+              <ReactMarkdown skipHtml components={markdownComponents}>
+                {document.contentMarkdown}
+              </ReactMarkdown>
+            </div>
+            <p className="reader-end-mark" aria-hidden="true">
+              ✦
+            </p>
+          </article>
+        ) : contentVisible && state === "loading" ? (
+          <div className="reader-load-state" aria-label="正在读取文档">
+            正在展开纸张…
+          </div>
+        ) : null}
+      </div>
+      {contentVisible && popover ? (
         <div
           ref={popoverRef}
           className="reader-selection-popover"

@@ -35,7 +35,6 @@ import type {
 import type { ReaderDocument } from "../../domain/reader";
 import {
   compactDragFrame,
-  preserveStickyTopOnModeChange,
   readerFontSizes,
   readerLineSpacings,
   settleCompactPosition,
@@ -77,6 +76,7 @@ type StickyShellProps = {
   onStickyModeChange(mode: StickyMode): void;
   onReaderFontSizeChange(size: ReaderFontSize): void;
   onReaderLineSpacingChange(spacing: ReaderLineSpacing): void;
+  onReaderContentVisibilityChange(visible: boolean): void;
   onRetryReader(): void;
   onCopyReaderSelection(text: string): Promise<void>;
   onCaptureReaderSelection(documentId: string, text: string): Promise<boolean>;
@@ -667,7 +667,7 @@ function consumeTodoWheel(element: HTMLDivElement, event: globalThis.WheelEvent)
     event.stopPropagation();
     return;
   }
-  const reader = document.querySelector<HTMLElement>(".reader-canvas");
+  const reader = document.querySelector<HTMLElement>(".reader-scroll-viewport");
   if (!reader || event.deltaY === 0) return;
   reader.scrollTop += event.deltaY;
   event.preventDefault();
@@ -676,6 +676,7 @@ function consumeTodoWheel(element: HTMLDivElement, event: globalThis.WheelEvent)
 type StickySurfaceProps = {
   mode: StickyMode;
   position: StickyPosition;
+  pinned?: boolean;
   label: string;
   onActivate(): void;
   onPositionChange(position: StickyPosition): void;
@@ -685,6 +686,7 @@ type StickySurfaceProps = {
 function StickySurface({
   mode,
   position,
+  pinned = false,
   label,
   onActivate,
   onPositionChange,
@@ -702,23 +704,26 @@ function StickySurface({
   const [snapHint, setSnapHint] = useState<StickyPosition["snap"]>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
 
-  const style: CSSProperties = live
-    ? { left: live.left, top: live.top, transform: "none" }
-    : position.snap
-      ? {
-          left: position.snap.endsWith("left") ? 12 : "auto",
-          right: position.snap.endsWith("right") ? 12 : "auto",
-          top: position.snap.startsWith("top") ? 76 : "auto",
-          bottom: position.snap.startsWith("bottom") ? 12 : "auto",
-          transform: "none",
-        }
-      : {
-          left: `clamp(12px, calc(${position.xRatio * 100}% - var(--sticky-surface-half-width)), calc(100% - var(--sticky-surface-width) - 12px))`,
-          top: `clamp(76px, calc(${position.yRatio * 100}% - var(--sticky-surface-half-height)), calc(100% - var(--sticky-surface-height) - 12px))`,
-          transform: "none",
-        };
+  const style: CSSProperties = pinned
+    ? {}
+    : live
+      ? { left: live.left, top: live.top, transform: "none" }
+      : position.snap
+        ? {
+            left: position.snap.endsWith("left") ? 12 : "auto",
+            right: position.snap.endsWith("right") ? 12 : "auto",
+            top: position.snap.startsWith("top") ? 76 : "auto",
+            bottom: position.snap.startsWith("bottom") ? 12 : "auto",
+            transform: "none",
+          }
+        : {
+            left: `clamp(12px, calc(${position.xRatio * 100}% - var(--sticky-surface-half-width)), calc(100% - var(--sticky-surface-width) - 12px))`,
+            top: `clamp(76px, calc(${position.yRatio * 100}% - var(--sticky-surface-half-height)), calc(100% - var(--sticky-surface-height) - 12px))`,
+            transform: "none",
+          };
 
   function pointerDown(event: PointerEvent<HTMLDivElement>) {
+    if (pinned) return;
     if ((event.target as HTMLElement).closest("[data-no-drag]")) return;
     const surface = surfaceRef.current;
     if (!surface) return;
@@ -802,11 +807,13 @@ function StickySurface({
       ref={surfaceRef}
       className="sticky-surface"
       data-mode={mode}
+      data-pinned-to-shelf={pinned}
       data-snap-hint={snapHint ?? "free"}
       style={style}
       role="button"
       tabIndex={0}
       aria-label={label}
+      onClick={pinned ? onActivate : undefined}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") onActivate();
       }}
@@ -928,7 +935,8 @@ function MiniStickyTab({
     <StickySurface
       mode="mini"
       position={position}
-      label="恢复 Compact Sticky 或拖动 Mini Tab"
+      pinned
+      label="恢复 Compact Sticky"
       onActivate={onRestore}
       onPositionChange={onPositionChange}
     >
@@ -964,6 +972,7 @@ export function StickyShell(props: StickyShellProps) {
     onStickyModeChange,
     onReaderFontSizeChange,
     onReaderLineSpacingChange,
+    onReaderContentVisibilityChange,
     onRetryReader,
     onCopyReaderSelection,
     onCaptureReaderSelection,
@@ -1036,14 +1045,6 @@ export function StickyShell(props: StickyShellProps) {
   }
 
   function changeStickyMode(nextMode: StickyMode) {
-    const currentMode = preferences.stickyMode;
-    const nextPosition = preserveStickyTopOnModeChange(
-      preferences.stickyPosition,
-      window.innerHeight,
-      currentMode,
-      nextMode,
-    );
-    if (nextPosition !== preferences.stickyPosition) onStickyPositionChange(nextPosition);
     onStickyModeChange(nextMode);
   }
 
@@ -1056,7 +1057,9 @@ export function StickyShell(props: StickyShellProps) {
         windowPreset={preferences.windowPreset}
         document={readerDocument}
         state={readerState}
+        contentVisible={preferences.readerContentVisible}
         onRetry={onRetryReader}
+        onContentVisibilityChange={onReaderContentVisibilityChange}
         onCopy={onCopyReaderSelection}
         onCaptureSelection={onCaptureReaderSelection}
       />

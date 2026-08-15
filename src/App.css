@@ -3,6 +3,9 @@
 }
 
 .desk-board {
+  --reader-safe-shelf-top: 76px;
+  --reader-safe-shelf-height: 64px;
+  --reader-safe-shelf-mini-inset: 9px;
   position: relative;
   box-sizing: border-box;
   height: 100vh;
@@ -33,14 +36,81 @@
   position: absolute;
   inset: 0;
   z-index: 1;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
   color: var(--reader-ink);
   background-image: radial-gradient(circle, var(--reader-fiber) 0.55px, transparent 0.7px);
   background-size: 6px 6px;
+}
+
+.reader-safe-shelf {
+  position: absolute;
+  top: var(--reader-safe-shelf-top);
+  right: 0;
+  left: 0;
+  z-index: 2;
+  box-sizing: border-box;
+  height: var(--reader-safe-shelf-height);
+  pointer-events: none;
+}
+
+.reader-safe-shelf::after {
+  position: absolute;
+  right: 18px;
+  bottom: 0;
+  left: 18px;
+  height: 1px;
+  background: color-mix(in srgb, var(--reader-rule) 28%, transparent);
+  content: "";
+  opacity: 0.34;
+}
+
+.reader-visibility-control {
+  position: absolute;
+  top: 50%;
+  left: clamp(18px, 6vw, 28px);
+  border: 0;
+  border-radius: 4px;
+  padding: 5px 4px;
+  color: var(--reader-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.66rem;
+  letter-spacing: 0.035em;
+  transform: translateY(-50%);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.reader-visibility-control:hover,
+.reader-visibility-control:focus-visible {
+  color: var(--reader-ink);
+  background: color-mix(in srgb, var(--board-soft) 64%, transparent);
+}
+
+.reader-mini-shelf-slot {
+  position: absolute;
+  top: var(--reader-safe-shelf-mini-inset);
+  right: 18px;
+  width: 78px;
+  height: 46px;
+}
+
+.reader-scroll-viewport {
+  position: absolute;
+  top: calc(var(--reader-safe-shelf-top) + var(--reader-safe-shelf-height));
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-color: color-mix(in srgb, var(--board-muted) 32%, transparent) transparent;
   scrollbar-width: thin;
+}
+
+.reader-scroll-viewport[data-content-visible="false"] {
+  overflow: hidden;
 }
 
 .reader-canvas[data-font-size="small"] {
@@ -59,14 +129,14 @@
   --reader-line-height: 1.95;
 }
 
-.reader-canvas::-webkit-scrollbar,
+.reader-scroll-viewport::-webkit-scrollbar,
 .settings-panel::-webkit-scrollbar,
 .reader-article pre::-webkit-scrollbar {
   width: 7px;
   height: 7px;
 }
 
-.reader-canvas::-webkit-scrollbar-thumb,
+.reader-scroll-viewport::-webkit-scrollbar-thumb,
 .settings-panel::-webkit-scrollbar-thumb,
 .reader-article pre::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
@@ -75,23 +145,17 @@
   background-clip: padding-box;
 }
 
-.reader-canvas:hover::-webkit-scrollbar-thumb,
-.reader-canvas:focus-visible::-webkit-scrollbar-thumb,
+.reader-scroll-viewport:hover::-webkit-scrollbar-thumb,
+.reader-scroll-viewport:focus-visible::-webkit-scrollbar-thumb,
 .settings-panel:hover::-webkit-scrollbar-thumb,
 .reader-article pre:hover::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--board-muted) 52%, transparent);
   background-clip: padding-box;
 }
 
-.reader-canvas:focus-visible {
+.reader-scroll-viewport:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--focus) 68%, transparent);
   outline-offset: -3px;
-}
-
-.reader-top-safe-area {
-  position: relative;
-  z-index: 1;
-  height: clamp(124px, 24vh, 148px);
 }
 
 .reader-content {
@@ -100,7 +164,7 @@
   box-sizing: border-box;
   width: min(100%, 640px);
   margin: 0 auto;
-  padding: 0 clamp(18px, 7vw, 38px) clamp(68px, 13vh, 96px);
+  padding: 10px clamp(18px, 7vw, 38px) clamp(68px, 13vh, 96px);
 }
 
 .reader-context {
@@ -1726,6 +1790,15 @@ textarea:disabled {
   height: var(--sticky-surface-height);
 }
 
+.sticky-surface[data-mode="mini"][data-pinned-to-shelf="true"] {
+  top: calc(var(--reader-safe-shelf-top) + var(--reader-safe-shelf-mini-inset));
+  right: 18px;
+  bottom: auto;
+  left: auto;
+  transform: none;
+  touch-action: manipulation;
+}
+
 .sticky-surface:focus-visible {
   outline: 2px solid var(--sticky-accent);
   outline-offset: 4px;
@@ -1759,6 +1832,10 @@ textarea:disabled {
 .sticky-surface:active .sticky-preview,
 .sticky-surface:active .mini-tab {
   cursor: grabbing;
+}
+
+.sticky-surface[data-pinned-to-shelf="true"]:active .mini-tab {
+  cursor: pointer;
 }
 
 .compact-header-actions {
@@ -1982,8 +2059,10 @@ textarea:disabled {
 }
 
 @media (max-height: 470px) {
-  .reader-top-safe-area {
-    height: 128px;
+  .desk-board {
+    --reader-safe-shelf-top: 70px;
+    --reader-safe-shelf-height: 60px;
+    --reader-safe-shelf-mini-inset: 7px;
   }
 
   .reader-content {

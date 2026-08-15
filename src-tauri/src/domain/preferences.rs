@@ -120,8 +120,14 @@ pub struct Preferences {
     pub reader_font_size: ReaderFontSize,
     #[serde(default)]
     pub reader_line_spacing: ReaderLineSpacing,
+    #[serde(default = "default_true")]
+    pub reader_content_visible: bool,
     #[serde(default)]
     pub current_reader_document_id: Option<String>,
+}
+
+const fn default_true() -> bool {
+    true
 }
 
 impl Default for Preferences {
@@ -137,6 +143,7 @@ impl Default for Preferences {
             reader_skin: ReaderSkin::Grid,
             reader_font_size: ReaderFontSize::Standard,
             reader_line_spacing: ReaderLineSpacing::Standard,
+            reader_content_visible: true,
             current_reader_document_id: None,
         }
     }
@@ -160,6 +167,7 @@ mod tests {
         assert_eq!(value["readerSkin"], "grid");
         assert_eq!(value["readerFontSize"], "standard");
         assert_eq!(value["readerLineSpacing"], "standard");
+        assert_eq!(value["readerContentVisible"], true);
         assert_eq!(value["currentReaderDocumentId"], serde_json::Value::Null);
     }
 
@@ -179,6 +187,7 @@ mod tests {
         assert_eq!(preferences.reader_skin, ReaderSkin::Grid);
         assert_eq!(preferences.reader_font_size, ReaderFontSize::Standard);
         assert_eq!(preferences.reader_line_spacing, ReaderLineSpacing::Standard);
+        assert!(preferences.reader_content_visible);
         assert_eq!(preferences.current_reader_document_id, None);
     }
 }

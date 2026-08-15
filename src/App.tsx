@@ -84,6 +84,9 @@ function App() {
       onReaderLineSpacingChange={(readerLineSpacing) =>
         save({ ...preferencesRef.current, readerLineSpacing })
       }
+      onReaderContentVisibilityChange={(readerContentVisible) =>
+        save({ ...preferencesRef.current, readerContentVisible })
+      }
       onCurrentReaderDocumentChange={(currentReaderDocumentId) =>
         save({ ...preferencesRef.current, currentReaderDocumentId })
       }

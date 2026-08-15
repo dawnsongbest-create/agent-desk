@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { useState } from "react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import appCss from "../../App.css?raw";
@@ -48,6 +49,8 @@ function renderReader(
   document: ReaderDocument = readerDocument,
   onCopy = vi.fn(async () => undefined),
   onCaptureSelection = vi.fn(async () => true),
+  contentVisible = true,
+  onContentVisibilityChange = vi.fn(),
 ) {
   return {
     ...render(
@@ -58,14 +61,44 @@ function renderReader(
         windowPreset={windowPreset}
         document={document}
         state="ready"
+        contentVisible={contentVisible}
         onRetry={vi.fn()}
+        onContentVisibilityChange={onContentVisibilityChange}
         onCopy={onCopy}
         onCaptureSelection={onCaptureSelection}
       />,
     ),
     onCopy,
     onCaptureSelection,
+    onContentVisibilityChange,
   };
+}
+
+function VisibilityHarness({
+  initiallyVisible = true,
+  onCopy = vi.fn(async () => undefined),
+  onCaptureSelection = vi.fn(async () => true),
+}: {
+  initiallyVisible?: boolean;
+  onCopy?: (text: string) => Promise<void>;
+  onCaptureSelection?: (documentId: string, text: string) => Promise<boolean>;
+}) {
+  const [contentVisible, setContentVisible] = useState(initiallyVisible);
+  return (
+    <ReaderCanvas
+      skin="grid"
+      fontSize="standard"
+      lineSpacing="standard"
+      windowPreset="iphone5"
+      document={readerDocument}
+      state="ready"
+      contentVisible={contentVisible}
+      onRetry={vi.fn()}
+      onContentVisibilityChange={setContentVisible}
+      onCopy={onCopy}
+      onCaptureSelection={onCaptureSelection}
+    />
+  );
 }
 
 function mockSelection(
@@ -91,22 +124,24 @@ function mockSelection(
     focusNode: anchorNode,
     toString: () => text,
     getRangeAt: () => ({ getBoundingClientRect: () => bounds }),
+    removeAllRanges: vi.fn(),
   } as unknown as Selection);
 }
 
 afterEach(() => vi.restoreAllMocks());
 
 describe("ReaderCanvas document and selection", () => {
-  it("renders a document identity and starts it after the responsive safe area", () => {
+  it("renders a document identity below the fixed Safe Shelf", () => {
     renderReader();
     const reader = screen.getByRole("region", { name: "Reader Canvas" });
-    const safeArea = screen.getByTestId("reader-top-safe-area");
+    const shelf = screen.getByTestId("reader-safe-shelf");
+    const viewport = screen.getByRole("region", { name: "Reader scroll viewport" });
     const content = within(reader).getByRole("article", { name: "真实 Reader 文档" });
     expect(reader).toHaveAttribute("data-current-document-id", "reader-test");
     expect(reader).toHaveAttribute("data-reader-layer", "1");
-    expect(safeArea.compareDocumentPosition(content) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(
-      0,
-    );
+    expect(shelf.contains(viewport)).toBe(false);
+    expect(shelf.compareDocumentPosition(viewport) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    expect(viewport.contains(content)).toBe(true);
     expect(screen.getByRole("heading", { level: 1, name: "真实 Reader 文档" })).toBeVisible();
     expect(screen.getByText("文章 · 本地测试")).toBeVisible();
   });
@@ -195,7 +230,7 @@ describe("ReaderCanvas document and selection", () => {
     const article = screen.getByRole("article", { name: "真实 Reader 文档" });
     mockSelection(article.firstChild!, "滚动前选择");
     fireEvent.mouseUp(article);
-    fireEvent.scroll(screen.getByRole("region", { name: "Reader Canvas" }));
+    fireEvent.scroll(screen.getByRole("region", { name: "Reader scroll viewport" }));
     expect(screen.queryByRole("toolbar", { name: "所选文字操作" })).not.toBeInTheDocument();
 
     const selection = mockSelection(article.firstChild!, "再次选择");
@@ -270,9 +305,71 @@ describe("ReaderCanvas document and selection", () => {
     expect(screen.getByRole("button", { name: "保存到记录" })).toBeEnabled();
   });
 
-  it("keeps 320px layouts bounded with responsive padding and horizontal containment", () => {
+  it("hides the complete Reader presentation while keeping the paper and Safe Shelf", async () => {
+    const user = userEvent.setup();
+    const onCopy = vi.fn(async () => undefined);
+    const onCaptureSelection = vi.fn(async () => true);
+    render(<VisibilityHarness onCopy={onCopy} onCaptureSelection={onCaptureSelection} />);
+
+    const reader = screen.getByRole("region", { name: "Reader Canvas" });
+    const viewport = screen.getByRole("region", { name: "Reader scroll viewport" });
+    expect(screen.getByRole("article", { name: readerDocument.title })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "隐藏正文" }));
+
+    expect(reader).toHaveAttribute("data-content-visible", "false");
+    expect(viewport).toHaveAttribute("data-content-visible", "false");
+    expect(viewport).toHaveAttribute("tabindex", "-1");
+    expect(screen.getByTestId("reader-safe-shelf")).toBeInTheDocument();
+    expect(screen.getByTestId("reader-mini-shelf-slot")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "显示正文" })).toBeVisible();
+    expect(screen.queryByRole("article")).not.toBeInTheDocument();
+    expect(screen.queryByText(readerDocument.title)).not.toBeInTheDocument();
+    expect(screen.queryByText("const safe = true;")).not.toBeInTheDocument();
+    expect(onCopy).not.toHaveBeenCalled();
+    expect(onCaptureSelection).not.toHaveBeenCalled();
+  });
+
+  it("clears selection actions on hide and allows fresh selection after show", async () => {
+    const user = userEvent.setup();
+    render(<VisibilityHarness />);
+    const article = screen.getByRole("article", { name: readerDocument.title });
+    const selection = mockSelection(article.firstChild!, "需要清除的选择");
+    fireEvent.mouseUp(article);
+    expect(screen.getByRole("toolbar", { name: "所选文字操作" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "隐藏正文" }));
+    expect(screen.queryByRole("toolbar", { name: "所选文字操作" })).not.toBeInTheDocument();
+    expect(window.getSelection()?.removeAllRanges).toHaveBeenCalled();
+
+    selection.mockRestore();
+    await user.click(screen.getByRole("button", { name: "显示正文" }));
+    const restoredArticle = screen.getByRole("article", { name: readerDocument.title });
+    mockSelection(restoredArticle.firstChild!, "重新选择");
+    fireEvent.mouseUp(restoredArticle);
+    expect(screen.getByRole("toolbar", { name: "所选文字操作" })).toBeInTheDocument();
+  });
+
+  it("restores the session scroll position after blank mode", async () => {
+    const user = userEvent.setup();
+    render(<VisibilityHarness />);
+    const viewport = screen.getByRole("region", { name: "Reader scroll viewport" });
+    viewport.scrollTop = 812;
+    await user.click(screen.getByRole("button", { name: "隐藏正文" }));
+    viewport.scrollTop = 0;
+    await user.click(screen.getByRole("button", { name: "显示正文" }));
+    await waitFor(() => expect(viewport.scrollTop).toBe(812));
+  });
+
+  it("keeps the Safe Shelf fixed above an independently scrolling 320px Reader viewport", () => {
+    expect(appCss).toContain(".reader-safe-shelf {");
+    expect(appCss).toContain("height: var(--reader-safe-shelf-height)");
+    expect(appCss).toContain(".reader-scroll-viewport {");
+    expect(appCss).toContain(
+      "top: calc(var(--reader-safe-shelf-top) + var(--reader-safe-shelf-height))",
+    );
+    expect(appCss).toContain('[data-mode="mini"][data-pinned-to-shelf="true"]');
     expect(appCss).toContain("overflow-x: hidden");
-    expect(appCss).toContain("padding: 0 clamp(18px, 7vw, 38px)");
+    expect(appCss).toContain("padding: 10px clamp(18px, 7vw, 38px)");
     expect(appCss).toContain("max-width: 100%");
     expect(appCss).toContain("overflow-x: auto");
   });

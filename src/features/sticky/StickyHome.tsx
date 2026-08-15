@@ -26,6 +26,7 @@ type StickyHomeProps = {
   onStickyModeChange(mode: StickyMode): void;
   onReaderFontSizeChange(size: ReaderFontSize): void;
   onReaderLineSpacingChange(spacing: ReaderLineSpacing): void;
+  onReaderContentVisibilityChange(visible: boolean): void;
   onCurrentReaderDocumentChange(id: string): void;
 };
 
@@ -42,6 +43,7 @@ export function StickyHome({
   onStickyModeChange,
   onReaderFontSizeChange,
   onReaderLineSpacingChange,
+  onReaderContentVisibilityChange,
   onCurrentReaderDocumentChange,
 }: StickyHomeProps) {
   const sticky = useStickyCards(port);
@@ -80,6 +82,7 @@ export function StickyHome({
       onStickyModeChange={onStickyModeChange}
       onReaderFontSizeChange={onReaderFontSizeChange}
       onReaderLineSpacingChange={onReaderLineSpacingChange}
+      onReaderContentVisibilityChange={onReaderContentVisibilityChange}
       onRetryReader={reader.retry}
       onCopyReaderSelection={reader.copyText}
       onCaptureReaderSelection={captureSelection}
