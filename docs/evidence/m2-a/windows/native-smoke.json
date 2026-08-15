@@ -1,0 +1,306 @@
+{
+  "implementationCommit": "cf98307360f56d67e1902efa7ce35a107ed43a12",
+  "executable": "D:\\agent-desk-target\\release\\agent-desk.exe",
+  "executableSha256": "A3A5D9B4C8D83599382D5DF94313D2CF402B0CF67A8A7F32C2B060E2D6704FD5",
+  "targetUrl": "http://tauri.localhost/",
+  "process": {
+    "firstPid": 24528,
+    "secondPid": 12744,
+    "aliveAfterTenSeconds": true
+  },
+  "presets": [
+    {
+      "preset": "sticky",
+      "viewport": {
+        "width": 320,
+        "height": 420
+      },
+      "safeArea": {
+        "height": 140,
+        "bottom": 140
+      },
+      "title": {
+        "top": 162.40000915527344,
+        "width": 273.6000061035156
+      },
+      "content": {
+        "left": 0,
+        "right": 309.6000061035156,
+        "width": 309.6000061035156
+      },
+      "quoteWidth": 273.6000061035156,
+      "code": {
+        "width": 273.6000061035156,
+        "scrollWidth": 418
+      },
+      "stickyVisible": true,
+      "readerScrollable": true,
+      "horizontalOverflow": false,
+      "layers": {
+        "reader": "1",
+        "sticky": "2",
+        "readerZ": "1",
+        "stickyZ": "20"
+      },
+      "gridRule": "rgb(235 225 200 / 4.5%)",
+      "readerSkin": "grid",
+      "settings": {
+        "visible": true,
+        "width": 236,
+        "right": 300,
+        "scrollable": true,
+        "withinViewport": true
+      },
+      "miniVisible": true,
+      "readerScrollTop": 120
+    },
+    {
+      "preset": "iphone5",
+      "viewport": {
+        "width": 320,
+        "height": 568
+      },
+      "safeArea": {
+        "height": 176.0749969482422,
+        "bottom": 176.0749969482422
+      },
+      "title": {
+        "top": 198.47500610351562,
+        "width": 264.8000183105469
+      },
+      "content": {
+        "left": 0,
+        "right": 309.6000061035156,
+        "width": 309.6000061035156
+      },
+      "quoteWidth": 264.8000183105469,
+      "code": {
+        "width": 264.8000183105469,
+        "scrollWidth": 418
+      },
+      "stickyVisible": true,
+      "readerScrollable": true,
+      "horizontalOverflow": false,
+      "layers": {
+        "reader": "1",
+        "sticky": "2",
+        "readerZ": "1",
+        "stickyZ": "20"
+      },
+      "gridRule": "rgb(235 225 200 / 4.5%)",
+      "readerSkin": "grid",
+      "settings": {
+        "visible": true,
+        "width": 236,
+        "right": 300,
+        "scrollable": true,
+        "withinViewport": true
+      },
+      "miniVisible": true,
+      "readerScrollTop": 120
+    },
+    {
+      "preset": "pocket",
+      "viewport": {
+        "width": 360,
+        "height": 640
+      },
+      "safeArea": {
+        "height": 190,
+        "bottom": 190
+      },
+      "title": {
+        "top": 212.40000915527344,
+        "width": 299.20001220703125
+      },
+      "content": {
+        "left": 0,
+        "right": 349.6000061035156,
+        "width": 349.6000061035156
+      },
+      "quoteWidth": 299.20001220703125,
+      "code": {
+        "width": 299.20001220703125,
+        "scrollWidth": 418
+      },
+      "stickyVisible": true,
+      "readerScrollable": true,
+      "horizontalOverflow": false,
+      "layers": {
+        "reader": "1",
+        "sticky": "2",
+        "readerZ": "1",
+        "stickyZ": "20"
+      },
+      "gridRule": "rgb(235 225 200 / 4.5%)",
+      "readerSkin": "grid",
+      "settings": {
+        "visible": true,
+        "width": 236,
+        "right": 340,
+        "scrollable": true,
+        "withinViewport": true
+      },
+      "miniVisible": true,
+      "readerScrollTop": 120
+    },
+    {
+      "preset": "book",
+      "viewport": {
+        "width": 420,
+        "height": 595
+      },
+      "safeArea": {
+        "height": 184.5,
+        "bottom": 184.5
+      },
+      "title": {
+        "top": 206.90000915527344,
+        "width": 350.8000183105469
+      },
+      "content": {
+        "left": 0,
+        "right": 409.6000061035156,
+        "width": 409.6000061035156
+      },
+      "quoteWidth": 350.8000183105469,
+      "code": {
+        "width": 350.8000183105469,
+        "scrollWidth": 418
+      },
+      "stickyVisible": true,
+      "readerScrollable": true,
+      "horizontalOverflow": false,
+      "layers": {
+        "reader": "1",
+        "sticky": "2",
+        "readerZ": "1",
+        "stickyZ": "20"
+      },
+      "gridRule": "rgb(235 225 200 / 4.5%)",
+      "readerSkin": "grid",
+      "settings": {
+        "visible": true,
+        "width": 236,
+        "right": 400,
+        "scrollable": true,
+        "withinViewport": true
+      },
+      "miniVisible": true,
+      "readerScrollTop": 120
+    }
+  ],
+  "screenshots": [
+    {
+      "file": "01-iphone5-mini.png",
+      "sha256": "BABAB84F54CAED01AED529991BF3B0F55EB155C0A619B8B9A071425A3212E7AE"
+    },
+    {
+      "file": "02-iphone5-compact-overlap.png",
+      "sha256": "1AFD463CC3B8BDC26416926B1EB469A53C780FBA48CFA07A4CC98C48EBFB33DF"
+    },
+    {
+      "file": "09-sticky-320x420.png",
+      "sha256": "1D94A46F0BF08932E0B1BD26A60E2589ED497A92574A085BFE8178C7B7EAA639"
+    },
+    {
+      "file": "10-pocket-360x640.png",
+      "sha256": "B5475FB1C73A98C9F72A51091E9C28386826F3B881C612F6974D43788D293086"
+    },
+    {
+      "file": "03-book-420x594.png",
+      "sha256": "07DD4D29EC745C4F84732BCFB98598D67641E107AC7D296D62C0B7D136CE1C68"
+    },
+    {
+      "file": "04-blockquote.png",
+      "sha256": "2263C997A256D9AD2CEF93875B8E6839A23FA85CF02135D269ECC1C1B7D65A02"
+    },
+    {
+      "file": "05-code-block.png",
+      "sha256": "A0AE764B60E5556B60888F54FF9B3598EF651DDA6A4AE0E2CC7E6ECFC67BFB06"
+    },
+    {
+      "file": "06-long-scroll.png",
+      "sha256": "8C078B74B88ADA0B7FBAF141E688883E19C6C0AAC76EAD89DFD1A93C38E189B6"
+    },
+    {
+      "file": "07-reader-appearance-settings.png",
+      "sha256": "AE34FECB2507C650B50BBCBB0B70C86E542E1A84E724EC77065EA5D4FDEC6663"
+    },
+    {
+      "file": "08-final-darker-grid-after-restart.png",
+      "sha256": "9E6F1F5DDCB63D0C9E28069F5EFC2A42F7D6B9497CFC9BFB288BC6FB2FA13146"
+    }
+  ],
+  "wheel": {
+    "start": {
+      "todo": 0,
+      "reader": 260
+    },
+    "internal": {
+      "todo": 28,
+      "reader": 260
+    },
+    "boundaryStart": {
+      "todo": 28,
+      "reader": 260
+    },
+    "boundary": {
+      "todo": 28,
+      "reader": 350.3999938964844
+    }
+  },
+  "preferences": {
+    "beforeRestart": {
+      "fontSize": "large",
+      "lineSpacing": "relaxed"
+    },
+    "afterRestart": {
+      "fontSize": "large",
+      "lineSpacing": "relaxed",
+      "cards": 4,
+      "skin": "grid"
+    }
+  },
+  "errors": [],
+  "miniSafety": {
+    "mini": {
+      "top": 136.03750610351562,
+      "bottom": 182.03750610351562
+    },
+    "titleTop": 198.47500610351562,
+    "firstTitleClear": true
+  },
+  "overlap": {
+    "beforeDrag": {
+      "x": 38,
+      "y": 76,
+      "width": 244,
+      "height": 250,
+      "left": 38,
+      "right": 282,
+      "top": 76,
+      "bottom": 326
+    },
+    "afterDrag": {
+      "x": 55.98749923706055,
+      "y": 201,
+      "width": 244,
+      "height": 250,
+      "left": 55.98749923706055,
+      "right": 299.98749923706055,
+      "top": 201,
+      "bottom": 451
+    },
+    "moved": true,
+    "overlapsReaderTitle": true
+  },
+  "longScrollTop": 2450.39990234375,
+  "runtimeOutput": {
+    "firstStdout": "",
+    "firstStderr": "",
+    "secondStdout": "",
+    "secondStderr": ""
+  },
+  "status": "PASS"
+}
