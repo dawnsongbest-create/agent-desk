@@ -199,7 +199,7 @@ pub async fn export_sticky_record(
     let file = app
         .dialog()
         .file()
-        .set_title("导出 Record")
+        .set_title("导出记录")
         .set_file_name(export_file_name(&text))
         .add_filter("Markdown", &["md"])
         .blocking_save_file();

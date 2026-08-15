@@ -32,8 +32,10 @@ import type {
   ThemeMode,
   WindowPreset,
 } from "../../domain/preferences";
+import type { ReaderDocument } from "../../domain/reader";
 import {
   compactDragFrame,
+  preserveStickyTopOnModeChange,
   readerFontSizes,
   readerLineSpacings,
   settleCompactPosition,
@@ -51,6 +53,7 @@ import {
   type StickyProfile,
 } from "../../domain/sticky";
 import { ReaderCanvas } from "../reader/ReaderCanvas";
+import type { ReaderLoadState } from "../reader/useReaderDocument";
 import { playPageTurnSound } from "./pageTurnSound";
 import type { StickyLoadState } from "./useStickyCards";
 
@@ -59,6 +62,8 @@ type StickyFace = "note" | "task";
 
 type StickyShellProps = {
   preferences: Preferences;
+  readerDocument: ReaderDocument | null;
+  readerState: ReaderLoadState;
   preferenceSaveState: SaveState;
   cards: StickyCard[];
   profile: StickyProfile;
@@ -72,6 +77,9 @@ type StickyShellProps = {
   onStickyModeChange(mode: StickyMode): void;
   onReaderFontSizeChange(size: ReaderFontSize): void;
   onReaderLineSpacingChange(spacing: ReaderLineSpacing): void;
+  onRetryReader(): void;
+  onCopyReaderSelection(text: string): Promise<void>;
+  onCaptureReaderSelection(documentId: string, text: string): Promise<boolean>;
   onCreate(input: CreateStickyCardInput): Promise<boolean>;
   onUpdateText(id: string, text: string): Promise<boolean>;
   onTaskCompleted(id: string, completed: boolean): Promise<void>;
@@ -98,7 +106,7 @@ const presetLabels: Record<WindowPreset, string> = {
   custom: "Custom",
 };
 
-const faceLabels: Record<StickyFace, string> = { note: "Record", task: "待办" };
+const faceLabels: Record<StickyFace, string> = { note: "记录", task: "待办" };
 const readerFontSizeLabels: Record<ReaderFontSize, string> = {
   small: "小",
   standard: "标准",
@@ -390,7 +398,7 @@ function RecordCapture({
         autoFocus
         rows={8}
         maxLength={100000}
-        aria-label="新建长 Record"
+        aria-label="新建长记录"
         placeholder="第一行会成为列表标题。继续往下写，正文可以很长…"
         onChange={(event) => {
           const nextHasText = Boolean(event.target.value.trim());
@@ -411,7 +419,7 @@ function RecordCapture({
             取消
           </button>
           <button type="button" disabled={!hasText} onClick={() => void submit()}>
-            保存 Record
+            保存记录
           </button>
         </span>
       </div>
@@ -426,7 +434,7 @@ function RecordCapture({
     >
       <span className="capture-plus">+</span>
       <span>
-        <strong>新建 Record</strong>
+        <strong>新建记录</strong>
         <small>在这张纸上写一篇长记录</small>
       </span>
     </button>
@@ -443,9 +451,9 @@ function RecordList({
   onOpen(card: StickyCard): void;
 }) {
   return (
-    <div className="record-list" aria-label="我的 Records">
+    <div className="record-list" aria-label="我的记录">
       {records.length === 0 ? (
-        <p className="face-empty">还没有 Record。让第一段文字从这里开始。</p>
+        <p className="face-empty">还没有记录。让第一段文字从这里开始。</p>
       ) : null}
       {records.map((record) => (
         <button type="button" key={record.id} disabled={disabled} onClick={() => onOpen(record)}>
@@ -500,13 +508,13 @@ function RecordEditor({
   return (
     <section
       className="record-editor"
-      aria-label={`编辑 Record：${recordDisplayTitle(record.text)}`}
+      aria-label={`编辑记录：${recordDisplayTitle(record.text)}`}
       aria-busy={disabled}
       data-dirty={!saved}
     >
       <header>
         <button type="button" onClick={onClose}>
-          ← Records
+          ← 记录
         </button>
         <span>{saved ? "已保存" : "有未保存修改"}</span>
       </header>
@@ -514,7 +522,7 @@ function RecordEditor({
         ref={draftRef}
         defaultValue={record.text}
         maxLength={100000}
-        aria-label="Record 正文"
+        aria-label="记录正文"
         onChange={(event) => {
           if (saved) {
             setSaved(false);
@@ -941,6 +949,8 @@ function jumpToCapture(face: StickyFace) {
 export function StickyShell(props: StickyShellProps) {
   const {
     preferences,
+    readerDocument,
+    readerState,
     preferenceSaveState,
     cards,
     profile,
@@ -954,6 +964,9 @@ export function StickyShell(props: StickyShellProps) {
     onStickyModeChange,
     onReaderFontSizeChange,
     onReaderLineSpacingChange,
+    onRetryReader,
+    onCopyReaderSelection,
+    onCaptureReaderSelection,
     onCreate,
     onUpdateText,
     onTaskCompleted,
@@ -1022,6 +1035,18 @@ export function StickyShell(props: StickyShellProps) {
     );
   }
 
+  function changeStickyMode(nextMode: StickyMode) {
+    const currentMode = preferences.stickyMode;
+    const nextPosition = preserveStickyTopOnModeChange(
+      preferences.stickyPosition,
+      window.innerHeight,
+      currentMode,
+      nextMode,
+    );
+    if (nextPosition !== preferences.stickyPosition) onStickyPositionChange(nextPosition);
+    onStickyModeChange(nextMode);
+  }
+
   return (
     <main className="desk-board" aria-label="Agent Desk Sticky Home">
       <ReaderCanvas
@@ -1029,6 +1054,11 @@ export function StickyShell(props: StickyShellProps) {
         fontSize={preferences.readerFontSize}
         lineSpacing={preferences.readerLineSpacing}
         windowPreset={preferences.windowPreset}
+        document={readerDocument}
+        state={readerState}
+        onRetry={onRetryReader}
+        onCopy={onCopyReaderSelection}
+        onCaptureSelection={onCaptureReaderSelection}
       />
       <header className="board-header">
         <div>
@@ -1075,7 +1105,7 @@ export function StickyShell(props: StickyShellProps) {
                   disabled={busy || (selectedRecord !== null && recordDirty)}
                   onClick={openCapture}
                 >
-                  + {face === "note" ? "新 Record" : "新待办"}
+                  + {face === "note" ? "新记录" : "新待办"}
                 </button>
                 <button
                   className="collapse-button"
@@ -1123,7 +1153,7 @@ export function StickyShell(props: StickyShellProps) {
                     <>
                       <QuoteEditor profile={profile} disabled={busy} onUpdate={onUpdateQuote} />
                       <div className="face-heading">
-                        <p>我的 Records</p>
+                        <p>我的记录</p>
                         <span>{records.length} 篇</span>
                       </div>
                       <RecordList
@@ -1195,7 +1225,7 @@ export function StickyShell(props: StickyShellProps) {
           <MiniStickyTab
             openTaskCount={openTaskCount}
             position={preferences.stickyPosition}
-            onRestore={() => onStickyModeChange("compact")}
+            onRestore={() => changeStickyMode("compact")}
             onPositionChange={onStickyPositionChange}
           />
         ) : (
@@ -1205,7 +1235,7 @@ export function StickyShell(props: StickyShellProps) {
             loading={stickyState === "loading"}
             position={preferences.stickyPosition}
             onExpand={() => setExpanded(true)}
-            onMinimize={() => onStickyModeChange("mini")}
+            onMinimize={() => changeStickyMode("mini")}
             onPositionChange={onStickyPositionChange}
           />
         )}

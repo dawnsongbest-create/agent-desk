@@ -1,4 +1,5 @@
 import type { StickyCardsPort } from "../../application/ports/sticky";
+import type { ReaderDocumentsPort } from "../../application/ports/reader";
 import type {
   Preferences,
   ReaderFontSize,
@@ -10,9 +11,11 @@ import type {
 } from "../../domain/preferences";
 import { StickyShell } from "./StickyShell";
 import { useStickyCards } from "./useStickyCards";
+import { useReaderDocument } from "../reader/useReaderDocument";
 
 type StickyHomeProps = {
   port: StickyCardsPort;
+  readerPort: ReaderDocumentsPort;
   preferences: Preferences;
   preferenceSaveState: "loading" | "idle" | "saving" | "saved" | "error";
   now?: Date;
@@ -23,10 +26,12 @@ type StickyHomeProps = {
   onStickyModeChange(mode: StickyMode): void;
   onReaderFontSizeChange(size: ReaderFontSize): void;
   onReaderLineSpacingChange(spacing: ReaderLineSpacing): void;
+  onCurrentReaderDocumentChange(id: string): void;
 };
 
 export function StickyHome({
   port,
+  readerPort,
   preferences,
   preferenceSaveState,
   now,
@@ -37,12 +42,31 @@ export function StickyHome({
   onStickyModeChange,
   onReaderFontSizeChange,
   onReaderLineSpacingChange,
+  onCurrentReaderDocumentChange,
 }: StickyHomeProps) {
   const sticky = useStickyCards(port);
+  const reader = useReaderDocument(
+    readerPort,
+    preferenceSaveState !== "loading",
+    preferences.currentReaderDocumentId,
+    onCurrentReaderDocumentChange,
+  );
+
+  async function captureSelection(documentId: string, text: string) {
+    try {
+      const captured = await reader.captureSelection(documentId, text);
+      sticky.acceptCreated(captured.record);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   return (
     <StickyShell
       preferences={preferences}
+      readerDocument={reader.document}
+      readerState={reader.state}
       preferenceSaveState={preferenceSaveState}
       cards={sticky.cards}
       profile={sticky.profile}
@@ -56,6 +80,9 @@ export function StickyHome({
       onStickyModeChange={onStickyModeChange}
       onReaderFontSizeChange={onReaderFontSizeChange}
       onReaderLineSpacingChange={onReaderLineSpacingChange}
+      onRetryReader={reader.retry}
+      onCopyReaderSelection={reader.copyText}
+      onCaptureReaderSelection={captureSelection}
       onCreate={sticky.create}
       onUpdateText={sticky.updateText}
       onTaskCompleted={sticky.setTaskCompleted}

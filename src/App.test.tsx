@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => ({
   applyWindowPreset: vi.fn(),
   listCards: vi.fn(),
   getProfile: vi.fn(),
+  openReader: vi.fn(),
+  captureSelection: vi.fn(),
+  copyText: vi.fn(),
 }));
 
 vi.mock("./infrastructure/tauri/preferences", () => ({
@@ -34,6 +37,17 @@ vi.mock("./infrastructure/tauri/sticky", () => ({
   },
 }));
 
+vi.mock("./infrastructure/tauri/reader", () => ({
+  tauriReaderDocuments: {
+    openCurrent: mocks.openReader,
+    get: vi.fn(),
+    list: vi.fn(),
+    create: vi.fn(),
+    captureSelection: mocks.captureSelection,
+    copyText: mocks.copyText,
+  },
+}));
+
 import App from "./App";
 
 describe("App Reader preferences", () => {
@@ -43,6 +57,17 @@ describe("App Reader preferences", () => {
     mocks.savePreferences.mockImplementation(async (preferences) => preferences);
     mocks.listCards.mockResolvedValue([]);
     mocks.getProfile.mockResolvedValue({ quoteText: "", updatedAt: "" });
+    mocks.openReader.mockResolvedValue({
+      id: "reader-test",
+      documentType: "article",
+      title: "测试文档",
+      subtitle: null,
+      contentMarkdown: "正文",
+      sourceType: "builtin",
+      sourceLabel: "测试",
+      createdAt: "2026-08-12T00:00:00Z",
+      updatedAt: "2026-08-12T00:00:00Z",
+    });
   });
 
   it("persists font size and line spacing through the Preference Port", async () => {
@@ -59,6 +84,7 @@ describe("App Reader preferences", () => {
     await waitFor(() => {
       expect(mocks.savePreferences).toHaveBeenCalledWith({
         ...defaultPreferences,
+        currentReaderDocumentId: "reader-test",
         readerFontSize: "large",
       });
       expect(reader).toHaveAttribute("data-font-size", "large");
@@ -69,6 +95,7 @@ describe("App Reader preferences", () => {
     await waitFor(() => {
       expect(mocks.savePreferences).toHaveBeenLastCalledWith({
         ...defaultPreferences,
+        currentReaderDocumentId: "reader-test",
         readerFontSize: "large",
         readerLineSpacing: "relaxed",
       });
@@ -90,5 +117,39 @@ describe("App Reader preferences", () => {
       expect(reader).toHaveAttribute("data-font-size", "small");
       expect(reader).toHaveAttribute("data-line-spacing", "compact");
     });
+  });
+
+  it("persists the bootstrapped current document id and reopens by that id", async () => {
+    const first = render(<App />);
+    await waitFor(() =>
+      expect(mocks.savePreferences).toHaveBeenCalledWith({
+        ...defaultPreferences,
+        currentReaderDocumentId: "reader-test",
+      }),
+    );
+    first.unmount();
+    vi.clearAllMocks();
+    mocks.loadPreferences.mockResolvedValue({
+      ...defaultPreferences,
+      currentReaderDocumentId: "reader-test",
+    });
+    mocks.savePreferences.mockImplementation(async (preferences) => preferences);
+    mocks.listCards.mockResolvedValue([]);
+    mocks.getProfile.mockResolvedValue({ quoteText: "", updatedAt: "" });
+    mocks.openReader.mockResolvedValue({
+      id: "reader-test",
+      documentType: "article",
+      title: "测试文档",
+      subtitle: null,
+      contentMarkdown: "正文",
+      sourceType: "builtin",
+      sourceLabel: "测试",
+      createdAt: "2026-08-12T00:00:00Z",
+      updatedAt: "2026-08-12T00:00:00Z",
+    });
+
+    render(<App />);
+    await waitFor(() => expect(mocks.openReader).toHaveBeenCalledWith("reader-test"));
+    expect(mocks.savePreferences).not.toHaveBeenCalled();
   });
 });

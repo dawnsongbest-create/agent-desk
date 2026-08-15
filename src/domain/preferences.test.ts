@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { compactDragFrame, defaultPreferences, settleCompactPosition } from "./preferences";
+import {
+  compactDragFrame,
+  defaultPreferences,
+  preserveStickyTopOnModeChange,
+  settleCompactPosition,
+} from "./preferences";
 
 const base = { boardWidth: 420, boardHeight: 594, stickyWidth: 218, stickyHeight: 176 };
 
@@ -32,6 +37,19 @@ describe("Compact Sticky position", () => {
         deltaY: 20,
       }),
     ).toEqual({ left: 230, top: 362 });
+  });
+
+  it("keeps the Compact top edge when shrinking to Mini so Reader can begin earlier", () => {
+    const minimized = preserveStickyTopOnModeChange(
+      defaultPreferences.stickyPosition,
+      568,
+      "compact",
+      "mini",
+    );
+    expect(minimized.xRatio).toBe(0.5);
+    expect(minimized.yRatio * 568 - 23).toBeCloseTo(76);
+    const restored = preserveStickyTopOnModeChange(minimized, 568, "mini", "compact");
+    expect(restored.yRatio * 568 - 125).toBeCloseTo(76);
   });
   it("preserves a normalized free position", () => {
     expect(settleCompactPosition({ ...base, left: 100, top: 210 })).toEqual({

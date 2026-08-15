@@ -30,6 +30,7 @@ export type Preferences = {
   readerSkin: ReaderSkin;
   readerFontSize: ReaderFontSize;
   readerLineSpacing: ReaderLineSpacing;
+  currentReaderDocumentId: string | null;
 };
 
 export const defaultPreferences: Preferences = {
@@ -43,6 +44,7 @@ export const defaultPreferences: Preferences = {
   readerSkin: "grid",
   readerFontSize: "standard",
   readerLineSpacing: "standard",
+  currentReaderDocumentId: null,
 };
 
 export type CompactGeometry = {
@@ -74,6 +76,27 @@ export function compactDragFrame(frame: DragFrame) {
       76,
       Math.min(frame.boardHeight - frame.stickyHeight - 12, frame.originTop + frame.deltaY),
     ),
+  };
+}
+
+export function preserveStickyTopOnModeChange(
+  position: StickyPosition,
+  boardHeight: number,
+  fromMode: StickyMode,
+  toMode: StickyMode,
+): StickyPosition {
+  if (position.snap || fromMode === toMode || boardHeight <= 0) return position;
+  const heights: Record<StickyMode, number> = { compact: 250, mini: 46 };
+  const fromHeight = heights[fromMode];
+  const toHeight = heights[toMode];
+  const fromTop = Math.max(
+    76,
+    Math.min(boardHeight - fromHeight - 12, position.yRatio * boardHeight - fromHeight / 2),
+  );
+  const toTop = Math.max(76, Math.min(boardHeight - toHeight - 12, fromTop));
+  return {
+    ...position,
+    yRatio: Math.max(0, Math.min(1, (toTop + toHeight / 2) / boardHeight)),
   };
 }
 

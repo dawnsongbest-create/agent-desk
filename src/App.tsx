@@ -3,6 +3,7 @@ import type { Preferences } from "./domain/preferences";
 import { defaultPreferences } from "./domain/preferences";
 import { StickyHome } from "./features/sticky/StickyHome";
 import { tauriPreferences } from "./infrastructure/tauri/preferences";
+import { tauriReaderDocuments } from "./infrastructure/tauri/reader";
 import { tauriStickyCards } from "./infrastructure/tauri/sticky";
 import { applyTheme } from "./styles/theme";
 import "./App.css";
@@ -62,6 +63,7 @@ function App() {
   return (
     <StickyHome
       port={tauriStickyCards}
+      readerPort={tauriReaderDocuments}
       preferences={preferences}
       preferenceSaveState={saveState}
       onThemeChange={(theme) => save({ ...preferencesRef.current, theme })}
@@ -81,6 +83,9 @@ function App() {
       }
       onReaderLineSpacingChange={(readerLineSpacing) =>
         save({ ...preferencesRef.current, readerLineSpacing })
+      }
+      onCurrentReaderDocumentChange={(currentReaderDocumentId) =>
+        save({ ...preferencesRef.current, currentReaderDocumentId })
       }
     />
   );

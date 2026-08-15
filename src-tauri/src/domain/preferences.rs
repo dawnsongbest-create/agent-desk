@@ -120,6 +120,8 @@ pub struct Preferences {
     pub reader_font_size: ReaderFontSize,
     #[serde(default)]
     pub reader_line_spacing: ReaderLineSpacing,
+    #[serde(default)]
+    pub current_reader_document_id: Option<String>,
 }
 
 impl Default for Preferences {
@@ -135,6 +137,7 @@ impl Default for Preferences {
             reader_skin: ReaderSkin::Grid,
             reader_font_size: ReaderFontSize::Standard,
             reader_line_spacing: ReaderLineSpacing::Standard,
+            current_reader_document_id: None,
         }
     }
 }
@@ -157,6 +160,7 @@ mod tests {
         assert_eq!(value["readerSkin"], "grid");
         assert_eq!(value["readerFontSize"], "standard");
         assert_eq!(value["readerLineSpacing"], "standard");
+        assert_eq!(value["currentReaderDocumentId"], serde_json::Value::Null);
     }
 
     #[test]
@@ -175,5 +179,6 @@ mod tests {
         assert_eq!(preferences.reader_skin, ReaderSkin::Grid);
         assert_eq!(preferences.reader_font_size, ReaderFontSize::Standard);
         assert_eq!(preferences.reader_line_spacing, ReaderLineSpacing::Standard);
+        assert_eq!(preferences.current_reader_document_id, None);
     }
 }

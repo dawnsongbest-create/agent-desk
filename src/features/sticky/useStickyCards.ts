@@ -207,11 +207,21 @@ export function useStickyCards(port: StickyCardsPort) {
       try {
         return await port.exportRecord(id);
       } catch {
-        if (mountedRef.current) setError("导出没有完成；Record 原文没有改变。");
+        if (mountedRef.current) setError("导出没有完成；记录原文没有改变。");
         return false;
       }
     },
     [port],
+  );
+
+  const acceptCreated = useCallback(
+    (created: StickyCard) => {
+      const next = [...cardsRef.current.filter((card) => card.id !== created.id), created].sort(
+        (left, right) => left.position - right.position,
+      );
+      publish(next);
+    },
+    [publish],
   );
 
   return {
@@ -228,6 +238,7 @@ export function useStickyCards(port: StickyCardsPort) {
     reorder,
     updateQuote,
     exportRecord,
+    acceptCreated,
     retry: load,
     dismissError: () => setError(null),
   };

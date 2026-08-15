@@ -91,7 +91,7 @@
 .reader-top-safe-area {
   position: relative;
   z-index: 1;
-  height: clamp(136px, 31vh, 190px);
+  height: clamp(124px, 24vh, 148px);
 }
 
 .reader-content {
@@ -109,6 +109,100 @@
   font-size: 0.62rem;
   font-weight: 650;
   letter-spacing: 0.08em;
+}
+
+.reader-document-header {
+  margin-bottom: 24px;
+}
+
+.reader-document-header h1 {
+  margin: 0;
+  color: var(--reader-ink);
+  font-family: Georgia, "Noto Serif CJK SC", "Songti SC", "SimSun", serif;
+  font-size: clamp(1.52rem, 6.6vw, 1.95rem);
+  font-weight: 620;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+.reader-subtitle {
+  margin: 10px 0 0;
+  color: var(--reader-muted);
+  font-family: Georgia, "Noto Serif CJK SC", "Songti SC", "SimSun", serif;
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.reader-load-state {
+  position: relative;
+  z-index: 1;
+  margin: 0 auto;
+  padding: 0 22px;
+  color: var(--reader-muted);
+  font-size: 0.76rem;
+  text-align: center;
+}
+
+.reader-load-state button {
+  border: 1px solid var(--popover-line);
+  border-radius: 5px;
+  padding: 5px 10px;
+  color: var(--popover-ink);
+  background: var(--popover);
+  cursor: pointer;
+}
+
+.reader-selection-popover {
+  position: fixed;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  box-sizing: border-box;
+  min-height: 34px;
+  border: 1px solid var(--popover-line);
+  border-radius: 7px;
+  padding: 3px;
+  color: var(--popover-ink);
+  background: color-mix(in srgb, var(--popover) 96%, transparent);
+  box-shadow: 0 5px 14px rgb(63 50 28 / 14%);
+  font-size: 0.68rem;
+  user-select: none;
+}
+
+.reader-selection-popover button {
+  border: 0;
+  border-radius: 5px;
+  padding: 6px 8px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.reader-selection-popover button:hover,
+.reader-selection-popover button:focus-visible {
+  background: var(--popover-soft);
+}
+
+.reader-selection-popover button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -1px;
+}
+
+.reader-selection-popover button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.reader-selection-popover > span {
+  padding: 5px 8px;
+  white-space: nowrap;
+}
+
+.reader-selection-popover[data-status="error"] > span {
+  color: var(--danger);
+  padding-left: 4px;
 }
 
 .reader-article {
@@ -1889,7 +1983,7 @@ textarea:disabled {
 
 @media (max-height: 470px) {
   .reader-top-safe-area {
-    height: 140px;
+    height: 128px;
   }
 
   .reader-content {

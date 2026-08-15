@@ -2,12 +2,35 @@ import { createEvent, fireEvent, render, screen, waitFor, within } from "@testin
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { StickyCardsPort } from "../../application/ports/sticky";
+import type { ReaderDocumentsPort } from "../../application/ports/reader";
 import { defaultPreferences, type Preferences } from "../../domain/preferences";
+import type { ReaderDocument } from "../../domain/reader";
 import type { CreateStickyCardInput, StickyCard, StickyProfile } from "../../domain/sticky";
 import { playPageTurnSound } from "./pageTurnSound";
 import { StickyHome } from "./StickyHome";
 
 vi.mock("./pageTurnSound", () => ({ playPageTurnSound: vi.fn() }));
+
+const readerDocument: ReaderDocument = {
+  id: "reader-test",
+  documentType: "article",
+  title: "测试阅读文档",
+  subtitle: null,
+  contentMarkdown: "Reader 正文",
+  sourceType: "builtin",
+  sourceLabel: "测试",
+  createdAt: "2026-08-12T00:00:00Z",
+  updatedAt: "2026-08-12T00:00:00Z",
+};
+
+const readerPort: ReaderDocumentsPort = {
+  openCurrent: vi.fn(async () => readerDocument),
+  get: vi.fn(async () => readerDocument),
+  list: vi.fn(async () => [readerDocument]),
+  create: vi.fn(async () => readerDocument),
+  captureSelection: vi.fn(),
+  copyText: vi.fn(),
+};
 
 function makeCard(
   id: string,
@@ -90,10 +113,12 @@ function renderHome(
   modeChange = vi.fn(),
   readerFontSizeChange = vi.fn(),
   readerLineSpacingChange = vi.fn(),
+  readerDocuments: ReaderDocumentsPort = readerPort,
 ) {
   return render(
     <StickyHome
       port={port}
+      readerPort={readerDocuments}
       preferences={preferences}
       preferenceSaveState="idle"
       now={new Date("2026-08-12T12:00:00")}
@@ -104,6 +129,7 @@ function renderHome(
       onStickyModeChange={modeChange}
       onReaderFontSizeChange={readerFontSizeChange}
       onReaderLineSpacingChange={readerLineSpacingChange}
+      onCurrentReaderDocumentChange={vi.fn()}
     />,
   );
 }
@@ -125,6 +151,48 @@ async function expand(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("StickyHome M1-B4", () => {
+  it("adds a Reader selection capture to the existing 记录 list without opening Sticky", async () => {
+    const user = userEvent.setup();
+    const port = new MemoryStickyPort();
+    const capturedRecord = makeCard("captured", "note", "Reader 正文", 0);
+    const captureSelection = vi.fn(async () => ({
+      record: capturedRecord,
+      sourceRef: {
+        recordId: capturedRecord.id,
+        documentId: readerDocument.id,
+        sourceType: "reader_selection" as const,
+        selectedText: capturedRecord.text,
+        documentTitleSnapshot: readerDocument.title,
+        capturedAt: "2026-08-15T00:00:00Z",
+      },
+    }));
+    const selectionPort = { ...readerPort, captureSelection };
+    renderHome(port, vi.fn(), defaultPreferences, vi.fn(), vi.fn(), vi.fn(), selectionPort);
+    const article = await screen.findByRole("article", { name: readerDocument.title });
+    const textNode = screen.getByText("Reader 正文").firstChild!;
+    const selection = vi.spyOn(window, "getSelection").mockReturnValue({
+      rangeCount: 1,
+      isCollapsed: false,
+      anchorNode: textNode,
+      focusNode: textNode,
+      toString: () => "Reader 正文",
+      getRangeAt: () => ({
+        getBoundingClientRect: () =>
+          ({ left: 40, right: 130, top: 180, bottom: 200, width: 90, height: 20 }) as DOMRect,
+      }),
+    } as unknown as Selection);
+    fireEvent.mouseUp(article);
+    await user.click(screen.getByRole("button", { name: "保存到记录" }));
+    expect(captureSelection).toHaveBeenCalledWith({
+      documentId: readerDocument.id,
+      selectedText: "Reader 正文",
+    });
+    expect(screen.queryByRole("region", { name: "展开的便利贴" })).not.toBeInTheDocument();
+    await expand(user);
+    expect(screen.getByRole("button", { name: /Reader 正文/ })).toBeVisible();
+    selection.mockRestore();
+  });
+
   it("renders a compact Todo + Quote overlay with only open Todo priority", async () => {
     const port = new MemoryStickyPort([
       makeCard("done", "task", "已完成，不应抢占", 0, true),
@@ -157,17 +225,17 @@ describe("StickyHome M1-B4", () => {
     renderHome(port);
     await expand(user);
     expect(screen.getByText("Agent Desk 产品想法")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /新建 Record/ }));
+    await user.click(screen.getByRole("button", { name: /新建记录/ }));
     const body = `长记录第一行\n${"中文内容".repeat(1300)}`;
-    fireEvent.change(screen.getByRole("textbox", { name: "新建长 Record" }), {
+    fireEvent.change(screen.getByRole("textbox", { name: "新建长记录" }), {
       target: { value: body },
     });
-    await user.click(screen.getByRole("button", { name: "保存 Record" }));
+    await user.click(screen.getByRole("button", { name: "保存记录" }));
     await waitFor(() =>
       expect(port.create).toHaveBeenCalledWith({ kind: "note", text: body, dueDate: null }),
     );
     await user.click(screen.getByRole("button", { name: /长记录第一行/ }));
-    expect(screen.getByRole("textbox", { name: "Record 正文" })).toHaveValue(body);
+    expect(screen.getByRole("textbox", { name: "记录正文" })).toHaveValue(body);
   });
 
   it("edits and saves a long Record without leaving the paper", async () => {
@@ -176,7 +244,7 @@ describe("StickyHome M1-B4", () => {
     renderHome(port);
     await expand(user);
     await user.click(screen.getByRole("button", { name: /原始标题/ }));
-    const editor = screen.getByRole("textbox", { name: "Record 正文" });
+    const editor = screen.getByRole("textbox", { name: "记录正文" });
     fireEvent.change(editor, { target: { value: "修改后标题\n修改后的正文" } });
     await user.click(screen.getByRole("button", { name: "保存" }));
     await waitFor(() =>
@@ -194,22 +262,22 @@ describe("StickyHome M1-B4", () => {
     renderHome(port);
     await expand(user);
     await user.click(screen.getByRole("button", { name: /需要保存的 Record/ }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Record 正文" }), {
+    fireEvent.change(screen.getByRole("textbox", { name: "记录正文" }), {
       target: { value: "普通保存后的内容" },
     });
     expect(screen.getByRole("tab", { name: /待办/ })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /新 Record/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /新记录/ })).toBeDisabled();
     expect(screen.getByRole("button", { name: "收起便利贴" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "保存" }));
     await waitFor(() => expect(screen.getByText("已保存")).toBeInTheDocument());
 
     const todoTab = screen.getByRole("tab", { name: /待办/ });
     expect(todoTab).toBeEnabled();
-    const newRecord = screen.getByRole("button", { name: /新 Record/ });
+    const newRecord = screen.getByRole("button", { name: /新记录/ });
     expect(newRecord).toBeEnabled();
     expect(screen.getByRole("button", { name: "收起便利贴" })).toBeEnabled();
     await user.click(newRecord);
-    expect(await screen.findByRole("textbox", { name: "新建长 Record" })).toBeInTheDocument();
+    expect(await screen.findByRole("textbox", { name: "新建长记录" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "取消" }));
     await user.click(todoTab);
     expect(screen.getByText("保存后可以打开")).toBeInTheDocument();
@@ -222,7 +290,7 @@ describe("StickyHome M1-B4", () => {
     renderHome(port);
     await expand(user);
     await user.click(screen.getByRole("button", { name: /长 Record 原文/ }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Record 正文" }), {
+    fireEvent.change(screen.getByRole("textbox", { name: "记录正文" }), {
       target: { value: body },
     });
     await user.click(screen.getByRole("button", { name: "保存" }));
@@ -233,7 +301,7 @@ describe("StickyHome M1-B4", () => {
     await user.click(collapse);
     await user.click(screen.getByRole("button", { name: "展开或拖动便利贴" }));
     await user.click(screen.getByRole("button", { name: /长 Record 普通保存/ }));
-    expect(screen.getByRole("textbox", { name: "Record 正文" })).toHaveValue(body);
+    expect(screen.getByRole("textbox", { name: "记录正文" })).toHaveValue(body);
   });
 
   it("pastes 6000+ Chinese characters, saves, and collapses without controlled rerenders", async () => {
@@ -244,7 +312,7 @@ describe("StickyHome M1-B4", () => {
     renderHome(port);
     await expand(user);
     await user.click(screen.getByRole("button", { name: /原始长记录/ }));
-    const editor = screen.getByRole("textbox", { name: "Record 正文" });
+    const editor = screen.getByRole("textbox", { name: "记录正文" });
     fireEvent.change(editor, { target: { value: pasted } });
     expect(screen.getByText(pasted.length.toLocaleString())).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "保存并收起" }));
@@ -252,7 +320,7 @@ describe("StickyHome M1-B4", () => {
     expect(screen.getByRole("button", { name: "展开或拖动便利贴" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "展开或拖动便利贴" }));
     await user.click(screen.getByRole("button", { name: /稳定性记录/ }));
-    expect(screen.getByRole("textbox", { name: "Record 正文" })).toHaveValue(pasted);
+    expect(screen.getByRole("textbox", { name: "记录正文" })).toHaveValue(pasted);
   });
 
   it("stores the full Sticky Quote beyond the compact visual line limit", async () => {
@@ -289,7 +357,7 @@ describe("StickyHome M1-B4", () => {
     await expand(user);
     await user.click(screen.getByRole("tab", { name: /待办/ }));
     expect(playPageTurnSound).toHaveBeenLastCalledWith("note-to-todo");
-    await user.click(screen.getByRole("tab", { name: /Record/ }));
+    await user.click(screen.getByRole("tab", { name: /记录/ }));
     expect(playPageTurnSound).toHaveBeenLastCalledWith("todo-to-note");
   });
 
@@ -350,6 +418,7 @@ describe("StickyHome M1-B4", () => {
     view.rerender(
       <StickyHome
         port={port}
+        readerPort={readerPort}
         preferences={{ ...defaultPreferences, stickyMode: "mini" }}
         preferenceSaveState="idle"
         now={new Date("2026-08-12T12:00:00")}
@@ -360,6 +429,7 @@ describe("StickyHome M1-B4", () => {
         onStickyModeChange={modeChange}
         onReaderFontSizeChange={vi.fn()}
         onReaderLineSpacingChange={vi.fn()}
+        onCurrentReaderDocumentChange={vi.fn()}
       />,
     );
     const mini = screen.getByRole("button", { name: "恢复 Compact Sticky 或拖动 Mini Tab" });

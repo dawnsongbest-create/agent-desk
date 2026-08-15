@@ -166,7 +166,10 @@ mod tests {
             SELECT COUNT(*)
             FROM sqlite_master
             WHERE type = 'table'
-              AND name IN ('cards', 'note_payloads', 'task_payloads', 'card_placements', 'sticky_surface_profile')
+              AND name IN (
+                  'cards', 'note_payloads', 'task_payloads', 'card_placements',
+                  'sticky_surface_profile', 'reader_documents', 'record_source_refs'
+              )
             "#,
         )
         .fetch_one(&database.0)
@@ -183,9 +186,89 @@ mod tests {
                 .await
                 .expect("migration history query");
 
-        assert_eq!(table_count, 5);
-        assert_eq!(applied_versions, vec![1, 2, 3]);
+        assert_eq!(table_count, 7);
+        assert_eq!(applied_versions, vec![1, 2, 3, 4]);
         assert_eq!(foreign_keys, 1);
+    }
+
+    #[tokio::test]
+    async fn upgrades_a_0003_database_without_changing_existing_sticky_data() {
+        let temp = tempfile::tempdir().expect("temp directory");
+        let database_path = temp.path().join("upgrade-0003.sqlite3");
+        let database = connect(&database_path)
+            .await
+            .expect("database should initialize");
+        sqlx::raw_sql(
+            r#"
+            DROP TRIGGER record_source_refs_require_note;
+            DROP TABLE record_source_refs;
+            DROP TABLE reader_documents;
+            DELETE FROM _sqlx_migrations WHERE version = 4;
+
+            INSERT INTO cards (
+                id, card_type, title, lifecycle, attention, source_kind,
+                source_agent_id, source_delivery_id, metadata_json,
+                created_at, updated_at
+            ) VALUES
+                ('existing-note', 'note', NULL, 'active', NULL, 'user', NULL, NULL, '{}',
+                 '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z'),
+                ('existing-task', 'task', NULL, 'active', NULL, 'user', NULL, NULL, '{}',
+                 '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z');
+            INSERT INTO note_payloads (card_id, body) VALUES ('existing-note', '保留的记录');
+            INSERT INTO task_payloads (card_id, text, due_date)
+                VALUES ('existing-task', '保留的待办', '2026-08-30');
+            INSERT INTO card_placements (card_id, surface, position, created_at, updated_at)
+                VALUES
+                    ('existing-note', 'sticky', 0, '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z'),
+                    ('existing-task', 'sticky', 1, '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z');
+            UPDATE sticky_surface_profile
+                SET quote_text = '保留的便签一句'
+                WHERE surface = 'sticky';
+            "#,
+        )
+        .execute(&database.0)
+        .await
+        .expect("0003 fixture setup");
+        database.0.close().await;
+
+        let upgraded = connect(&database_path)
+            .await
+            .expect("0003 database should upgrade");
+        let versions: Vec<i64> =
+            sqlx::query_scalar("SELECT version FROM _sqlx_migrations ORDER BY version")
+                .fetch_all(&upgraded.0)
+                .await
+                .unwrap();
+        let note: String =
+            sqlx::query_scalar("SELECT body FROM note_payloads WHERE card_id = 'existing-note'")
+                .fetch_one(&upgraded.0)
+                .await
+                .unwrap();
+        let task: (String, Option<String>) = sqlx::query_as(
+            "SELECT text, due_date FROM task_payloads WHERE card_id = 'existing-task'",
+        )
+        .fetch_one(&upgraded.0)
+        .await
+        .unwrap();
+        let quote: String = sqlx::query_scalar(
+            "SELECT quote_text FROM sticky_surface_profile WHERE surface = 'sticky'",
+        )
+        .fetch_one(&upgraded.0)
+        .await
+        .unwrap();
+        let placements: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM card_placements")
+            .fetch_one(&upgraded.0)
+            .await
+            .unwrap();
+
+        assert_eq!(versions, vec![1, 2, 3, 4]);
+        assert_eq!(note, "保留的记录");
+        assert_eq!(
+            task,
+            ("保留的待办".to_owned(), Some("2026-08-30".to_owned()))
+        );
+        assert_eq!(quote, "保留的便签一句");
+        assert_eq!(placements, 2);
     }
 
     #[tokio::test]
