@@ -1,0 +1,12 @@
+{
+  "page": {
+    "title": "Agent Desk",
+    "url": "http://tauri.localhost/"
+  },
+  "captureState": {
+    "selectedText": "Agent De",
+    "feedback": "✓ 已保存到记录",
+    "currentDocumentId": "reader_builtin_foundation_v1",
+    "contentVisible": "true"
+  }
+}

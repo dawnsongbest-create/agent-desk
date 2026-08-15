@@ -1,0 +1,22 @@
+{
+  "page": {
+    "title": "Agent Desk",
+    "url": "http://tauri.localhost/"
+  },
+  "beforeShow": {
+    "contentVisible": "false",
+    "hasArticle": false,
+    "hasMini": true,
+    "currentDocumentId": "reader_builtin_foundation_v1",
+    "viewport": {
+      "width": 320,
+      "height": 420
+    }
+  },
+  "afterShow": {
+    "contentVisible": "true",
+    "hasArticle": true,
+    "hasMini": true,
+    "currentDocumentId": "reader_builtin_foundation_v1"
+  }
+}

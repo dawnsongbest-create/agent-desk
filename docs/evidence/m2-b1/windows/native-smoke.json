@@ -1,0 +1,301 @@
+{
+  "page": {
+    "title": "Agent Desk",
+    "url": "http://tauri.localhost/"
+  },
+  "currentDocumentId": "reader_builtin_foundation_v1",
+  "presetMetrics": {
+    "sticky": {
+      "viewportSize": {
+        "width": 320,
+        "height": 420
+      },
+      "requestedScrollTop": 0,
+      "actualScrollTop": 0,
+      "maximumScrollTop": 2553,
+      "shelf": {
+        "left": 0,
+        "top": 70,
+        "right": 320,
+        "bottom": 130,
+        "width": 320,
+        "height": 60
+      },
+      "mini": {
+        "left": 224,
+        "top": 77,
+        "right": 302,
+        "bottom": 123,
+        "width": 78,
+        "height": 46
+      },
+      "readerViewport": {
+        "left": 0,
+        "top": 130,
+        "right": 320,
+        "bottom": 420,
+        "width": 320,
+        "height": 290
+      },
+      "shelfBeforeReader": true,
+      "miniInsideShelf": true,
+      "miniReaderOverlap": false,
+      "horizontalOverflow": false
+    },
+    "iphone5": {
+      "viewportSize": {
+        "width": 320,
+        "height": 568
+      },
+      "requestedScrollTop": 0,
+      "actualScrollTop": 0,
+      "maximumScrollTop": 2527,
+      "shelf": {
+        "left": 0,
+        "top": 76,
+        "right": 320,
+        "bottom": 140,
+        "width": 320,
+        "height": 64
+      },
+      "mini": {
+        "left": 224,
+        "top": 85,
+        "right": 302,
+        "bottom": 131,
+        "width": 78,
+        "height": 46
+      },
+      "readerViewport": {
+        "left": 0,
+        "top": 140,
+        "right": 320,
+        "bottom": 568,
+        "width": 320,
+        "height": 428
+      },
+      "shelfBeforeReader": true,
+      "miniInsideShelf": true,
+      "miniReaderOverlap": false,
+      "horizontalOverflow": false
+    },
+    "pocket": {
+      "viewportSize": {
+        "width": 360,
+        "height": 640
+      },
+      "requestedScrollTop": 300,
+      "actualScrollTop": 300,
+      "maximumScrollTop": 2279,
+      "shelf": {
+        "left": 0,
+        "top": 76,
+        "right": 360,
+        "bottom": 140,
+        "width": 360,
+        "height": 64
+      },
+      "mini": {
+        "left": 264,
+        "top": 85,
+        "right": 342,
+        "bottom": 131,
+        "width": 78,
+        "height": 46
+      },
+      "readerViewport": {
+        "left": 0,
+        "top": 140,
+        "right": 360,
+        "bottom": 640,
+        "width": 360,
+        "height": 500
+      },
+      "shelfBeforeReader": true,
+      "miniInsideShelf": true,
+      "miniReaderOverlap": false,
+      "horizontalOverflow": false
+    },
+    "book": {
+      "viewportSize": {
+        "width": 420,
+        "height": 595
+      },
+      "requestedScrollTop": 300,
+      "actualScrollTop": 300,
+      "maximumScrollTop": 2110,
+      "shelf": {
+        "left": 0,
+        "top": 76,
+        "right": 420,
+        "bottom": 140,
+        "width": 420,
+        "height": 64
+      },
+      "mini": {
+        "left": 324,
+        "top": 85,
+        "right": 402,
+        "bottom": 131,
+        "width": 78,
+        "height": 46
+      },
+      "readerViewport": {
+        "left": 0,
+        "top": 140,
+        "right": 420,
+        "bottom": 595.2000122070312,
+        "width": 420,
+        "height": 455.20001220703125
+      },
+      "shelfBeforeReader": true,
+      "miniInsideShelf": true,
+      "miniReaderOverlap": false,
+      "horizontalOverflow": false
+    }
+  },
+  "scrollMetrics": [
+    {
+      "viewportSize": {
+        "width": 320,
+        "height": 568
+      },
+      "requestedScrollTop": 0,
+      "actualScrollTop": 0,
+      "maximumScrollTop": 2527,
+      "shelf": {
+        "left": 0,
+        "top": 76,
+        "right": 320,
+        "bottom": 140,
+        "width": 320,
+        "height": 64
+      },
+      "mini": {
+        "left": 224,
+        "top": 85,
+        "right": 302,
+        "bottom": 131,
+        "width": 78,
+        "height": 46
+      },
+      "readerViewport": {
+        "left": 0,
+        "top": 140,
+        "right": 320,
+        "bottom": 568,
+        "width": 320,
+        "height": 428
+      },
+      "shelfBeforeReader": true,
+      "miniInsideShelf": true,
+      "miniReaderOverlap": false,
+      "horizontalOverflow": false
+    },
+    {
+      "viewportSize": {
+        "width": 320,
+        "height": 568
+      },
+      "requestedScrollTop": 300,
+      "actualScrollTop": 300,
+      "maximumScrollTop": 2527,
+      "shelf": {
+        "left": 0,
+        "top": 76,
+        "right": 320,
+        "bottom": 140,
+        "width": 320,
+        "height": 64
+      },
+      "mini": {
+        "left": 224,
+        "top": 85,
+        "right": 302,
+        "bottom": 131,
+        "width": 78,
+        "height": 46
+      },
+      "readerViewport": {
+        "left": 0,
+        "top": 140,
+        "right": 320,
+        "bottom": 568,
+        "width": 320,
+        "height": 428
+      },
+      "shelfBeforeReader": true,
+      "miniInsideShelf": true,
+      "miniReaderOverlap": false,
+      "horizontalOverflow": false
+    },
+    {
+      "viewportSize": {
+        "width": 320,
+        "height": 568
+      },
+      "requestedScrollTop": 1000,
+      "actualScrollTop": 1000,
+      "maximumScrollTop": 2527,
+      "shelf": {
+        "left": 0,
+        "top": 76,
+        "right": 320,
+        "bottom": 140,
+        "width": 320,
+        "height": 64
+      },
+      "mini": {
+        "left": 224,
+        "top": 85,
+        "right": 302,
+        "bottom": 131,
+        "width": 78,
+        "height": 46
+      },
+      "readerViewport": {
+        "left": 0,
+        "top": 140,
+        "right": 320,
+        "bottom": 568,
+        "width": 320,
+        "height": 428
+      },
+      "shelfBeforeReader": true,
+      "miniInsideShelf": true,
+      "miniReaderOverlap": false,
+      "horizontalOverflow": false
+    }
+  ],
+  "selectedBeforeBlank": "Agent De",
+  "blankState": {
+    "contentVisible": "false",
+    "hasArticle": false,
+    "hasTitle": false,
+    "hasPopover": false,
+    "selectionRangeCount": 0,
+    "viewportTabIndex": -1,
+    "viewportOverflowY": "hidden",
+    "hasGridPaper": true,
+    "showControlVisible": true
+  },
+  "sessionScroll": {
+    "beforeBlank": 732.7999877929688,
+    "maximum": 2527,
+    "afterShow": 732.7999877929688,
+    "delta": 0
+  },
+  "overlayProof": {
+    "topElementClass": "sticky-preview",
+    "stickyOwnsHit": true,
+    "stickyLayer": "2",
+    "readerLayer": "1"
+  },
+  "selectedAfterRestore": "Agent De",
+  "finalState": {
+    "contentVisible": "false",
+    "hasMini": true,
+    "hasPopover": false,
+    "selectionRangeCount": 0
+  }
+}
