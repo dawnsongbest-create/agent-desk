@@ -196,9 +196,10 @@ The truth target did not exist before the build. `pnpm tauri build --no-bundle -
 ## U. Git State
 
 - Branch: `main`
-- Product source HEAD / origin main: `cd480d425f201f07c8699f589858df84930b5f73`
+- Product source / Final Handoff Commit: `cd480d425f201f07c8699f589858df84930b5f73`
+- Gate documentation: published on `main` as a descendant containing only this report and evidence; `main` and `origin/main` were synchronized after publication
 - Historical migrations: unchanged
-- Product source working tree: clean after the implementation commit; only this Gate report/evidence remained for the documentation commit
+- Working tree: clean after the documentation publication
 - Remote: `origin https://github.com/dawnsongbest-create/agent-desk.git`
 
 ## Product Review Questions
