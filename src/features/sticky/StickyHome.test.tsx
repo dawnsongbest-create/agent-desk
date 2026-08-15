@@ -251,19 +251,22 @@ describe("StickyHome M1-B4", () => {
     expect(screen.getByRole("textbox", { name: "Record 正文" })).toHaveValue(pasted);
   });
 
-  it("updates the single Sticky Quote and shows it after collapse", async () => {
+  it("stores the full Sticky Quote beyond the compact visual line limit", async () => {
     const user = userEvent.setup();
     const port = new MemoryStickyPort();
+    const quote =
+      "愿你在很长很长的日子里，仍然保留好奇、耐心和一点点不合时宜的浪漫，并记得给真正重要的事留出时间。";
     renderHome(port);
     await expand(user);
     await user.click(screen.getByRole("button", { name: "写下你的便签一句" }));
     fireEvent.change(screen.getByRole("textbox", { name: "编辑便签一句" }), {
-      target: { value: "多花点时间玩。" },
+      target: { value: quote },
     });
     await user.click(screen.getByRole("button", { name: "保存" }));
-    await waitFor(() => expect(port.updateQuote).toHaveBeenCalledWith("多花点时间玩。"));
+    await waitFor(() => expect(port.updateQuote).toHaveBeenCalledWith(quote));
+    expect(port.profile.quoteText).toBe(quote);
     await user.click(screen.getByRole("button", { name: "收起便利贴" }));
-    expect(await screen.findByText("多花点时间玩。")).toBeInTheDocument();
+    expect(await screen.findByText(quote)).toBeInTheDocument();
   });
 
   it("exports the selected saved Record through the native boundary", async () => {

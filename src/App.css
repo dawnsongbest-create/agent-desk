@@ -1026,6 +1026,7 @@ textarea:disabled {
 
 .sticky-preview blockquote {
   display: -webkit-box;
+  flex-shrink: 0;
   margin: 9px 0 0;
   overflow: hidden;
   color: var(--sticky-muted);
@@ -1034,7 +1035,7 @@ textarea:disabled {
   font-style: italic;
   line-height: 1.42;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
 }
 
 .sticky-preview .preview-open {

@@ -543,15 +543,15 @@ mod tests {
         let database = crate::persistence::sqlite::connect(&path).await.unwrap();
         let repository = SqliteStickyRepository::new(database.0.clone());
         assert_eq!(repository.get_profile().await.unwrap().quote_text, "");
-        repository.update_quote("多花点时间玩。").await.unwrap();
+        let quote =
+            "愿你在很长很长的日子里，仍然保留好奇、耐心和一点点不合时宜的浪漫，并记得给真正重要的事留出时间。";
+        repository.update_quote(quote).await.unwrap();
+        assert_eq!(repository.get_profile().await.unwrap().quote_text, quote);
         database.0.close().await;
 
         let reopened = crate::persistence::sqlite::connect(&path).await.unwrap();
         let restored = SqliteStickyRepository::new(reopened.0);
-        assert_eq!(
-            restored.get_profile().await.unwrap().quote_text,
-            "多花点时间玩。"
-        );
+        assert_eq!(restored.get_profile().await.unwrap().quote_text, quote);
     }
 
     #[tokio::test]
