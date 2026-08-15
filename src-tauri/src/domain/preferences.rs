@@ -35,6 +35,31 @@ pub enum StickyMode {
     Mini,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReaderSkin {
+    #[default]
+    Grid,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReaderFontSize {
+    Small,
+    #[default]
+    Standard,
+    Large,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReaderLineSpacing {
+    Compact,
+    #[default]
+    Standard,
+    Relaxed,
+}
+
 impl WindowPreset {
     pub const fn logical_size(self) -> Option<(f64, f64)> {
         match self {
@@ -89,6 +114,12 @@ pub struct Preferences {
     pub sticky_position: StickyPosition,
     #[serde(default)]
     pub sticky_mode: StickyMode,
+    #[serde(default)]
+    pub reader_skin: ReaderSkin,
+    #[serde(default)]
+    pub reader_font_size: ReaderFontSize,
+    #[serde(default)]
+    pub reader_line_spacing: ReaderLineSpacing,
 }
 
 impl Default for Preferences {
@@ -101,6 +132,9 @@ impl Default for Preferences {
             window_preset: WindowPreset::Sticky,
             sticky_position: StickyPosition::default(),
             sticky_mode: StickyMode::Compact,
+            reader_skin: ReaderSkin::Grid,
+            reader_font_size: ReaderFontSize::Standard,
+            reader_line_spacing: ReaderLineSpacing::Standard,
         }
     }
 }
@@ -120,6 +154,9 @@ mod tests {
         assert_eq!(value["windowPreset"], "sticky");
         assert_eq!(value["stickyPosition"]["xRatio"], 0.5);
         assert_eq!(value["stickyMode"], "compact");
+        assert_eq!(value["readerSkin"], "grid");
+        assert_eq!(value["readerFontSize"], "standard");
+        assert_eq!(value["readerLineSpacing"], "standard");
     }
 
     #[test]
@@ -135,5 +172,8 @@ mod tests {
         .expect("deserialize legacy preferences");
 
         assert_eq!(preferences.sticky_mode, StickyMode::Compact);
+        assert_eq!(preferences.reader_skin, ReaderSkin::Grid);
+        assert_eq!(preferences.reader_font_size, ReaderFontSize::Standard);
+        assert_eq!(preferences.reader_line_spacing, ReaderLineSpacing::Standard);
     }
 }

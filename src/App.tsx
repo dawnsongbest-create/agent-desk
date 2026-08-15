@@ -76,6 +76,12 @@ function App() {
         save({ ...preferencesRef.current, stickyPosition })
       }
       onStickyModeChange={(stickyMode) => save({ ...preferencesRef.current, stickyMode })}
+      onReaderFontSizeChange={(readerFontSize) =>
+        save({ ...preferencesRef.current, readerFontSize })
+      }
+      onReaderLineSpacingChange={(readerLineSpacing) =>
+        save({ ...preferencesRef.current, readerLineSpacing })
+      }
     />
   );
 }

@@ -14,7 +14,7 @@
   --board-ink: #38352f;
   --board-muted: #817b70;
   --board-line: rgb(86 78 65 / 14%);
-  --board-rule: rgb(94 82 61 / 5%);
+  --board-rule: rgb(94 82 61 / 5.6%);
   --board-soft: rgb(255 255 255 / 46%);
   --sticky-paper: #f3de82;
   --sticky-ink: #3f3926;
@@ -40,6 +40,15 @@
   --danger-line: rgb(163 66 50 / 22%);
   --danger-soft: rgb(163 66 50 / 7%);
   --danger-soft-solid: #f7dfcc;
+  --reader-ink: #454038;
+  --reader-muted: #7c756a;
+  --reader-accent: #735d31;
+  --reader-link: #695326;
+  --reader-rule: rgb(82 70 50 / 18%);
+  --reader-quote-line: rgb(112 88 44 / 38%);
+  --reader-quote-paper: rgb(255 255 255 / 22%);
+  --reader-code-paper: rgb(103 84 50 / 8%);
+  --reader-fiber: rgb(89 72 43 / 2%);
   background: var(--board-paper);
 }
 
@@ -50,7 +59,7 @@
   --board-ink: #e7e1d5;
   --board-muted: #a49e92;
   --board-line: rgb(232 224 207 / 13%);
-  --board-rule: rgb(235 225 200 / 4%);
+  --board-rule: rgb(235 225 200 / 4.5%);
   --board-soft: rgb(255 255 255 / 6%);
   --sticky-paper: #60552e;
   --sticky-ink: #f4eeca;
@@ -76,6 +85,15 @@
   --danger-line: rgb(239 145 128 / 24%);
   --danger-soft: rgb(239 145 128 / 8%);
   --danger-soft-solid: #49322c;
+  --reader-ink: #ded8cc;
+  --reader-muted: #a9a296;
+  --reader-accent: #cbb57a;
+  --reader-link: #d4bd7d;
+  --reader-rule: rgb(231 221 198 / 16%);
+  --reader-quote-line: rgb(226 202 132 / 34%);
+  --reader-quote-paper: rgb(255 255 255 / 4%);
+  --reader-code-paper: rgb(255 248 221 / 6%);
+  --reader-fiber: rgb(255 244 211 / 1.5%);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -86,7 +104,7 @@
     --board-ink: #e7e1d5;
     --board-muted: #a49e92;
     --board-line: rgb(232 224 207 / 13%);
-    --board-rule: rgb(235 225 200 / 4%);
+    --board-rule: rgb(235 225 200 / 4.5%);
     --board-soft: rgb(255 255 255 / 6%);
     --sticky-paper: #60552e;
     --sticky-ink: #f4eeca;
@@ -112,6 +130,15 @@
     --danger-line: rgb(239 145 128 / 24%);
     --danger-soft: rgb(239 145 128 / 8%);
     --danger-soft-solid: #49322c;
+    --reader-ink: #ded8cc;
+    --reader-muted: #a9a296;
+    --reader-accent: #cbb57a;
+    --reader-link: #d4bd7d;
+    --reader-rule: rgb(231 221 198 / 16%);
+    --reader-quote-line: rgb(226 202 132 / 34%);
+    --reader-quote-paper: rgb(255 255 255 / 4%);
+    --reader-code-paper: rgb(255 248 221 / 6%);
+    --reader-fiber: rgb(255 244 211 / 1.5%);
   }
 }
 

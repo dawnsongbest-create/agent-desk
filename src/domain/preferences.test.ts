@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compactDragFrame, settleCompactPosition } from "./preferences";
+import { compactDragFrame, defaultPreferences, settleCompactPosition } from "./preferences";
 
 const base = { boardWidth: 420, boardHeight: 594, stickyWidth: 218, stickyHeight: 176 };
 
@@ -62,5 +62,13 @@ describe("Compact Sticky position", () => {
       yRatio: 494 / 594,
       snap: null,
     });
+  });
+});
+
+describe("Reader preference defaults", () => {
+  it("keeps the only M2-A skin and neutral typography defaults", () => {
+    expect(defaultPreferences.readerSkin).toBe("grid");
+    expect(defaultPreferences.readerFontSize).toBe("standard");
+    expect(defaultPreferences.readerLineSpacing).toBe("standard");
   });
 });

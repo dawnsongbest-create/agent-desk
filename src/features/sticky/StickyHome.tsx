@@ -1,6 +1,8 @@
 import type { StickyCardsPort } from "../../application/ports/sticky";
 import type {
   Preferences,
+  ReaderFontSize,
+  ReaderLineSpacing,
   StickyMode,
   StickyPosition,
   ThemeMode,
@@ -19,6 +21,8 @@ type StickyHomeProps = {
   onWindowPresetChange(windowPreset: WindowPreset): void;
   onStickyPositionChange(position: StickyPosition): void;
   onStickyModeChange(mode: StickyMode): void;
+  onReaderFontSizeChange(size: ReaderFontSize): void;
+  onReaderLineSpacingChange(spacing: ReaderLineSpacing): void;
 };
 
 export function StickyHome({
@@ -31,6 +35,8 @@ export function StickyHome({
   onWindowPresetChange,
   onStickyPositionChange,
   onStickyModeChange,
+  onReaderFontSizeChange,
+  onReaderLineSpacingChange,
 }: StickyHomeProps) {
   const sticky = useStickyCards(port);
 
@@ -48,6 +54,8 @@ export function StickyHome({
       onWindowPresetChange={onWindowPresetChange}
       onStickyPositionChange={onStickyPositionChange}
       onStickyModeChange={onStickyModeChange}
+      onReaderFontSizeChange={onReaderFontSizeChange}
+      onReaderLineSpacingChange={onReaderLineSpacingChange}
       onCreate={sticky.create}
       onUpdateText={sticky.updateText}
       onTaskCompleted={sticky.setTaskCompleted}

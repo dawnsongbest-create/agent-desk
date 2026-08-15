@@ -6,6 +6,12 @@ export const windowPresets = ["sticky", "iphone5", "pocket", "book", "custom"] a
 export type WindowPreset = (typeof windowPresets)[number];
 export const stickyModes = ["compact", "mini"] as const;
 export type StickyMode = (typeof stickyModes)[number];
+export const readerSkins = ["grid"] as const;
+export type ReaderSkin = (typeof readerSkins)[number];
+export const readerFontSizes = ["small", "standard", "large"] as const;
+export type ReaderFontSize = (typeof readerFontSizes)[number];
+export const readerLineSpacings = ["compact", "standard", "relaxed"] as const;
+export type ReaderLineSpacing = (typeof readerLineSpacings)[number];
 
 export type StickyPosition = {
   xRatio: number;
@@ -21,6 +27,9 @@ export type Preferences = {
   windowPreset: WindowPreset;
   stickyPosition: StickyPosition;
   stickyMode: StickyMode;
+  readerSkin: ReaderSkin;
+  readerFontSize: ReaderFontSize;
+  readerLineSpacing: ReaderLineSpacing;
 };
 
 export const defaultPreferences: Preferences = {
@@ -31,6 +40,9 @@ export const defaultPreferences: Preferences = {
   windowPreset: "sticky",
   stickyPosition: { xRatio: 0.5, yRatio: 0.28, snap: null },
   stickyMode: "compact",
+  readerSkin: "grid",
+  readerFontSize: "standard",
+  readerLineSpacing: "standard",
 };
 
 export type CompactGeometry = {

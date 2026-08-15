@@ -88,6 +88,8 @@ function renderHome(
   positionChange = vi.fn(),
   preferences: Preferences = defaultPreferences,
   modeChange = vi.fn(),
+  readerFontSizeChange = vi.fn(),
+  readerLineSpacingChange = vi.fn(),
 ) {
   return render(
     <StickyHome
@@ -100,6 +102,8 @@ function renderHome(
       onWindowPresetChange={vi.fn()}
       onStickyPositionChange={positionChange}
       onStickyModeChange={modeChange}
+      onReaderFontSizeChange={readerFontSizeChange}
+      onReaderLineSpacingChange={readerLineSpacingChange}
     />,
   );
 }
@@ -354,6 +358,8 @@ describe("StickyHome M1-B4", () => {
         onWindowPresetChange={vi.fn()}
         onStickyPositionChange={vi.fn()}
         onStickyModeChange={modeChange}
+        onReaderFontSizeChange={vi.fn()}
+        onReaderLineSpacingChange={vi.fn()}
       />,
     );
     const mini = screen.getByRole("button", { name: "恢复 Compact Sticky 或拖动 Mini Tab" });
@@ -415,5 +421,59 @@ describe("StickyHome M1-B4", () => {
     for (const label of ["Sticky", "iPhone 5", "Pocket", "Book"])
       expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "缩成 Mini Tab" })).toBeInTheDocument();
+  });
+
+  it("keeps Reader below the Compact overlay and forwards boundary wheel movement", async () => {
+    const port = new MemoryStickyPort([
+      makeCard("one", "task", "第一件", 0),
+      makeCard("two", "task", "第二件", 1),
+      makeCard("three", "task", "第三件", 2),
+      makeCard("four", "task", "第四件", 3),
+    ]);
+    renderHome(port);
+    const reader = await screen.findByRole("region", { name: "Reader Canvas" });
+    const compact = screen.getByRole("button", { name: "展开或拖动便利贴" });
+    expect(reader).toHaveAttribute("data-reader-layer", "1");
+    expect(compact.parentElement).toHaveAttribute("data-reader-layer", "2");
+
+    const todo = within(compact).getByLabelText("Compact Todo 列表");
+    Object.defineProperties(todo, {
+      clientHeight: { configurable: true, value: 70 },
+      scrollHeight: { configurable: true, value: 140 },
+      scrollTop: { configurable: true, writable: true, value: 20 },
+    });
+    reader.scrollTop = 100;
+    fireEvent.wheel(todo, { deltaY: 18 });
+    expect(todo.scrollTop).toBe(38);
+    expect(reader.scrollTop).toBe(100);
+
+    todo.scrollTop = 70;
+    fireEvent.wheel(todo, { deltaY: 18 });
+    expect(reader.scrollTop).toBe(118);
+  });
+
+  it("offers keyboard-accessible Reader font size and line spacing controls", async () => {
+    const user = userEvent.setup();
+    const fontSizeChange = vi.fn();
+    const lineSpacingChange = vi.fn();
+    renderHome(
+      new MemoryStickyPort(),
+      vi.fn(),
+      defaultPreferences,
+      vi.fn(),
+      fontSizeChange,
+      lineSpacingChange,
+    );
+    await user.click(screen.getByRole("button", { name: "外观与窗口设置" }));
+    const fontGroup = screen.getByRole("group", { name: "Reader 字号" });
+    const spacingGroup = screen.getByRole("group", { name: "Reader 行距" });
+    expect(within(fontGroup).getByRole("button", { name: "标准" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await user.click(within(fontGroup).getByRole("button", { name: "大" }));
+    await user.click(within(spacingGroup).getByRole("button", { name: "宽松" }));
+    expect(fontSizeChange).toHaveBeenCalledWith("large");
+    expect(lineSpacingChange).toHaveBeenCalledWith("relaxed");
   });
 });

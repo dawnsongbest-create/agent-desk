@@ -16,15 +16,17 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
   type PointerEvent,
   type ReactNode,
-  type WheelEvent,
 } from "react";
 import type {
   Preferences,
+  ReaderFontSize,
+  ReaderLineSpacing,
   StickyMode,
   StickyPosition,
   ThemeMode,
@@ -32,6 +34,8 @@ import type {
 } from "../../domain/preferences";
 import {
   compactDragFrame,
+  readerFontSizes,
+  readerLineSpacings,
   settleCompactPosition,
   themeModes,
   windowPresets,
@@ -46,6 +50,7 @@ import {
   type StickyCard,
   type StickyProfile,
 } from "../../domain/sticky";
+import { ReaderCanvas } from "../reader/ReaderCanvas";
 import { playPageTurnSound } from "./pageTurnSound";
 import type { StickyLoadState } from "./useStickyCards";
 
@@ -65,6 +70,8 @@ type StickyShellProps = {
   onWindowPresetChange(preset: WindowPreset): void;
   onStickyPositionChange(position: StickyPosition): void;
   onStickyModeChange(mode: StickyMode): void;
+  onReaderFontSizeChange(size: ReaderFontSize): void;
+  onReaderLineSpacingChange(spacing: ReaderLineSpacing): void;
   onCreate(input: CreateStickyCardInput): Promise<boolean>;
   onUpdateText(id: string, text: string): Promise<boolean>;
   onTaskCompleted(id: string, completed: boolean): Promise<void>;
@@ -92,6 +99,16 @@ const presetLabels: Record<WindowPreset, string> = {
 };
 
 const faceLabels: Record<StickyFace, string> = { note: "Record", task: "待办" };
+const readerFontSizeLabels: Record<ReaderFontSize, string> = {
+  small: "小",
+  standard: "标准",
+  large: "大",
+};
+const readerLineSpacingLabels: Record<ReaderLineSpacing, string> = {
+  compact: "紧凑",
+  standard: "标准",
+  relaxed: "宽松",
+};
 const SNAP_DISTANCE = 28;
 
 function SettingsMenu({
@@ -100,12 +117,16 @@ function SettingsMenu({
   onThemeChange,
   onAlwaysOnTopChange,
   onWindowPresetChange,
+  onReaderFontSizeChange,
+  onReaderLineSpacingChange,
 }: {
   preferences: Preferences;
   saveState: SaveState;
   onThemeChange(theme: ThemeMode): void;
   onAlwaysOnTopChange(alwaysOnTop: boolean): void;
   onWindowPresetChange(preset: WindowPreset): void;
+  onReaderFontSizeChange(size: ReaderFontSize): void;
+  onReaderLineSpacingChange(spacing: ReaderLineSpacing): void;
 }) {
   const [open, setOpen] = useState(false);
   const disabled = saveState === "loading" || saveState === "saving";
@@ -139,6 +160,44 @@ function SettingsMenu({
                 {themeLabels[theme]}
               </button>
             ))}
+          </div>
+          <div className="settings-section reader-settings">
+            <div className="settings-heading">
+              <strong>Reader</strong>
+              <span>阅读字号与行距</span>
+            </div>
+            <div className="reader-setting-row">
+              <span>字号</span>
+              <div className="reader-option-grid" role="group" aria-label="Reader 字号">
+                {readerFontSizes.map((size) => (
+                  <button
+                    type="button"
+                    key={size}
+                    disabled={disabled}
+                    aria-pressed={preferences.readerFontSize === size}
+                    onClick={() => onReaderFontSizeChange(size)}
+                  >
+                    {readerFontSizeLabels[size]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="reader-setting-row">
+              <span>行距</span>
+              <div className="reader-option-grid" role="group" aria-label="Reader 行距">
+                {readerLineSpacings.map((spacing) => (
+                  <button
+                    type="button"
+                    key={spacing}
+                    disabled={disabled}
+                    aria-pressed={preferences.readerLineSpacing === spacing}
+                    onClick={() => onReaderLineSpacingChange(spacing)}
+                  >
+                    {readerLineSpacingLabels[spacing]}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
           <div className="settings-section">
             <div className="settings-heading">
@@ -591,11 +650,19 @@ function SortableTask({
   );
 }
 
-function consumeTodoWheel(event: WheelEvent<HTMLDivElement>) {
-  const element = event.currentTarget;
+function consumeTodoWheel(element: HTMLDivElement, event: globalThis.WheelEvent) {
   const canMoveUp = element.scrollTop > 0;
   const canMoveDown = element.scrollTop + element.clientHeight < element.scrollHeight - 1;
-  if ((event.deltaY < 0 && canMoveUp) || (event.deltaY > 0 && canMoveDown)) event.stopPropagation();
+  if ((event.deltaY < 0 && canMoveUp) || (event.deltaY > 0 && canMoveDown)) {
+    element.scrollTop += event.deltaY;
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+  const reader = document.querySelector<HTMLElement>(".reader-canvas");
+  if (!reader || event.deltaY === 0) return;
+  reader.scrollTop += event.deltaY;
+  event.preventDefault();
 }
 
 type StickySurfaceProps = {
@@ -767,6 +834,15 @@ function StickyPreview({
   onPositionChange(position: StickyPosition): void;
 }) {
   const openTasks = cards.filter((card) => card.kind === "task" && !card.completed);
+  const todoViewportRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const element = todoViewportRef.current;
+    if (!element) return;
+    const onWheel = (event: globalThis.WheelEvent) => consumeTodoWheel(element, event);
+    element.addEventListener("wheel", onWheel, { passive: false });
+    return () => element.removeEventListener("wheel", onWheel);
+  }, [loading]);
 
   return (
     <StickySurface
@@ -800,9 +876,9 @@ function StickyPreview({
         <p className="preview-empty">正在翻开昨天留下的字迹…</p>
       ) : (
         <div
+          ref={todoViewportRef}
           className="compact-todo-viewport"
           data-no-drag
-          onWheel={consumeTodoWheel}
           onClick={(event) => {
             event.stopPropagation();
             onExpand();
@@ -876,6 +952,8 @@ export function StickyShell(props: StickyShellProps) {
     onWindowPresetChange,
     onStickyPositionChange,
     onStickyModeChange,
+    onReaderFontSizeChange,
+    onReaderLineSpacingChange,
     onCreate,
     onUpdateText,
     onTaskCompleted,
@@ -946,6 +1024,12 @@ export function StickyShell(props: StickyShellProps) {
 
   return (
     <main className="desk-board" aria-label="Agent Desk Sticky Home">
+      <ReaderCanvas
+        skin={preferences.readerSkin}
+        fontSize={preferences.readerFontSize}
+        lineSpacing={preferences.readerLineSpacing}
+        windowPreset={preferences.windowPreset}
+      />
       <header className="board-header">
         <div>
           <p className="board-eyebrow">Agent Desk</p>
@@ -959,171 +1043,173 @@ export function StickyShell(props: StickyShellProps) {
             onThemeChange={onThemeChange}
             onAlwaysOnTopChange={onAlwaysOnTopChange}
             onWindowPresetChange={onWindowPresetChange}
+            onReaderFontSizeChange={onReaderFontSizeChange}
+            onReaderLineSpacingChange={onReaderLineSpacingChange}
           />
         </div>
       </header>
-      <div className="board-lines" aria-hidden="true" />
-      <p className="board-caption">A quiet layer beside your reading.</p>
-      {expanded ? (
-        <section className="expanded-sticky" aria-label="展开的便利贴">
-          <span className="tape expanded-tape" aria-hidden="true" />
-          <header className="expanded-header">
-            <div className="face-switcher" role="tablist" aria-label="便利贴正反面">
-              {(["note", "task"] as const).map((candidate) => (
-                <button
-                  key={candidate}
-                  type="button"
-                  role="tab"
-                  aria-selected={face === candidate}
-                  disabled={busy || (selectedRecord !== null && recordDirty)}
-                  onClick={() => switchFace(candidate)}
-                >
-                  {faceLabels[candidate]}
-                  <span>{candidate === "note" ? records.length : openTaskCount}</span>
-                </button>
-              ))}
-            </div>
-            <div className="expanded-actions">
-              <button
-                className="new-entry-shortcut"
-                type="button"
-                disabled={busy || (selectedRecord !== null && recordDirty)}
-                onClick={openCapture}
-              >
-                + {face === "note" ? "新 Record" : "新待办"}
-              </button>
-              <button
-                className="collapse-button"
-                type="button"
-                disabled={busy || (selectedRecord !== null && recordDirty)}
-                aria-label="收起便利贴"
-                onClick={() => {
-                  setSelectedRecord(null);
-                  setRecordDirty(false);
-                  setExpanded(false);
-                }}
-              >
-                ↙
-              </button>
-            </div>
-          </header>
-          <div className="face-scroll" data-editor={selectedRecord ? "record" : "none"}>
-            <div
-              key={`${face}-${turnSerial}`}
-              className="sticky-face"
-              data-face={face}
-              data-turn={turnDirection}
-              role="tabpanel"
-            >
-              {face === "note" ? (
-                selectedRecord ? (
-                  <RecordEditor
-                    record={cards.find((card) => card.id === selectedRecord.id) ?? selectedRecord}
-                    disabled={busy}
-                    onClose={() => {
-                      setSelectedRecord(null);
-                      setRecordDirty(false);
-                    }}
-                    onSave={onUpdateText}
-                    onDelete={onDelete}
-                    onExport={onExportRecord}
-                    onCollapse={() => {
-                      setSelectedRecord(null);
-                      setRecordDirty(false);
-                      setExpanded(false);
-                    }}
-                    onDirtyChange={setRecordDirty}
-                  />
-                ) : (
-                  <>
-                    <QuoteEditor profile={profile} disabled={busy} onUpdate={onUpdateQuote} />
-                    <div className="face-heading">
-                      <p>我的 Records</p>
-                      <span>{records.length} 篇</span>
-                    </div>
-                    <RecordList
-                      records={records}
-                      disabled={busy}
-                      onOpen={(record) => {
-                        setRecordDirty(false);
-                        setSelectedRecord(record);
-                      }}
-                    />
-                    <RecordCapture disabled={busy} onCreate={onCreate} />
-                  </>
-                )
-              ) : (
-                <>
-                  <div className="face-heading">
-                    <p>接下来要做的事</p>
-                    <span>{openTaskCount} 件未完成</span>
-                  </div>
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={taskDragEnd}
+      <div className="sticky-overlay-layer" data-reader-layer="2">
+        {expanded ? (
+          <section className="expanded-sticky" aria-label="展开的便利贴">
+            <span className="tape expanded-tape" aria-hidden="true" />
+            <header className="expanded-header">
+              <div className="face-switcher" role="tablist" aria-label="便利贴正反面">
+                {(["note", "task"] as const).map((candidate) => (
+                  <button
+                    key={candidate}
+                    type="button"
+                    role="tab"
+                    aria-selected={face === candidate}
+                    disabled={busy || (selectedRecord !== null && recordDirty)}
+                    onClick={() => switchFace(candidate)}
                   >
-                    <SortableContext
-                      items={tasks.map((card) => card.id)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      <div className="sticky-list">
-                        {tasks.length === 0 ? (
-                          <p className="face-empty">今天还没有待办。先写下一件小事。</p>
-                        ) : null}
-                        {tasks.map((card) => (
-                          <SortableTask
-                            key={card.id}
-                            card={card}
-                            disabled={busy}
-                            onTaskCompleted={onTaskCompleted}
-                            onTaskDueDate={onTaskDueDate}
-                            onDelete={onDelete}
-                          />
-                        ))}
-                      </div>
-                    </SortableContext>
-                  </DndContext>
-                  <TaskCapture disabled={busy} onCreate={onCreate} />
-                </>
-              )}
-              {!selectedRecord ? <p className="paper-end-mark">✦</p> : null}
-            </div>
-          </div>
-          {error ? (
-            <div className="mutation-error" role="alert">
-              <span>{error}</span>
-              <div>
-                {stickyState === "error" && cards.length === 0 ? (
-                  <button type="button" onClick={() => void onRetry()}>
-                    重试
+                    {faceLabels[candidate]}
+                    <span>{candidate === "note" ? records.length : openTaskCount}</span>
                   </button>
-                ) : null}
-                <button type="button" aria-label="关闭错误提示" onClick={onDismissError}>
-                  ×
+                ))}
+              </div>
+              <div className="expanded-actions">
+                <button
+                  className="new-entry-shortcut"
+                  type="button"
+                  disabled={busy || (selectedRecord !== null && recordDirty)}
+                  onClick={openCapture}
+                >
+                  + {face === "note" ? "新 Record" : "新待办"}
+                </button>
+                <button
+                  className="collapse-button"
+                  type="button"
+                  disabled={busy || (selectedRecord !== null && recordDirty)}
+                  aria-label="收起便利贴"
+                  onClick={() => {
+                    setSelectedRecord(null);
+                    setRecordDirty(false);
+                    setExpanded(false);
+                  }}
+                >
+                  ↙
                 </button>
               </div>
+            </header>
+            <div className="face-scroll" data-editor={selectedRecord ? "record" : "none"}>
+              <div
+                key={`${face}-${turnSerial}`}
+                className="sticky-face"
+                data-face={face}
+                data-turn={turnDirection}
+                role="tabpanel"
+              >
+                {face === "note" ? (
+                  selectedRecord ? (
+                    <RecordEditor
+                      record={cards.find((card) => card.id === selectedRecord.id) ?? selectedRecord}
+                      disabled={busy}
+                      onClose={() => {
+                        setSelectedRecord(null);
+                        setRecordDirty(false);
+                      }}
+                      onSave={onUpdateText}
+                      onDelete={onDelete}
+                      onExport={onExportRecord}
+                      onCollapse={() => {
+                        setSelectedRecord(null);
+                        setRecordDirty(false);
+                        setExpanded(false);
+                      }}
+                      onDirtyChange={setRecordDirty}
+                    />
+                  ) : (
+                    <>
+                      <QuoteEditor profile={profile} disabled={busy} onUpdate={onUpdateQuote} />
+                      <div className="face-heading">
+                        <p>我的 Records</p>
+                        <span>{records.length} 篇</span>
+                      </div>
+                      <RecordList
+                        records={records}
+                        disabled={busy}
+                        onOpen={(record) => {
+                          setRecordDirty(false);
+                          setSelectedRecord(record);
+                        }}
+                      />
+                      <RecordCapture disabled={busy} onCreate={onCreate} />
+                    </>
+                  )
+                ) : (
+                  <>
+                    <div className="face-heading">
+                      <p>接下来要做的事</p>
+                      <span>{openTaskCount} 件未完成</span>
+                    </div>
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={taskDragEnd}
+                    >
+                      <SortableContext
+                        items={tasks.map((card) => card.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <div className="sticky-list">
+                          {tasks.length === 0 ? (
+                            <p className="face-empty">今天还没有待办。先写下一件小事。</p>
+                          ) : null}
+                          {tasks.map((card) => (
+                            <SortableTask
+                              key={card.id}
+                              card={card}
+                              disabled={busy}
+                              onTaskCompleted={onTaskCompleted}
+                              onTaskDueDate={onTaskDueDate}
+                              onDelete={onDelete}
+                            />
+                          ))}
+                        </div>
+                      </SortableContext>
+                    </DndContext>
+                    <TaskCapture disabled={busy} onCreate={onCreate} />
+                  </>
+                )}
+                {!selectedRecord ? <p className="paper-end-mark">✦</p> : null}
+              </div>
             </div>
-          ) : null}
-        </section>
-      ) : preferences.stickyMode === "mini" ? (
-        <MiniStickyTab
-          openTaskCount={openTaskCount}
-          position={preferences.stickyPosition}
-          onRestore={() => onStickyModeChange("compact")}
-          onPositionChange={onStickyPositionChange}
-        />
-      ) : (
-        <StickyPreview
-          cards={cards}
-          quote={profile.quoteText}
-          loading={stickyState === "loading"}
-          position={preferences.stickyPosition}
-          onExpand={() => setExpanded(true)}
-          onMinimize={() => onStickyModeChange("mini")}
-          onPositionChange={onStickyPositionChange}
-        />
-      )}
+            {error ? (
+              <div className="mutation-error" role="alert">
+                <span>{error}</span>
+                <div>
+                  {stickyState === "error" && cards.length === 0 ? (
+                    <button type="button" onClick={() => void onRetry()}>
+                      重试
+                    </button>
+                  ) : null}
+                  <button type="button" aria-label="关闭错误提示" onClick={onDismissError}>
+                    ×
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </section>
+        ) : preferences.stickyMode === "mini" ? (
+          <MiniStickyTab
+            openTaskCount={openTaskCount}
+            position={preferences.stickyPosition}
+            onRestore={() => onStickyModeChange("compact")}
+            onPositionChange={onStickyPositionChange}
+          />
+        ) : (
+          <StickyPreview
+            cards={cards}
+            quote={profile.quoteText}
+            loading={stickyState === "loading"}
+            position={preferences.stickyPosition}
+            onExpand={() => setExpanded(true)}
+            onMinimize={() => onStickyModeChange("mini")}
+            onPositionChange={onStickyPositionChange}
+          />
+        )}
+      </div>
     </main>
   );
 }
