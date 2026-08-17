@@ -25,8 +25,6 @@ Agent 可以在后台完成任务，把阅读材料、研究报告、定时 Brie
   <img src="docs/images/record.png" width="31%" alt="Agent Desk Record" />
 </p>
 
-> 建议将 README 中的三张截图替换为仓库内实际图片路径：
->
 > <img width="401" height="748" alt="image" src="https://github.com/user-attachments/assets/7035b496-0d2c-4995-844a-53e6817851b5" />
 > <img width="648" height="741" alt="image" src="https://github.com/user-attachments/assets/1e9b8c07-6928-4b36-95ed-4d7f7a43d458" />
 > <img width="526" height="780" alt="image" src="https://github.com/user-attachments/assets/87b43705-3af3-4f73-b340-97fb53264564" />
