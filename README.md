@@ -17,6 +17,7 @@ Agent 在后台工作
         ↓
 接收 → 阅读 → 摘录 → 记录 → 待办
 ```
+<img width="1285" height="579" alt="image" src="https://github.com/user-attachments/assets/01dc1d4f-f0b9-4c6e-9cdb-3449d06f8b68" />
 
 ---
 
