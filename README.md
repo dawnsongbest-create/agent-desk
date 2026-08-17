@@ -1,723 +1,420 @@
 # Agent Desk
 
-> **A quiet desktop surface for Agents.**
-> 让 Agent 在后台工作，把真正值得看的内容安静地送到你的桌面。
+> 一个用来接收、阅读和处理 Agent 工作结果的桌面应用。
 
-Agent Desk 是一个面向 **Windows / macOS** 的桌面 Agent 应用。
+Agent Desk 是我独立设计，并通过 **Vibe Coding** 持续开发的一款面向 Windows / macOS 的 Agent 桌面应用。
 
-它尝试解决一个很具体的问题：
+我希望把 Agent 定时生成的阅读材料、研究报告和任务结果，从聊天窗口中拿出来，放进一个排版更舒服、可以长期悬浮在桌面的窗口中，让用户能够在同一个地方完成**接收、阅读、摘录、记录和待办管理**。
 
-**Agent 已经可以替我们搜索、整理、总结和定时执行任务，但 Agent 产出的内容，应该在哪里被好好地阅读和使用？**
-
-我的答案不是再做一个 Chat UI，而是给 Agent 一张真正的“桌面”。
-
-Agent 可以在后台完成任务，把阅读材料、研究报告、定时 Brief 等内容投递到 Agent Desk；用户则可以在一个轻量、长期悬浮的桌面窗口中完成：
-
-**接收 → 阅读 → 摘录 → 记录 → 待办**
-
----
-
-## Preview
-
-<p align="center">
-  <img src="docs/images/reader.png" width="31%" alt="Agent Desk Reader" />
-  <img src="docs/images/sticky.png" width="31%" alt="Agent Desk Sticky" />
-  <img src="docs/images/record.png" width="31%" alt="Agent Desk Record" />
-</p>
-
-> <img width="401" height="748" alt="image" src="https://github.com/user-attachments/assets/7035b496-0d2c-4995-844a-53e6817851b5" />
-> <img width="648" height="741" alt="image" src="https://github.com/user-attachments/assets/1e9b8c07-6928-4b36-95ed-4d7f7a43d458" />
-> <img width="526" height="780" alt="image" src="https://github.com/user-attachments/assets/87b43705-3af3-4f73-b340-97fb53264564" />
-
-
----
-
-# Why Agent Desk?
-
-这个项目来自我自己使用 Agent 定时任务时遇到的一个真实问题。
-
-我经常让 Agent 定时整理资料、生成 Brief 或推送阅读内容。
-
-但慢慢发现：
-
-**内容生成出来，并不意味着我真的愿意读。**
-
-很多 Agent 的结果最终被送进 IM 或聊天窗口：
-
-* 长内容缺少舒服的排版
-* 新内容不断把旧内容往上顶
-* 未读消息越积越多
-* 很难区分“需要现在看”和“以后再看”
-* 阅读、记笔记、Todo 又散落在不同应用里
-
-最后 Agent 虽然替我节省了“获取信息”的时间，却产生了新的：
-
-> **信息消费负担。**
-
-所以我开始思考：
-
-如果 Agent 已经逐渐成为一个后台工作的数字协作者，那么它是不是也需要一个专门的 **Delivery Surface**？
-
-于是有了 Agent Desk。
-
----
-
-# Product Idea
-
-Agent Desk 的核心原则是：
-
-> **Agent 负责理解、处理和生产，Desk 负责呈现、交互和沉淀。**
-
-我不希望它变成另一个：
-
-* ChatGPT 客户端
-* AI 聊天窗口
-* 笔记软件
-* Todo App
-* 电子书阅读器
-
-它更像是这些产品之间的一层连接。
+简单来说，它想做的是：
 
 ```text
-Agent
-  ↓
-获取 / 搜索 / 分析 / 生成
-  ↓
-Delivery
-  ↓
-Agent Desk
-  ↓
-阅读 / 摘录 / 记录 / Todo
+Agent 在后台工作
+        ↓
+生成报告 / 阅读材料 / 任务结果
+        ↓
+     Agent Desk
+        ↓
+接收 → 阅读 → 摘录 → 记录 → 待办
 ```
-
-Agent 在外面工作。
-
-Agent Desk 是这些工作结果最终安静落到用户面前的地方。
 
 ---
 
-# Core Experience
+## 产品定位
 
-## 1. Reader + Floating Sticky
+现在的 Agent 已经可以帮用户定时搜索资料、整理内容、生成报告，甚至持续执行一些后台任务，但这些结果最后往往还是回到聊天窗口或者 IM 中。
 
-整个产品采用：
+Agent Desk 希望为这些内容提供一个更适合消费的桌面入口。
 
-> **阅读页面 + 悬浮便利贴**
+我希望它不是另外一个 AI 对话框，而是一个可以长期放在桌面上的轻量页面：Agent 负责在后台获取和处理信息，Agent Desk 负责把结果清晰地送到用户面前。
 
-的双层交互。
-
-视觉上希望它更像：
-
-**桌面上放着一张纸，纸上贴着一张便利贴。**
-
-而不是传统软件中的 Sidebar、Panel 和 Dashboard。
-
-```text
-┌─────────────────────────────┐
-│                             │
-│       Reader Document       │
-│                             │
-│                   ┌───────┐ │
-│                   │Sticky │ │
-│                   └───────┘ │
-│                             │
-└─────────────────────────────┘
-```
-
-Sticky 与 Reader 是两个独立图层。
-
-便利贴可以自然盖在阅读页面上，不需要正文为了它重新排版。
+它同时融合了阅读页面、便利贴和笔记本的部分能力，让 Agent 的工作结果不只是“被生成”，而是能够真正被用户继续阅读和处理。
 
 ---
 
-# Sticky
+## 为什么做这个产品
 
-Sticky 是 Agent Desk 中随时可以使用的个人信息层。
+这个产品来自我自己使用 Agent 定时任务时遇到的问题。
 
-目前支持三种状态：
+我会让 Agent 定时整理资料或者推送一些阅读内容，但实际使用过程中发现，很多内容在 IM 或聊天窗口中的排版并不适合长时间阅读。随着定时任务越来越多，未读内容也会不断堆积，最后反而形成新的阅读压力。
 
-```text
-Mini
- ↕
-Compact
- ↕
-Expanded
+另外，在真正阅读这些内容的时候，我经常还需要记下一句话、记录自己的想法，或者顺手创建一个 Todo，但这些操作往往又分散在聊天窗口、笔记软件和待办工具之间。
+
+所以我希望设计一个长期悬浮在桌面的 Agent 个人阅读页面，把这些原本分散的操作集中到一个轻量界面中。
+
+```mermaid
+flowchart LR
+    A[Agent 定时任务] --> B[生成内容]
+    B --> C[Agent Desk 收件箱]
+    C --> D[阅读]
+    D --> E[摘录]
+    D --> F[记录]
+    D --> G[待办]
 ```
 
-### Mini
+核心想法是：
 
-最小化后的 Sticky 会固定在 Reader 顶部的 Safe Shelf 中。
+> **Agent 负责生产内容，Agent Desk 负责让这些内容真正被看见和使用。**
 
-只保留：
+---
 
-* TODAY
-* 当前 Todo 数量
-* 极轻量状态信息
+## 核心功能
 
-尽可能减少对阅读的干扰。
+### 1. 阅读页面 + 悬浮便利贴
 
-### Compact
+产品采用“**阅读页面 + 悬浮便利贴**”的双层结构。
 
-Compact Sticky 用于快速查看：
+视觉上，我希望它更像现实中的一张纸上贴着一张便利贴，而不是传统软件中的侧边栏或者浮动工具栏。
 
-* 当前待办
-* Sticky Quote
-* 今日信息
+```text
+┌────────────────────────────┐
+│                            │
+│        阅读页面            │
+│                            │
+│              ┌──────────┐  │
+│              │ 便利贴   │  │
+│              │ Todo     │  │
+│              │ 记录     │  │
+│              └──────────┘  │
+│                            │
+└────────────────────────────┘
+```
 
-支持拖动与位置保存。
+阅读页面和便利贴是两个独立图层，便利贴可以覆盖在阅读内容上方，不需要让正文为了便利贴重新排版。
 
-### Expanded
+---
 
-Expanded Sticky 是完整工作状态，目前支持：
+### 2. 三种便利贴状态
 
-### 记录
+便利贴目前支持：
 
-* 创建长记录
-* 编辑 / 删除
-* 长文本输入
-* Markdown 友好
-* Markdown 导出
-* 重启恢复
+**Mini → Compact → Expanded**
 
-### Todo
+三种形态。
 
-* 创建 Todo
-* 完成 / 恢复
+Mini 状态尽量降低对阅读的干扰，只显示日期和当前待办数量；Compact 状态可以快速查看 Todo 和一条便签短句；Expanded 状态则可以进入完整的记录和待办管理。
+
+目前便利贴支持：
+
+* 长记录创建、编辑和保存
+* Todo 创建与完成
 * 截止日期
-* 拖动排序
-* 持久化
-* Compact 状态快速查看
+* Todo 拖动排序
+* 一条独立的便签短句
+* Markdown 文件导出
+* 本地持久化
+* 应用重启后恢复
 
-### Sticky Quote
-
-可以单独留下一个简短句子。
-
-它更像真正贴在桌边的一句话，而不是数据库中的另一条 Note。
+便利贴的 Mini 状态会固定在阅读页面顶部的安全区域，避免在阅读滚动过程中持续遮挡正文。
 
 ---
 
-# Reader
+### 3. 纸张式阅读页面
 
-Reader 是 Agent 内容真正被消费的地方。
+阅读页面采用偏纸张式的 Markdown 阅读体验，目前支持：
 
-我没有把 Reader 做成 AI Dashboard，而是刻意向：
-
-> **一张安静、耐看的纸**
-
-靠近。
-
-目前支持：
-
-* Markdown 阅读
-* H1 / H2 / H3
+* 标题和正文
 * 列表
 * 引用
-* Code Block
-* Inline Code
-* Link
+* 代码块
+* 行内代码
+* 链接
 * 字号调整
 * 行距调整
-* Light / Dark / System
-* Grid Paper
-* Paper Texture
-* 阅读滚动位置恢复
+* 浅色 / 深色 / 跟随系统
+* 网格纸背景
+* 纸张纹理
+
+用户还可以点击“**隐藏正文**”，暂时把阅读内容收起来，只保留一张干净的纸和便利贴；再次点击“显示正文”后，会恢复之前的阅读位置。
 
 ---
 
-## Blank Reader
+### 4. 阅读过程中直接保存摘录
 
-用户可以点击：
+用户在阅读时可以直接选择一段文字。
 
-**隐藏正文**
-
-暂时把所有文章内容收起来。
-
-页面会变成一张干净的网格纸，只留下 Sticky。
-
-```text
-Reader
-↓
-隐藏正文
-↓
-Blank Paper + Sticky
-```
-
-需要继续阅读时，再点击：
-
-**显示正文**
-
-即可回到之前的位置。
-
-这个功能来自一个很简单的想法：
-
-> 阅读器不一定永远需要显示内容，有时候用户只需要一张安静的纸。
-
----
-
-# Selection Capture
-
-阅读过程中可以直接选中文字。
-
-选中后只出现两个操作：
+选中以后，页面只提供两个操作：
 
 ```text
 复制
 保存到记录
 ```
 
-不会弹出复杂的 AI Toolbar。
+保存到记录时，会保留用户真正选中的原始文字，不自动改写、总结或者润色。
 
-保存到记录时：
-
-* 保留用户选中的原始文本
-* 不自动改写
-* 不自动总结
-* 不自动润色
-* 不把来源信息混入正文
-
-同时系统会单独保存：
+同时，记录和它来自哪一篇阅读内容的来源关系会分别保存。
 
 ```text
-Record
-↕
-Source Reference
-↕
-ReaderDocument
+阅读内容
+   ↓
+选中文字
+   ↓
+保存到记录
+   ↓
+记录正文
+   +
+来源关系
 ```
 
-为未来：
-
-**记录 → 回到原文**
-
-留下数据基础。
+这样未来可以继续实现“从记录回到原文”等功能。当前文字复制、跨段摘录和代码内容保存已经完成原生验证。
 
 ---
 
-# Inbox & Delivery
+### 5. 内容投递和收件箱
 
-Agent Desk 已经进一步实现了内容投递与收件箱基础能力。
+目前产品已经进一步完成了**内容投递和收件箱**的主体能力。
 
-这里有一个我非常重视的设计：
-
-## Content ≠ Delivery
-
-一份内容是什么，与它什么时候被送到用户面前，是两件不同的事。
-
-因此内部将它们拆分为：
+这里我把“内容是什么”和“内容什么时候被送到用户面前”拆成了两层：
 
 ```text
-ReaderDocument
+阅读文档 ReaderDocument
 =
 内容本身
 
-Delivery
+投递 Delivery
 =
-一次投递行为
+一次内容送达行为
 ```
 
-例如：
+这样做是因为同一篇内容和一次投递行为并不是同一个概念。
 
-```text
-Agent
-↓
-生成 AI Daily Brief
-↓
-ReaderDocument
+未来 Agent 可能因为网络问题重新发送，也可能通过定时任务、系统通知或者其他方式多次进行投递，所以投递状态不应该直接写进内容本身。
 
-08:30 投递
-↓
-Delivery
+目前收件箱已经支持：
 
-Inbox
-↓
-用户打开
-↓
-Reader
-```
-
-这样未来即使出现：
-
-* Agent 重试
-* 定时任务
-* Notification
-* 多 Agent
-* Cloud Relay
-
-也不需要把“内容状态”和“投递状态”混在一起。
-
----
-
-## Inbox
-
-目前 Inbox 已支持：
-
-* 收件入口
-* 未读 / 已读
+* 未读 / 已读状态
 * 未读数量
 * 按投递时间排序
 * 内容来源
 * 内容类型
 * 投递时间
-* Delivery → Reader
-* 重启后状态恢复
-* 防重复投递
+* 点击内容直接进入阅读页面
+* 防止重复投递
 
-用户点击：
+当前阅读内容和投递行为已经作为独立领域对象进行管理。
 
-```text
-收件箱
-↓
-某份 Delivery
-↓
-ReaderDocument
-↓
-Reader
+完整流程为：
+
+```mermaid
+flowchart LR
+    A[Agent] --> B[生成内容]
+    B --> C[内容投递]
+    C --> D[收件箱]
+    D --> E[点击内容]
+    E --> F[阅读页面]
+    F --> G[摘录 / 记录 / Todo]
 ```
-
-即可直接进入阅读。
 
 ---
 
-# Idempotent Delivery
+## 和其他产品有什么不同
 
-Agent 在未来真实投递时可能发生：
+Agent Desk 不是一个新的笔记软件，也不是单纯的电子书阅读器，更不是另外一个 Agent Chat UI。
 
-```text
-请求
-↓
-网络超时
-↓
-Agent 重试
-```
+它更像是这几个产品之间的连接层。
 
-如果没有幂等机制，同一篇内容可能被投递很多次。
-
-因此 Delivery 从第一版开始就加入：
+大部分 Agent 产品主要关注：
 
 ```text
-idempotencyKey
+用户
+ ↓
+Agent
 ```
 
-同一 key + 同一内容再次进入：
+也就是用户如何和 Agent 对话、如何给 Agent 下任务。
+
+Agent Desk 更关注的是另一侧：
 
 ```text
-不会创建重复 Delivery
+Agent
+ ↓
+用户
 ```
 
-同一 key 却携带不同内容：
+也就是：
 
-```text
-IDEMPOTENCY_CONFLICT
+> **Agent 已经把事情做完以后，这些结果应该去哪里？**
+
+用户可以一边阅读 Agent 投递的内容，一边使用悬浮便利贴管理自己的记录和任务。
+
+未来不同 Agent 的结果也不会各自控制一套 UI，而是先通过统一的 Agent 网关和适配器转换成 Agent Desk 可以理解的统一事件，再进入相同的投递和阅读流程。
+
+```mermaid
+flowchart TD
+    A[本地 Agent] --> G[Agent 网关]
+    B[OpenAI] --> G
+    C[Claude] --> G
+    D[内部 Agent] --> G
+    E[HTTP / A2A / MCP] --> G
+
+    G --> H[统一事件]
+    H --> I[内容投递]
+    I --> J[Agent Desk]
 ```
 
-而不是静默覆盖。
-
-这是为了让未来 Agent Gateway 可以建立在一个可靠的投递基础上。
+这一层目前还是后续规划，真实 Agent Gateway 尚未开始实现。当前架构已经为这一方向预留统一边界。
 
 ---
 
-# Technical Architecture
+## 技术实现
 
-Agent Desk 当前使用：
+Agent Desk 当前主要使用：
 
 * **Tauri 2**
 * **React**
 * **TypeScript**
 * **Rust**
-* **SQLite**
-* **SQLx**
+* **SQLite / SQLx**
 * **Tauri Store**
 * **Vite**
 * **Vitest**
 * **GitHub Actions**
 
-整体采用 Local-first 架构。
+整体采用本地优先架构。
 
-```text
-┌──────────────────────────────┐
-│            React             │
-│                              │
-│ Sticky / Reader / Inbox / UI │
-└──────────────┬───────────────┘
-               │ Application Port
-               ▼
-┌──────────────────────────────┐
-│         Tauri Boundary       │
-└──────────────┬───────────────┘
-               │
-               ▼
-┌──────────────────────────────┐
-│             Rust             │
-│                              │
-│ Application Services         │
-│ Domain Validation            │
-│ Transactions                 │
-│ Native Capabilities          │
-└──────────────┬───────────────┘
-               │ Repository
-               ▼
-┌──────────────────────────────┐
-│            SQLite            │
-│                              │
-│ Cards                        │
-│ Records                      │
-│ Todos                        │
-│ ReaderDocuments              │
-│ SourceRefs                   │
-│ Deliveries                   │
-└──────────────────────────────┘
+React 主要负责界面展示和本地交互，Rust / Tauri 负责原生能力、业务服务和数据持久化边界，SQLite 负责保存记录、待办、阅读内容、来源关系和投递记录。
+
+```mermaid
+flowchart TD
+    A[React 界面层] --> B[应用接口]
+    B --> C[Tauri 边界]
+    C --> D[Rust 应用服务]
+    D --> E[数据仓库 Repository]
+    E --> F[(SQLite)]
 ```
+
+React 不直接访问 SQLite，数据读写统一经过应用接口和 Rust 服务。这样的好处是界面逻辑和持久化逻辑不会逐渐混在一起，也方便未来接入新的 Agent 或新的数据来源。
 
 ---
 
-# Architecture Principles
+## 一些工程设计
 
-## 1. React 不直接访问 SQLite
+虽然这是一个通过 Vibe Coding 开发的个人项目，但我不希望它只是一个可以演示 UI 的 Demo，所以开发过程中也加入了一些比较基础的软件工程约束。
 
-依赖方向保持：
+### 本地持久化
 
-```text
-React Feature
-↓
-Application Port
-↓
-Tauri Infrastructure
-↓
-Rust Application Service
-↓
-Repository
-↓
-SQLite
-```
+记录、Todo、阅读内容、内容来源和投递信息等业务数据统一保存到 SQLite。
 
-UI 不承担数据库业务逻辑。
+主题、字号、行距、当前阅读状态等轻量界面偏好则通过 Tauri Store 保存。
 
 ---
 
-## 2. Durable Data 与 UI Preference 分离
+### 数据库只追加迁移
 
-SQLite 保存：
+数据库结构采用只追加 Migration 的方式升级。
 
-* Record
-* Todo
-* ReaderDocument
-* Delivery
-* Source Reference
-* 业务状态
+已经发布的旧 Migration 不直接修改，而是：
 
-Tauri Store 保存：
+```text
+0001
+ ↓
+0002
+ ↓
+0003
+ ↓
+0004
+ ↓
+0005
+```
 
-* Theme
-* Window preference
-* Reader font size
-* Reader line spacing
-* Blank Reader
-* currentDocumentId
-* 其他轻量 UI Preference
+逐步演进。
+
+这样可以真实验证旧版本应用中的数据升级到新版本以后是否仍然能够正常使用。
 
 ---
 
-## 3. Append-only Migration
+### 事务一致性
 
-数据库从项目开始就采用：
-
-> migration 只新增，不修改已经发布的历史 migration。
-
-目前所有数据结构演进均通过连续 migration 完成。
-
-这样可以真实验证：
-
-```text
-Old Version
-↓
-Upgrade
-↓
-New Version
-```
-
-而不是每次开发都重建数据库。
-
----
-
-## 4. Transaction First
-
-需要保持一致的数据操作尽可能放在同一事务中。
-
-例如保存 Reader 摘录：
-
-```text
-Create Record
-+
-Create Source Reference
-```
-
-要么全部成功，要么全部失败。
-
-Delivery ingestion 同样如此：
-
-```text
-Create ReaderDocument
-+
-Create Delivery
-```
-
-作为一个原子操作完成。
-
----
-
-## 5. Presentation 与 Domain 分离
+一些必须同时成功的数据会放到一个事务中处理。
 
 例如：
 
 ```text
-隐藏正文
+保存阅读摘录
+
+创建记录
++
+创建来源关系
 ```
 
-只是 Reader 的 UI 状态。
-
-它不会：
-
-* 删除 ReaderDocument
-* 修改正文
-* 改变数据库内容
-
-类似地：
+以及：
 
 ```text
-currentDocumentId
+收到 Agent 内容
+
+创建阅读文档
++
+创建投递记录
 ```
 
-表示“用户现在正在看什么”。
-
-而：
-
-```text
-Delivery
-```
-
-表示“什么内容被送来过”。
-
-两者不会因为 UI 方便而混成同一个状态。
+如果其中一步失败，整个操作都会回滚，避免留下只有一半的数据。
 
 ---
 
-# Why Not Another Chat UI?
+### 防重复投递
 
-我刻意没有设计一个输入框放在页面底部。
+未来 Agent 在发送结果时，可能因为超时发生重试。
 
-因为 Agent Desk 想解决的并不是：
-
-> **“我应该在哪里继续和 AI 对话？”**
-
-而是：
-
-> **“Agent 已经工作完了，我应该在哪里舒服地消费它的结果？”**
-
-很多 Agent 产品关注的是：
+所以内容投递从第一版开始就加入了幂等机制。
 
 ```text
-User
-→ Agent
+第一次发送
+→ 创建内容
+
+相同内容再次发送
+→ 不重复创建
+
+同一个标识却发送不同内容
+→ 返回冲突
 ```
 
-Agent Desk 更关注：
-
-```text
-Agent
-→ User
-```
-
-也就是 Agent 工作结果的最后一公里。
+目前相关的数据层和自动化测试已经完成。
 
 ---
 
-# Multi-Agent Ready
+## 当前阶段
 
-目前产品还没有真正连接外部 Agent。
+目前已经完成一个可以运行的桌面 MVP。
 
-但架构没有绑定任何具体模型。
+便利贴部分已经完成长记录、Todo、截止日期、排序、便签短句和 Mini / Compact / Expanded 三种形态；阅读页面已经完成 Markdown 阅读、隐藏正文、阅读恢复、文字摘录和来源关系；内容投递和收件箱主体链路也已经落地。
 
-未来计划通过：
+当前 M2-C 阶段本地自动化结果：
 
 ```text
-External Agent
-↓
-Adapter
-↓
-Agent Gateway
-↓
-Unified Event
-↓
-Delivery
-↓
-Agent Desk
+前端测试    74 项通过
+Rust 测试   33 项通过
+Clippy      通过
+生产构建    通过
 ```
 
-接入不同来源。
-
-例如：
-
-* Local Agent
-* OpenAI
-* Claude
-* Internal Agent
-* HTTP
-* MCP
-* A2A
-
-UI 不需要知道：
-
-> 这条内容究竟来自哪一个模型或协议。
-
-它只需要知道：
-
-> 这是一个可以被 Agent Desk 理解的内容与投递事件。
+目前 M2-C 主体功能已经实现，但最终 Native Smoke 和 Windows / macOS CI Gate 仍然没有完全闭环，因此当前不会把这一阶段标记为最终完成，也尚未进入真实 Agent Gateway 开发。
 
 ---
 
-# Progressive Reading
+## 后续规划
 
-我还独立设计并验证了一个：
+下一阶段计划接入**本地 Agent 网关和系统通知**，真正跑通：
 
-**Progressive Reading Skill**
-
-它未来会成为 Agent Desk 的一个重要 Agent Use Case。
-
-用户只需要：
-
-1. 上传一本 PDF
-2. 设置每天希望阅读多少分钟
-3. 设置每天推送时间
-
-Agent 自动完成：
-
-```text
-PDF
-↓
-解析结构
-↓
-Reading Map
-↓
-判断内容难度
-↓
-估算阅读时间
-↓
-拆分语义完整 Reading Units
-↓
-每天选择下一段
-↓
-Delivery
-↓
-Agent Desk
+```mermaid
+flowchart LR
+    A[Agent 完成任务] --> B[Agent 网关]
+    B --> C[内容投递]
+    C --> D[收件箱]
+    D --> E[系统提醒]
+    E --> F[阅读页面]
 ```
 
-其中一个核心原则是：
+到这个阶段以后，Agent Desk 才会真正从一个具备投递结构的桌面应用，变成可以接收真实 Agent 工作结果的产品。
 
-> **语义完整性 > 精确阅读时间**
+---
 
-如果用户说每天阅读 10 分钟，并不是机械地在第 10 分钟的位置截断。
+## Progressive Reading Skill
 
-Agent 会综合：
+后续还计划接入我已经设计并验证的 **Progressive Reading Skill**。
+
+这是一个渐进式 PDF 阅读 Skill。
+
+用户上传一本 PDF，并告诉 Agent 每天希望阅读多少分钟、希望什么时候收到内容以后，Agent 会根据：
 
 ```text
 时间预算
@@ -729,399 +426,119 @@ Agent 会综合：
 语义完整性
 ```
 
-决定当天应该读到哪里。
+规划每天应该阅读到哪里。
 
-同时：
+它的核心原则是：
 
-> Agent 只能决定从哪里开始、在哪里结束，不能偷偷改写作者原文。
+> **语义完整性优先于精确阅读时间。**
 
-最终希望实现：
+例如用户选择每天阅读 10 分钟，Agent 不会简单按照固定字数把文章从一个完整意思中间截断，而是优先保证每天阅读内容的完整性。
 
-```text
-Progressive Reading Skill
-↓
-Daily Reading Packet
-↓
-Agent Desk Delivery
-↓
-Inbox
-↓
-Reader
-↓
-用户完成阅读
-↓
-Agent 推进下一段
+同时，正文必须直接来自原始 PDF，Agent 可以判断“从哪里开始、到哪里结束”，但不能偷偷改写作者原文。
+
+未来它和 Agent Desk 的完整体验会是：
+
+```mermaid
+flowchart LR
+    A[上传 PDF] --> B[Agent 建立阅读计划]
+    B --> C[每日阅读内容]
+    C --> D[Agent Desk 投递]
+    D --> E[收件箱]
+    E --> F[阅读]
+    F --> G[确认完成]
+    G --> H[下一段]
 ```
 
 ---
 
-# What Makes Agent Desk Different?
+## 产品设计思路
 
-我认为区别并不在于某一个单独功能。
+Agent Desk 最核心的原则是：
 
-便利贴、阅读器、Inbox 都已经存在很多年。
+> **Agent 负责理解和生产，Desk 负责呈现和交互。**
 
-真正不同的是它们被重新组合起来服务于一个新的工作方式：
+本质上，我想给 Agent 做一个放在桌面上的小插件。
 
-> **Agent 在后台工作，人只在需要的时候接收结果。**
+我刻意避免把它做成另一个 AI 对话框，而是从人的注意力和真实桌面使用习惯出发，用纸张、便利贴这些现实生活中已经非常熟悉的东西承载 Agent 的结果。
 
-因此 Agent Desk 更像是：
+纸和便利贴的特点是，它们不会一直催你互动，也不会持续抢你的注意力。它们只是安静地放在那里，需要的时候再拿起来看。
 
-### Agent 的桌面收件口
+我希望 Agent Desk 也是这样的产品。
 
-而不是聊天客户端。
-
-### Agent 结果的阅读器
-
-而不是电子书 App。
-
-### 阅读过程中的个人便利贴
-
-而不是完整知识库。
-
-### 多 Agent 共用的 Delivery Surface
-
-而不是绑定某个模型的 UI。
+同时，在技术设计上，我也尽量把内容、投递、界面状态和 Agent 协议拆开，让产品未来可以从一个单 Agent Demo 逐渐扩展成多个 Agent 共用的桌面入口。
 
 ---
 
-# Current Status
+## 开发方式
 
-目前已经完成可运行的 Desktop MVP。
+这是一个通过 Vibe Coding 开发的个人项目。
 
-### Sticky
-
-* [x] Record
-* [x] Todo
-* [x] Due Date
-* [x] Drag & Reorder
-* [x] Sticky Quote
-* [x] Mini / Compact / Expanded
-* [x] Persistence
-* [x] Markdown Export
-
-### Reader
-
-* [x] Markdown Renderer
-* [x] Paper Typography
-* [x] Grid Paper
-* [x] Font Size
-* [x] Line Spacing
-* [x] ReaderDocument
-* [x] Blank Reader
-* [x] Scroll Restore
-* [x] Text Selection
-* [x] Copy
-* [x] Save Selection to Record
-* [x] Source Provenance
-
-### Delivery / Inbox
-
-* [x] Delivery Domain
-* [x] ReaderDocument / Delivery Separation
-* [x] Inbox
-* [x] Unread / Opened
-* [x] Ordering
-* [x] Delivery → Reader
-* [x] Idempotent Delivery
-* [x] Atomic Persistence
-* [ ] Final M2-C Native / CI Gate
-
-### Agent
-
-* [ ] Local Agent Gateway
-* [ ] External Agent Push
-* [ ] Native Notification
-* [ ] Agent Adapter
-* [ ] Unified Agent Event
-* [ ] Remote Relay
-
----
-
-# Engineering Status
-
-当前 M2-C 本地验证：
-
-```text
-Frontend Tests   74 PASS
-Rust Tests       33 PASS
-Rust Clippy      PASS
-Production Build PASS
-```
-
-项目已经建立 Windows / macOS CI 流程。
-
-当前 Delivery / Inbox 主体实现完成，最终 M2-C Native Smoke 与 CI Gate 仍在收尾，因此这里不会把尚未完成的 Agent Gateway 标记为已实现。
-
----
-
-# Roadmap
-
-## M3 — Local Agent Gateway
-
-下一阶段优先实现：
-
-```text
-Local Agent
-↓
-Agent Gateway
-↓
-Delivery
-↓
-Inbox
-↓
-Native Notification
-↓
-Reader
-```
-
-目标是第一次真正跑通：
-
-> Agent 完成任务 → Agent Desk 自动出现一条新内容。
-
----
-
-## Progressive Reading Integration
-
-接入已经完成设计与验证的 Progressive Reading Skill。
-
-```text
-PDF
-↓
-Agent
-↓
-Daily Reading Packet
-↓
-Agent Desk
-↓
-Reader
-```
-
----
-
-## Native Notifications
-
-未来 Agent Desk 不需要一直打开在用户面前。
-
-Agent 完成重要任务以后：
-
-```text
-Native Notification
-↓
-点击
-↓
-对应 Delivery
-↓
-Reader
-```
-
----
-
-## More Agent Adapters
-
-后续探索：
-
-* Local HTTP Agent
-* MCP
-* A2A
-* OpenAI
-* Claude
-* Internal Agent Platform
-
-所有 Adapter 最终进入统一 Delivery Pipeline。
-
----
-
-## Semantic Content Layout
-
-当前 Reader 使用 Markdown。
-
-未来希望进一步支持结构化内容：
-
-```text
-summary
-key_point
-quote
-source
-code
-table
-action
-```
-
-由 Agent 生成语义结构，
-
-由 Agent Desk 决定最终视觉呈现。
-
-即：
-
-> **Agent 决定内容是什么，Desk 决定它应该怎么被阅读。**
-
----
-
-# Design Philosophy
-
-Agent Desk 的设计不是从：
-
-> “AI 产品应该长什么样？”
-
-开始的。
-
-而是从：
-
-> “人在桌面上到底愿意长期留下什么东西？”
-
-开始。
-
-纸、笔记本、便利贴之所以长期存在，是因为它们：
-
-* 不要求持续互动
-* 不抢注意力
-* 可以放在那里
-* 想看的时候再看
-* 信息结构足够简单
-
-所以我希望 Agent Desk 保留这种感觉。
-
-不是：
-
-```text
-AI is always asking for your attention.
-```
-
-而是：
-
-```text
-Agents work quietly in the background.
-
-The results wait for you on the desk.
-```
-
----
-
-# Development Method
-
-Agent Desk 也是我用于探索 **AI Native Product Development / Vibe Coding** 的个人项目。
-
-开发过程中，我主要负责：
+在整个开发过程中，我主要负责：
 
 * 产品定义
-* User Flow
-* Interaction Design
+* 用户流程
+* 交互设计
 * 信息架构
-* Domain Model
+* 领域模型设计
 * 技术方案讨论
-* Gate / Milestone 划分
-* Product Review
-* Native Validation
+* 开发阶段拆分
+* 验收标准
+* 实机产品体验
 * Bug 判断与迭代
 
-Coding Agent 负责具体工程实现。
+Coding Agent 负责具体代码实现。
 
-整个过程不是：
-
-```text
-Prompt
-↓
-一次生成 App
-```
-
-而是：
+整个开发过程更接近：
 
 ```text
-Product Hypothesis
-↓
-Architecture
-↓
-Gate
-↓
-Implementation
-↓
-Automated Test
-↓
-Native Smoke
-↓
-Product Review
-↓
-Next Gate
+产品想法
+ ↓
+产品与架构设计
+ ↓
+拆分开发 Gate
+ ↓
+Coding Agent 实现
+ ↓
+自动化测试
+ ↓
+原生应用验证
+ ↓
+产品体验
+ ↓
+下一轮迭代
 ```
 
-我希望通过这个项目验证：
+而不是通过一条 Prompt 一次性生成整个应用。
 
-> 在 Coding Agent 大幅降低实现成本以后，产品设计、问题拆解、架构判断、验收标准和持续迭代，会变得比“会不会亲手写完所有代码”更加重要。
+这个项目也是我对 **AI 时代产品设计与软件开发协作方式**的一次实践。
 
 ---
 
-# Local Development
-
-## Requirements
-
-建议开发环境：
+## 项目状态
 
 ```text
-Node.js 22
-pnpm
-Rust
-Tauri prerequisites
-```
-
-安装依赖：
-
-```bash
-pnpm install --frozen-lockfile
-```
-
-启动桌面开发环境：
-
-```bash
-pnpm tauri dev
-```
-
-运行前端测试：
-
-```bash
-pnpm test
-```
-
-构建：
-
-```bash
-pnpm tauri build
+便利贴                    ✅
+阅读页面                  ✅
+文字摘录与记录            ✅
+隐藏正文 / 阅读恢复       ✅
+内容投递                  ✅ 主体完成
+收件箱                    ✅ 主体完成
+真实 Agent Gateway        ⏳
+系统通知                  ⏳
+Progressive Reading 接入  ⏳
+多 Agent 接入             ⏳
 ```
 
 ---
 
-# Platform
+## 最后
 
-```text
-Windows   ✅
-macOS     ✅ CI / Build Support
-```
-
-当前主要 Product Preview 与 Native Smoke 在 Windows 完成。
-
----
-
-# Project Direction
-
-Agent Desk 目前仍然是一个持续开发中的个人项目。
-
-它最终想回答的问题很简单：
+Agent Desk 最终想回答的是一个很简单的问题：
 
 > **当未来一个人同时拥有很多 Agent，它们完成的工作应该去哪里？**
 
-我的设想是：
+我的设想不是让用户每天重新打开十个 Agent 聊天窗口。
 
-不需要每次重新打开十个 Agent 聊天窗口。
+而是让 Agent 各自在后台工作。
 
-Agent 可以各自在后台工作。
-
-而重要的结果最终汇聚到：
-
-**你的桌面。**
-
----
-
-<p align="center">
-  <strong>Agent Desk</strong><br/>
-  Agents work outside. Results arrive quietly on your desk.
-</p>
+重要的结果，最后来到同一张桌面。
