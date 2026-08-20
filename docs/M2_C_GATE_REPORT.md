@@ -3,13 +3,13 @@
 Gate status at this revision:
 
 ```text
-M2_C_GATE_STATUS: BLOCKED_NATIVE_SMOKE_AND_CI
+M2_C_GATE_STATUS: AWAITING_PRODUCT_AND_TECH_REVIEW
 DELIVERY_DOMAIN_STATUS: FOUNDATION_READY
-INBOX_STATUS: IMPLEMENTED_AWAITING_FINAL_GATE
+INBOX_STATUS: READY
 AGENT_GATEWAY_STATUS: NOT_STARTED
 ```
 
-The implementation, local automated gates, and resumed native audit pass. The hosted Windows and macOS CI jobs remain the only pending final gate at this revision.
+The implementation, local automated gates, resumed native audit, public-release safety audit, and hosted Windows/macOS CI pass. M2-C is ready for Product Owner and Tech Lead review; M3 has not started.
 
 ## A. Implementation Summary
 
@@ -161,7 +161,16 @@ Native status: **PASS**.
 
 ## Q. Windows/macOS CI
 
-Pending final handoff push. Windows: **PENDING**. macOS: **PENDING**. The workflow contains frozen install, frontend checks/tests/build, Rust fmt/Clippy/tests, and real Tauri builds on both runners.
+The first post-merge run, [CI #27](https://github.com/dawnsongbest-create/agent-desk/actions/runs/32363325541), failed on both platforms at `pnpm format`. Root cause: the preserved public README-only commits had not been formatted by the repository's pinned Prettier configuration. No product code failed. The minimal fix changed only README formatting and was committed as `52e75dacd13891a36f0c7d73b69f5f886122ad1f`.
+
+The replacement [CI #28](https://github.com/dawnsongbest-create/agent-desk/actions/runs/32363880138) ran against that exact commit and completed successfully:
+
+| Job | Job ID | Result |
+| --- | ---: | --- |
+| `windows-latest` | `96409095544` | **PASS** |
+| `macos-latest` | `96409095689` | **PASS** |
+
+Both jobs used Node `22.23.2`, pnpm `11.16.0`, frozen install, frontend format/typecheck/lint/test/build, Rust fmt/Clippy/tests, and a real non-bundled Tauri build.
 
 ## R. Product Preview Evidence
 
@@ -195,7 +204,8 @@ Automated Sticky and Reader regression suites: PASS. Native Reader, Sticky, Mini
 
 ```text
 Implementation commit: 10aa2751ea1751698b9433e9b06ee1c1832e5879
-Final handoff commit: PENDING
+Public README merge commit: b9ca47cc3d177b229c9cf42bb1197a24e2851002
+Final handoff commit: 52e75dacd13891a36f0c7d73b69f5f886122ad1f
 
 Frontend bundles:
 dist/index.html
@@ -215,21 +225,35 @@ D:\agent-desk-target\release\agent-desk.exe
 
 Truth SHA = Canonical SHA: PASS
 Product Preview path: D:\agent-desk-target\release\agent-desk.exe
-CI run: PENDING
+CI run: 32363880138 (run 28) — Windows PASS / macOS PASS
 ```
 
 Build used Node `22.23.2`, pnpm `11.16.0`, Cargo.lock with `--locked`, and a new isolated Cargo target. The release build did not reuse the prior canonical artifact.
 
 ## V. Git State
 
-At report creation:
+At the CI-validated handoff revision:
 
 ```text
 branch: main
-HEAD: 10aa2751ea1751698b9433e9b06ee1c1832e5879
-implementation commit: local, not yet pushed at this revision
-origin/main: 6f41b42c5e863767a56774b8618d7ed2dd997503
-working tree: report/evidence/.gitignore changes pending final handoff commit
+HEAD: 52e75dacd13891a36f0c7d73b69f5f886122ad1f
+origin/main: 52e75dacd13891a36f0c7d73b69f5f886122ad1f
+implementation commit: present in HEAD ancestry and on origin/main
+working tree: clean before this final report-only update
+repository visibility: Public by explicit Product Owner decision
 ```
+
+The report itself is the immediately following documentation-only provenance commit. Final post-push ref equality and CI are verified after that commit rather than self-referencing its SHA inside its own content.
+
+## W. Public Release Safety
+
+- Current `main` tree high-confidence secret signatures: none.
+- Credential assignment hints: none.
+- Literal personal user-directory paths: none; three legacy Gate Report paths were normalized to `%USERPROFILE%` / `%LOCALAPPDATA%` in the public merge.
+- Tracked `.env`, SQLite/database files, executables, libraries, archives, `node_modules`, Rust `target`, frontend `dist`, coverage, or local pnpm store: none.
+- Large tracked files above 5 MiB: none.
+- `.gitignore` covers `.env`, `.env.*`, `node_modules`, `.pnpm-store`, and `dist`.
+- Native screenshots contain only isolated A/B/C smoke fixtures and no Product Owner data.
+- Existing historical commit identities were preserved; no history rewrite or force-push was performed.
 
 No M3 implementation has started.

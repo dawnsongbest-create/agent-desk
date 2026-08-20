@@ -389,7 +389,7 @@ Clippy      通过
 生产构建    通过
 ```
 
-目前 M2-C 主体功能已经实现，但最终 Native Smoke 和 Windows / macOS CI Gate 仍然没有完全闭环，因此当前不会把这一阶段标记为最终完成，也尚未进入真实 Agent Gateway 开发。
+M2-C 的 Native Smoke 与 Windows / macOS CI Gate 已经完成，当前状态为等待 Product Owner 和 Tech Lead 最终评审。真实 Agent Gateway 尚未开始开发。
 
 ---
 
