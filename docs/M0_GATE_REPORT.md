@@ -46,7 +46,7 @@ MVP 的 Generic Local / HTTP Adapter 明确定义为：**仅绑定 loopback 的�
 
 ## A1. Current state
 
-审计工作区：`C:\Users\26374\Documents\ChatGPT\电子阅读便利贴`
+审计工作区：`%USERPROFILE%\Documents\ChatGPT\电子阅读便利贴`
 
 - repo 是 **greenfield / effectively empty**。
 - 只有 `.git/`；没有 tracked files，没有 commit，当前分支为 `master`。

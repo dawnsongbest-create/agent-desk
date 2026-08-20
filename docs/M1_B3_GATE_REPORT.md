@@ -169,7 +169,7 @@ Rust coverage includes Quote update/restart/rollback, 5,500-character create/upd
 
 Release:
 
-- Path: `C:\Users\26374\AppData\Local\Temp\agent-desk-b3-final-target\release\agent-desk.exe`
+- Path: `%LOCALAPPDATA%\Temp\agent-desk-b3-final-target\release\agent-desk.exe`
 - Size: 13,761,024 bytes
 - SHA-256: `79FEE30A966D81A7A66B65DC84D75280DE4595407A654309BD6476917BDCFBFB`
 

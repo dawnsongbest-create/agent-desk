@@ -28,7 +28,7 @@ However, an older Agent Desk instance was already running when the audit began:
 
 ```text
 PID: 15372
-Executable: C:\Users\26374\Desktop\agent-desk.exe
+Executable: %USERPROFILE%\Desktop\agent-desk.exe
 Started: 2026-08-14 10:19:16.516 +08:00
 SHA-256: 79FEE30A966D81A7A66B65DC84D75280DE4595407A654309BD6476917BDCFBFB
 ```
