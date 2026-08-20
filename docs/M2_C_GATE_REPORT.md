@@ -155,7 +155,9 @@ Product Owner AppData was protected by directing all runtime writes to the isola
 | Product Owner path | Files | Before | After |
 | --- | ---: | --- | --- |
 | `%APPDATA%\\com.agentdesk.desktop` | 3 | `89341C50A3209782EAEB76F3651AE90117DF39C11104CAE6B1BF16351D77E523` | `89341C50A3209782EAEB76F3651AE90117DF39C11104CAE6B1BF16351D77E523` |
-| `%LOCALAPPDATA%\\com.agentdesk.desktop` | 400 | `C0C0E5583872B88FB45D0F96DCF8ACE83EE66E42FD9EDB700B4DA0F5D309A11` | `C0C0E5583872B88FB45D0F96DCF8ACE83EE66E42FD9EDB700B4DA0F5D309A11` |
+| `%LOCALAPPDATA%\\com.agentdesk.desktop` | 400 | `C0C0E5583872B88FBF45D0F96DCF8ACE83EE66E42FD9EDB700B4DA0F5D309A11` | `C0C0E5583872B88FBF45D0F96DCF8ACE83EE66E42FD9EDB700B4DA0F5D309A11` |
+
+The `%LOCALAPPDATA%` digest above is the rederived 64-character SHA-256. An earlier report draft omitted one repeated `F` during manual transcription; file count, total bytes, and the latest file timestamp (`2026-08-16T16:03:09.0249575Z`) remained unchanged throughout the August 20 resumed Gate.
 
 Native status: **PASS**.
 
