@@ -8,8 +8,11 @@ import type {
 } from "../../domain/preferences";
 import type { ReaderDocument } from "../../domain/reader";
 import type { InboxDelivery } from "../../domain/delivery";
+import type { CreateReadingPlanInput, ReadingPlan, ReadingPlanStatus } from "../../domain/reading";
 import { InboxList } from "../inbox/InboxList";
 import type { InboxLoadState } from "../inbox/useInbox";
+import { ReadingPlanPanel } from "../reading/ReadingPlanPanel";
+import type { ReadingPlansState } from "../reading/useReadingPlans";
 import type { ReaderLoadState } from "./useReaderDocument";
 
 type ReaderCanvasProps = {
@@ -19,12 +22,16 @@ type ReaderCanvasProps = {
   windowPreset: WindowPreset;
   document: ReaderDocument | null;
   state: ReaderLoadState;
-  surfaceMode: "reader" | "inbox";
+  surfaceMode: "reader" | "inbox" | "plans";
   readerScrollTop: number;
   inboxItems: InboxDelivery[];
   inboxState: InboxLoadState;
   inboxOpeningId: string | null;
   inboxOpenError: string | null;
+  readingPlans: ReadingPlan[];
+  readingPlansState: ReadingPlansState;
+  readingPlansError: string | null;
+  readingBusyPlanId: string | null;
   contentVisible: boolean;
   onRetry(): void;
   onRetryInbox(): void;
@@ -33,9 +40,15 @@ type ReaderCanvasProps = {
   onContentVisibilityChange(visible: boolean): void;
   onCopy(text: string): Promise<void>;
   onCaptureSelection(documentId: string, text: string): Promise<boolean>;
+  onCreateReadingSession(documentId: string, text: string): Promise<boolean>;
+  onRetryReadingPlans(): void;
+  onCreateReadingPlan(input: CreateReadingPlanInput): Promise<boolean>;
+  onGenerateReadingDelivery(id: string): Promise<boolean>;
+  onSetReadingPlanStatus(id: string, status: ReadingPlanStatus): Promise<void>;
 };
 
-type SelectionStatus = "ready" | "copying" | "copied" | "saving" | "saved" | "error";
+type SelectionStatus =
+  "ready" | "copying" | "copied" | "saving" | "saved" | "sessioning" | "sessioned" | "error";
 
 type SelectionPopover = {
   text: string;
@@ -85,6 +98,10 @@ export function ReaderCanvas({
   inboxState,
   inboxOpeningId,
   inboxOpenError,
+  readingPlans,
+  readingPlansState,
+  readingPlansError,
+  readingBusyPlanId,
   contentVisible,
   onRetry,
   onRetryInbox,
@@ -93,6 +110,11 @@ export function ReaderCanvas({
   onContentVisibilityChange,
   onCopy,
   onCaptureSelection,
+  onCreateReadingSession,
+  onRetryReadingPlans,
+  onCreateReadingPlan,
+  onGenerateReadingDelivery,
+  onSetReadingPlanStatus,
 }: ReaderCanvasProps) {
   const contentRef = useRef<HTMLElement>(null);
   const scrollViewportRef = useRef<HTMLDivElement>(null);
@@ -222,6 +244,19 @@ export function ReaderCanvas({
     closeTimerRef.current = window.setTimeout(closePopover, 920);
   }
 
+  async function createReadingSession() {
+    if (!popover || !document) return;
+    const text = popover.text;
+    setPopover((current) => (current ? { ...current, status: "sessioning" } : current));
+    const created = await onCreateReadingSession(document.id, text);
+    if (!created) {
+      setPopover((current) => (current ? { ...current, status: "error" } : current));
+      return;
+    }
+    setPopover((current) => (current ? { ...current, status: "sessioned" } : current));
+    closeTimerRef.current = window.setTimeout(closePopover, 920);
+  }
+
   function toggleContentVisibility() {
     if (contentVisible) {
       hiddenScrollTopRef.current = scrollViewportRef.current?.scrollTop ?? 0;
@@ -262,17 +297,19 @@ export function ReaderCanvas({
             {contentVisible ? "隐藏正文" : "显示正文"}
           </button>
         ) : (
-          <span className="inbox-shelf-label">收件箱</span>
+          <span className="inbox-shelf-label">
+            {surfaceMode === "inbox" ? "收件箱" : "阅读计划"}
+          </span>
         )}
         <span className="reader-mini-shelf-slot" data-testid="reader-mini-shelf-slot" aria-hidden />
       </div>
       <div
         ref={scrollViewportRef}
         className="reader-scroll-viewport"
-        data-content-visible={surfaceMode === "inbox" || contentVisible}
+        data-content-visible={surfaceMode !== "reader" || contentVisible}
         role="region"
         aria-label={surfaceMode === "reader" ? "Reader scroll viewport" : "Inbox scroll viewport"}
-        tabIndex={surfaceMode === "inbox" || contentVisible ? 0 : -1}
+        tabIndex={surfaceMode !== "reader" || contentVisible ? 0 : -1}
         onScroll={(event) => {
           if (surfaceMode === "reader") onReaderScrollPositionChange(event.currentTarget.scrollTop);
           closePopover();
@@ -286,6 +323,18 @@ export function ReaderCanvas({
             openError={inboxOpenError}
             onRetry={onRetryInbox}
             onOpen={onOpenDelivery}
+          />
+        ) : null}
+        {surfaceMode === "plans" ? (
+          <ReadingPlanPanel
+            plans={readingPlans}
+            state={readingPlansState}
+            error={readingPlansError}
+            busyPlanId={readingBusyPlanId}
+            onRetry={onRetryReadingPlans}
+            onCreate={onCreateReadingPlan}
+            onGenerate={onGenerateReadingDelivery}
+            onSetStatus={onSetReadingPlanStatus}
           />
         ) : null}
         {surfaceMode === "reader" && contentVisible && state === "error" ? (
@@ -306,8 +355,10 @@ export function ReaderCanvas({
           >
             <header className="reader-document-header">
               <p className="reader-context">
-                {documentTypeLabels[document.documentType]} ·{" "}
-                {document.sourceLabel ?? document.sourceType}
+                {document.documentType === "reading"
+                  ? "今日阅读"
+                  : documentTypeLabels[document.documentType]}{" "}
+                · {document.sourceLabel ?? document.sourceType}
               </p>
               <h1>{document.title}</h1>
               {document.subtitle ? <p className="reader-subtitle">{document.subtitle}</p> : null}
@@ -339,21 +390,43 @@ export function ReaderCanvas({
         >
           {popover.status === "copied" ? <span role="status">已复制</span> : null}
           {popover.status === "saved" ? <span role="status">✓ 已保存到记录</span> : null}
-          {popover.status !== "copied" && popover.status !== "saved" ? (
+          {popover.status === "sessioned" ? <span role="status">✓ 已加入今日阅读</span> : null}
+          {popover.status !== "copied" &&
+          popover.status !== "saved" &&
+          popover.status !== "sessioned" ? (
             <>
               <button
                 type="button"
-                disabled={popover.status === "copying" || popover.status === "saving"}
+                disabled={
+                  popover.status === "copying" ||
+                  popover.status === "saving" ||
+                  popover.status === "sessioning"
+                }
                 onClick={() => void copySelection()}
               >
                 {popover.status === "copying" ? "复制中" : "复制"}
               </button>
               <button
                 type="button"
-                disabled={popover.status === "copying" || popover.status === "saving"}
+                disabled={
+                  popover.status === "copying" ||
+                  popover.status === "saving" ||
+                  popover.status === "sessioning"
+                }
                 onClick={() => void saveSelection()}
               >
                 {popover.status === "saving" ? "保存中" : "保存到记录"}
+              </button>
+              <button
+                type="button"
+                disabled={
+                  popover.status === "copying" ||
+                  popover.status === "saving" ||
+                  popover.status === "sessioning"
+                }
+                onClick={() => void createReadingSession()}
+              >
+                {popover.status === "sessioning" ? "加入中" : "加入今日阅读"}
               </button>
               {popover.status === "error" ? <span role="status">操作失败，请重试</span> : null}
             </>

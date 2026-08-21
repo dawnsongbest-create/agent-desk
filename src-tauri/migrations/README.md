@@ -15,3 +15,5 @@
 `0004_reader_documents.sql` adds the minimal durable ReaderDocument table and the one-to-one Reader selection provenance for existing note cards. It does not add delivery, Inbox, progress, annotation, or cursor state.
 
 `0005_delivery_inbox.sql` adds the minimal Delivery envelope linked one-to-one to a durable ReaderDocument, with a unique idempotency key and nullable first-open timestamp. It does not add Gateway, Agent, notification, archive, status, progress, or cursor state.
+
+`0006_reading_plan.sql` adds the local Reading Plan, its durable mapping to deliveries created through the existing Delivery Service, and selection-derived Reading Sessions. It does not add an Agent Gateway, remote credentials, cloud state, notifications, or scheduler execution.

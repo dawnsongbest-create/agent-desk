@@ -168,7 +168,8 @@ mod tests {
             WHERE type = 'table'
               AND name IN (
                   'cards', 'note_payloads', 'task_payloads', 'card_placements',
-                  'sticky_surface_profile', 'reader_documents', 'record_source_refs', 'deliveries'
+                  'sticky_surface_profile', 'reader_documents', 'record_source_refs', 'deliveries',
+                  'reading_plans', 'reading_plan_deliveries', 'reading_sessions'
               )
             "#,
         )
@@ -186,8 +187,8 @@ mod tests {
                 .await
                 .expect("migration history query");
 
-        assert_eq!(table_count, 8);
-        assert_eq!(applied_versions, vec![1, 2, 3, 4, 5]);
+        assert_eq!(table_count, 11);
+        assert_eq!(applied_versions, vec![1, 2, 3, 4, 5, 6]);
         assert_eq!(foreign_keys, 1);
     }
 
@@ -261,7 +262,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6]);
         assert_eq!(note, "保留的记录");
         assert_eq!(
             task,
@@ -331,13 +332,84 @@ mod tests {
             .fetch_one(&upgraded.0)
             .await
             .unwrap();
-        assert_eq!(versions, vec![1, 2, 3, 4, 5]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6]);
         assert_eq!(note, "0004 保留记录");
         assert_eq!(
             reader,
             ("0004 保留文章".to_owned(), "正文保持不变".to_owned())
         );
         assert_eq!(delivery_count, 0);
+    }
+
+    #[tokio::test]
+    async fn upgrades_a_0005_database_without_changing_delivery_or_reader_data() {
+        let temp = tempfile::tempdir().expect("temp directory");
+        let database_path = temp.path().join("upgrade-0005.sqlite3");
+        let database = connect(&database_path).await.unwrap();
+        sqlx::raw_sql(
+            r#"
+            DROP TABLE reading_sessions;
+            DROP TABLE reading_plan_deliveries;
+            DROP TABLE reading_plans;
+            DELETE FROM _sqlx_migrations WHERE version = 6;
+
+            INSERT INTO reader_documents (
+                id, document_type, title, subtitle, content_markdown,
+                source_type, source_label, created_at, updated_at
+            ) VALUES (
+                'existing-reader-0005', 'brief', '0005 保留交付', NULL,
+                '交付正文保持不变', 'agent', '迁移测试',
+                '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z'
+            );
+            INSERT INTO deliveries (
+                id, document_id, idempotency_key, delivered_at, opened_at
+            ) VALUES (
+                'existing-delivery-0005', 'existing-reader-0005',
+                'existing-key-0005', '2026-08-01T00:00:00Z', NULL
+            );
+            "#,
+        )
+        .execute(&database.0)
+        .await
+        .unwrap();
+        database.0.close().await;
+
+        let upgraded = connect(&database_path).await.unwrap();
+        let versions: Vec<i64> =
+            sqlx::query_scalar("SELECT version FROM _sqlx_migrations ORDER BY version")
+                .fetch_all(&upgraded.0)
+                .await
+                .unwrap();
+        let delivery: (String, String) = sqlx::query_as(
+            r#"
+            SELECT d.id, r.content_markdown
+            FROM deliveries d
+            JOIN reader_documents r ON r.id = d.document_id
+            WHERE d.id = 'existing-delivery-0005'
+            "#,
+        )
+        .fetch_one(&upgraded.0)
+        .await
+        .unwrap();
+        let reading_tables: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*) FROM sqlite_master
+            WHERE type = 'table'
+              AND name IN ('reading_plans', 'reading_plan_deliveries', 'reading_sessions')
+            "#,
+        )
+        .fetch_one(&upgraded.0)
+        .await
+        .unwrap();
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6]);
+        assert_eq!(
+            delivery,
+            (
+                "existing-delivery-0005".to_owned(),
+                "交付正文保持不变".to_owned()
+            )
+        );
+        assert_eq!(reading_tables, 3);
     }
 
     #[tokio::test]

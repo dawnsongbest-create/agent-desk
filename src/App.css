@@ -326,6 +326,204 @@
   font-size: 0.68rem;
 }
 
+.inbox-reading-kind {
+  color: var(--reader-accent);
+  font-weight: 700;
+}
+
+.reading-plan-panel {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  width: min(100%, 680px);
+  margin: 0 auto;
+  padding: 8px clamp(18px, 7vw, 38px) clamp(72px, 14vh, 110px);
+  color: var(--reader-ink);
+}
+
+.reading-plan-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid var(--reader-rule);
+  padding: 10px 0 16px;
+}
+
+.reading-plan-heading p,
+.reading-plan-heading h2 {
+  margin: 0;
+}
+
+.reading-plan-heading p {
+  color: var(--reader-accent);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.reading-plan-heading h2 {
+  margin-top: 4px;
+  font-family: Georgia, "Noto Serif CJK SC", "Songti SC", "SimSun", serif;
+  font-size: 1.18rem;
+  font-weight: 560;
+}
+
+.reading-plan-heading button,
+.reading-plan-form button,
+.reading-plan-actions button,
+.reading-plan-error button {
+  border: 1px solid var(--popover-line);
+  border-radius: 6px;
+  padding: 7px 10px;
+  color: var(--popover-ink);
+  background: color-mix(in srgb, var(--popover) 88%, transparent);
+  font: inherit;
+  font-size: 0.66rem;
+  cursor: pointer;
+}
+
+.reading-plan-form {
+  display: grid;
+  gap: 13px;
+  border-bottom: 1px solid var(--reader-rule);
+  padding: 18px 0 20px;
+}
+
+.reading-plan-form label {
+  display: grid;
+  gap: 5px;
+  color: var(--reader-muted);
+  font-size: 0.64rem;
+  letter-spacing: 0.025em;
+}
+
+.reading-plan-form input,
+.reading-plan-form select,
+.reading-plan-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--reader-rule);
+  border-radius: 5px;
+  padding: 8px 9px;
+  color: var(--reader-ink);
+  background: color-mix(in srgb, var(--reader-quote-paper) 72%, transparent);
+  font: inherit;
+  font-size: 0.76rem;
+}
+
+.reading-plan-form textarea {
+  min-height: 150px;
+  resize: vertical;
+  line-height: 1.65;
+}
+
+.reading-plan-form-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.reading-plan-form-actions,
+.reading-plan-actions,
+.reading-plan-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reading-plan-form-actions {
+  justify-content: space-between;
+}
+
+.reading-plan-form-actions span {
+  color: var(--reader-muted);
+  font-size: 0.61rem;
+}
+
+.reading-plan-list {
+  display: grid;
+}
+
+.reading-plan-card {
+  border-bottom: 1px solid var(--reader-rule);
+  padding: 18px 2px;
+}
+
+.reading-plan-card header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.reading-plan-card header span,
+.reading-plan-card header small,
+.reading-plan-card > p {
+  color: var(--reader-muted);
+  font-size: 0.62rem;
+}
+
+.reading-plan-card header h3 {
+  margin: 3px 0 0;
+  font-family: Georgia, "Noto Serif CJK SC", "Songti SC", "SimSun", serif;
+  font-size: 0.93rem;
+  font-weight: 580;
+}
+
+.reading-plan-card > p {
+  margin: 8px 0 10px;
+}
+
+.reading-plan-progress {
+  height: 2px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--reader-rule);
+}
+
+.reading-plan-progress span {
+  display: block;
+  height: 100%;
+  background: var(--reader-accent);
+}
+
+.reading-plan-actions {
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.reading-plan-actions button:first-child {
+  color: var(--reader-ink);
+  font-weight: 680;
+}
+
+.reading-plan-actions button:disabled,
+.reading-plan-form button:disabled {
+  cursor: wait;
+  opacity: 0.48;
+}
+
+.reading-plan-error {
+  justify-content: space-between;
+  margin-top: 12px;
+  border-radius: 5px;
+  padding: 8px 10px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  font-size: 0.66rem;
+}
+
+.reading-plan-empty {
+  margin: 0;
+  padding: clamp(46px, 12vh, 90px) 12px;
+  color: var(--reader-muted);
+  font-size: 0.72rem;
+  line-height: 1.7;
+  text-align: center;
+}
+
 .reader-context {
   margin: 0 0 8px;
   color: var(--reader-muted);
@@ -1037,9 +1235,10 @@
 }
 
 .collapse-button {
-  width: 27px;
-  height: 27px;
+  width: 36px;
+  height: 36px;
   color: var(--sticky-muted);
+  font-size: 16px;
 }
 
 .face-scroll {
@@ -2023,8 +2222,8 @@ textarea:disabled {
 
 .compact-header-actions button {
   display: grid;
-  width: 18px;
-  height: 18px;
+  width: 36px;
+  height: 36px;
   place-items: center;
   border: 0;
   border-radius: 50%;
@@ -2032,7 +2231,7 @@ textarea:disabled {
   color: var(--sticky-muted);
   background: var(--sticky-soft);
   font: inherit;
-  font-size: 0.8rem;
+  font-size: 16px;
   line-height: 1;
   cursor: pointer;
 }

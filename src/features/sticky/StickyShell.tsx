@@ -34,6 +34,7 @@ import type {
 } from "../../domain/preferences";
 import type { ReaderDocument } from "../../domain/reader";
 import type { InboxDelivery } from "../../domain/delivery";
+import type { CreateReadingPlanInput, ReadingPlan, ReadingPlanStatus } from "../../domain/reading";
 import {
   compactDragFrame,
   readerFontSizes,
@@ -55,12 +56,13 @@ import {
 import { ReaderCanvas } from "../reader/ReaderCanvas";
 import type { InboxLoadState } from "../inbox/useInbox";
 import type { ReaderLoadState } from "../reader/useReaderDocument";
+import type { ReadingPlansState } from "../reading/useReadingPlans";
 import { playPageTurnSound } from "./pageTurnSound";
 import type { StickyLoadState } from "./useStickyCards";
 
 type SaveState = "loading" | "idle" | "saving" | "saved" | "error";
 type StickyFace = "note" | "task";
-type ReaderSurfaceMode = "reader" | "inbox";
+type ReaderSurfaceMode = "reader" | "inbox" | "plans";
 
 type StickyShellProps = {
   preferences: Preferences;
@@ -71,6 +73,10 @@ type StickyShellProps = {
   inboxState: InboxLoadState;
   inboxOpeningId: string | null;
   inboxOpenError: string | null;
+  readingPlans: ReadingPlan[];
+  readingPlansState: ReadingPlansState;
+  readingPlansError: string | null;
+  readingBusyPlanId: string | null;
   preferenceSaveState: SaveState;
   cards: StickyCard[];
   profile: StickyProfile;
@@ -90,6 +96,11 @@ type StickyShellProps = {
   onOpenDelivery(id: string): Promise<boolean>;
   onCopyReaderSelection(text: string): Promise<void>;
   onCaptureReaderSelection(documentId: string, text: string): Promise<boolean>;
+  onCreateReadingSession(documentId: string, text: string): Promise<boolean>;
+  onRetryReadingPlans(): void;
+  onCreateReadingPlan(input: CreateReadingPlanInput): Promise<boolean>;
+  onGenerateReadingDelivery(id: string): Promise<boolean>;
+  onSetReadingPlanStatus(id: string, status: ReadingPlanStatus): Promise<void>;
   onCreate(input: CreateStickyCardInput): Promise<boolean>;
   onUpdateText(id: string, text: string): Promise<boolean>;
   onTaskCompleted(id: string, completed: boolean): Promise<void>;
@@ -974,6 +985,10 @@ export function StickyShell(props: StickyShellProps) {
     inboxState,
     inboxOpeningId,
     inboxOpenError,
+    readingPlans,
+    readingPlansState,
+    readingPlansError,
+    readingBusyPlanId,
     preferenceSaveState,
     cards,
     profile,
@@ -993,6 +1008,11 @@ export function StickyShell(props: StickyShellProps) {
     onOpenDelivery,
     onCopyReaderSelection,
     onCaptureReaderSelection,
+    onCreateReadingSession,
+    onRetryReadingPlans,
+    onCreateReadingPlan,
+    onGenerateReadingDelivery,
+    onSetReadingPlanStatus,
     onCreate,
     onUpdateText,
     onTaskCompleted,
@@ -1088,6 +1108,10 @@ export function StickyShell(props: StickyShellProps) {
         inboxState={inboxState}
         inboxOpeningId={inboxOpeningId}
         inboxOpenError={inboxOpenError}
+        readingPlans={readingPlans}
+        readingPlansState={readingPlansState}
+        readingPlansError={readingPlansError}
+        readingBusyPlanId={readingBusyPlanId}
         contentVisible={preferences.readerContentVisible}
         onRetry={onRetryReader}
         onRetryInbox={onRetryInbox}
@@ -1098,6 +1122,15 @@ export function StickyShell(props: StickyShellProps) {
         onContentVisibilityChange={onReaderContentVisibilityChange}
         onCopy={onCopyReaderSelection}
         onCaptureSelection={onCaptureReaderSelection}
+        onCreateReadingSession={onCreateReadingSession}
+        onRetryReadingPlans={onRetryReadingPlans}
+        onCreateReadingPlan={onCreateReadingPlan}
+        onGenerateReadingDelivery={async (id) => {
+          const generated = await onGenerateReadingDelivery(id);
+          if (generated) setReaderSurfaceMode("inbox");
+          return generated;
+        }}
+        onSetReadingPlanStatus={onSetReadingPlanStatus}
       />
       <header className="board-header">
         <div>
@@ -1109,6 +1142,21 @@ export function StickyShell(props: StickyShellProps) {
           <button
             className="inbox-nav-button"
             type="button"
+            aria-label={readerSurfaceMode === "plans" ? "返回阅读" : "打开阅读计划"}
+            onClick={() => {
+              if (readerSurfaceMode === "plans") {
+                setReaderSurfaceMode("reader");
+              } else {
+                onRetryReadingPlans();
+                setReaderSurfaceMode("plans");
+              }
+            }}
+          >
+            {readerSurfaceMode === "plans" ? "阅读" : "计划"}
+          </button>
+          <button
+            className="inbox-nav-button"
+            type="button"
             aria-label={
               readerSurfaceMode === "inbox"
                 ? "返回阅读"
@@ -1117,7 +1165,7 @@ export function StickyShell(props: StickyShellProps) {
                   : "打开收件箱"
             }
             onClick={() => {
-              if (readerSurfaceMode === "reader") {
+              if (readerSurfaceMode !== "inbox") {
                 onRetryInbox();
                 setReaderSurfaceMode("inbox");
               } else {

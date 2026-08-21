@@ -65,6 +65,8 @@ export function InboxList({
       {items.map((item) => {
         const unread = item.delivery.openedAt === null;
         const source = item.document.sourceLabel ?? item.document.sourceType;
+        const readingMeta =
+          item.document.documentType === "reading" ? item.document.subtitle : null;
         return (
           <button
             className="inbox-item"
@@ -79,8 +81,9 @@ export function InboxList({
             <span className="inbox-item-body">
               <strong>{item.document.title}</strong>
               <span className="inbox-item-meta">
+                {readingMeta ? <span className="inbox-reading-kind">今日阅读</span> : null}
                 <span>{source}</span>
-                <span>{documentTypeLabels[item.document.documentType]}</span>
+                <span>{readingMeta ?? documentTypeLabels[item.document.documentType]}</span>
                 <time dateTime={item.delivery.deliveredAt}>
                   {deliveryDate(item.delivery.deliveredAt)}
                 </time>

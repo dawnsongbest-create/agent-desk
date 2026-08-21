@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { StickyCardsPort } from "../../application/ports/sticky";
 import type { ReaderDocumentsPort } from "../../application/ports/reader";
 import type { DeliveriesPort } from "../../application/ports/delivery";
+import type { ReadingPlansPort } from "../../application/ports/reading";
 import { defaultPreferences, type Preferences } from "../../domain/preferences";
 import type { ReaderDocument } from "../../domain/reader";
 import type { CreateStickyCardInput, StickyCard, StickyProfile } from "../../domain/sticky";
@@ -39,6 +40,14 @@ const deliveryPort: DeliveriesPort = {
   listInbox: vi.fn(async () => []),
   getUnreadCount: vi.fn(async () => 0),
   open: vi.fn(),
+};
+
+const readingPort: ReadingPlansPort = {
+  createPlan: vi.fn(),
+  listPlans: vi.fn(async () => []),
+  setPlanStatus: vi.fn(),
+  generateToday: vi.fn(),
+  createSession: vi.fn(),
 };
 
 function makeCard(
@@ -130,6 +139,7 @@ function renderHome(
       port={port}
       readerPort={readerDocuments}
       deliveryPort={deliveries}
+      readingPort={readingPort}
       preferences={preferences}
       preferenceSaveState="idle"
       now={new Date("2026-08-12T12:00:00")}
@@ -563,6 +573,7 @@ describe("StickyHome M1-B4", () => {
         port={port}
         readerPort={readerPort}
         deliveryPort={deliveryPort}
+        readingPort={readingPort}
         preferences={{ ...defaultPreferences, stickyMode: "mini" }}
         preferenceSaveState="idle"
         now={new Date("2026-08-12T12:00:00")}

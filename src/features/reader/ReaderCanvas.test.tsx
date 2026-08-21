@@ -56,6 +56,20 @@ const inboxItem: InboxDelivery = {
   document: readerDocument,
 };
 
+function emptyReadingProps() {
+  return {
+    readingPlans: [],
+    readingPlansState: "ready" as const,
+    readingPlansError: null,
+    readingBusyPlanId: null,
+    onCreateReadingSession: vi.fn(async () => true),
+    onRetryReadingPlans: vi.fn(),
+    onCreateReadingPlan: vi.fn(async () => true),
+    onGenerateReadingDelivery: vi.fn(async () => true),
+    onSetReadingPlanStatus: vi.fn(async () => undefined),
+  };
+}
+
 function renderReader(
   windowPreset: WindowPreset = "iphone5",
   document: ReaderDocument = readerDocument,
@@ -63,10 +77,12 @@ function renderReader(
   onCaptureSelection = vi.fn(async () => true),
   contentVisible = true,
   onContentVisibilityChange = vi.fn(),
+  onCreateReadingSession = vi.fn(async () => true),
 ) {
   return {
     ...render(
       <ReaderCanvas
+        {...emptyReadingProps()}
         skin="grid"
         fontSize="standard"
         lineSpacing="standard"
@@ -87,11 +103,13 @@ function renderReader(
         onContentVisibilityChange={onContentVisibilityChange}
         onCopy={onCopy}
         onCaptureSelection={onCaptureSelection}
+        onCreateReadingSession={onCreateReadingSession}
       />,
     ),
     onCopy,
     onCaptureSelection,
     onContentVisibilityChange,
+    onCreateReadingSession,
   };
 }
 
@@ -107,6 +125,7 @@ function VisibilityHarness({
   const [contentVisible, setContentVisible] = useState(initiallyVisible);
   return (
     <ReaderCanvas
+      {...emptyReadingProps()}
       skin="grid"
       fontSize="standard"
       lineSpacing="standard"
@@ -139,6 +158,7 @@ function SurfaceHarness() {
         切换到收件
       </button>
       <ReaderCanvas
+        {...emptyReadingProps()}
         skin="grid"
         fontSize="standard"
         lineSpacing="standard"
@@ -250,6 +270,7 @@ describe("ReaderCanvas document and selection", () => {
     (preset) => {
       render(
         <ReaderCanvas
+          {...emptyReadingProps()}
           skin="grid"
           fontSize="standard"
           lineSpacing="standard"
@@ -289,7 +310,7 @@ describe("ReaderCanvas document and selection", () => {
     expect(screen.queryByRole("toolbar", { name: "所选文字操作" })).not.toBeInTheDocument();
   });
 
-  it("shows only Copy and Save actions for a Reader text selection", () => {
+  it("keeps Copy and Save while adding the Reading Session action", () => {
     renderReader();
     const text = screen.getByText(/正文包含/).firstChild!;
     mockSelection(text, "强调与原文");
@@ -297,7 +318,8 @@ describe("ReaderCanvas document and selection", () => {
     const toolbar = screen.getByRole("toolbar", { name: "所选文字操作" });
     expect(within(toolbar).getByRole("button", { name: "复制" })).toBeVisible();
     expect(within(toolbar).getByRole("button", { name: "保存到记录" })).toBeVisible();
-    expect(within(toolbar).getAllByRole("button")).toHaveLength(2);
+    expect(within(toolbar).getByRole("button", { name: "加入今日阅读" })).toBeVisible();
+    expect(within(toolbar).getAllByRole("button")).toHaveLength(3);
   });
 
   it("ignores a selection whose endpoints belong to Sticky UI", () => {
@@ -377,6 +399,27 @@ describe("ReaderCanvas document and selection", () => {
     expect(onCaptureSelection).toHaveBeenCalledWith("reader-test", selectedText);
     expect(screen.getByRole("status")).toHaveTextContent("✓ 已保存到记录");
     expect(article).toBeInTheDocument();
+  });
+
+  it("creates a Reading Session from the exact selection", async () => {
+    const user = userEvent.setup();
+    const selectedText = "技术段落\n\n```ts\nconst exact = true;\n```";
+    const onCreateReadingSession = vi.fn(async () => true);
+    renderReader(
+      "iphone5",
+      readerDocument,
+      vi.fn(),
+      vi.fn(async () => true),
+      true,
+      vi.fn(),
+      onCreateReadingSession,
+    );
+    const article = screen.getByRole("article", { name: readerDocument.title });
+    mockSelection(article.firstChild!, selectedText);
+    fireEvent.mouseUp(article);
+    await user.click(screen.getByRole("button", { name: "加入今日阅读" }));
+    expect(onCreateReadingSession).toHaveBeenCalledWith(readerDocument.id, selectedText);
+    expect(screen.getByRole("status")).toHaveTextContent("已加入今日阅读");
   });
 
   it("does not let an earlier copy confirmation close a newer selection", async () => {
