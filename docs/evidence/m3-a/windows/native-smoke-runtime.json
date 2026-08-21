@@ -1,0 +1,57 @@
+{
+  "firstLaunchPid": 34992,
+  "miniStickyPinned": {
+    "visible": true,
+    "pinned": true,
+    "label": "恢复 Compact Sticky"
+  },
+  "firstLaunchAliveAfter10Seconds": true,
+  "planCreated": {
+    "visible": true,
+    "count": 1,
+    "id": "reading_plan_2c63e04a67fb881dc6f307e95d952a99",
+    "status": "active"
+  },
+  "deliveryGenerated": {
+    "visible": true,
+    "inboxCount": 1,
+    "unread": 1,
+    "label": "未读，M3-A 隔离原生验收，M3-A Native Fixture，阅读，8月21日 15:46"
+  },
+  "deliveryOpened": {
+    "visible": true,
+    "title": "M3-A 隔离原生验收",
+    "subtitle": "今日阅读 · Day 1 · 预计 1 分钟",
+    "opened": true,
+    "unread": 0
+  },
+  "recordSaved": {
+    "selectedText": "阅读代理把长内容拆成今天可以完成的一小段。这个隔离验收段落用于验证选择文字、保存到记录以及加入今",
+    "recordCount": 1,
+    "status": "✓ 已保存到记录"
+  },
+  "sessionCreated": {
+    "selectedText": "阅读代理把长内容拆成今天可以完成的一小段。这个隔离验收段落用于验证选择文字、保存到记录以及加入今",
+    "status": "reader-opened",
+    "readerTitle": "今日阅读 · M3-A 隔离原生验收",
+    "documentCount": 3,
+    "readingDocumentCount": 2
+  },
+  "planCompleted": {
+    "status": "completed",
+    "visibleStatus": "已完成"
+  },
+  "restartPid": 22360,
+  "afterRestart": {
+    "planCount": 1,
+    "planStatus": "completed",
+    "inboxCount": 1,
+    "deliveryOpened": true,
+    "unread": 0,
+    "recordCount": 1,
+    "documentCount": 3,
+    "readingDocumentCount": 2,
+    "currentReaderVisible": true,
+    "currentReaderTitle": "今日阅读 · M3-A 隔离原生验收"
+  }
+}

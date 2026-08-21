@@ -1,0 +1,90 @@
+{
+  "gate": "M3-A Reading Agent Experience & Delivery Loop",
+  "source": {
+    "implementationCommit": "30324fee8f6d78a8452a0a1b9c343e7d49f6c784",
+    "truthCommit": "8df03f3ef39de27fe311e996b449a7f54b68869b",
+    "branch": "main"
+  },
+  "toolchain": {
+    "node": "22.23.2",
+    "pnpm": "11.16.0",
+    "cargoLock": "locked",
+    "windowsCompiler": "MSVC x64"
+  },
+  "frontendBundles": {
+    "dist/index.html": "02C8CFE6FF13EAD2814E51C6952323331A201089586B7749A17B528F0CFCD26A",
+    "dist/assets/index-Bx6m9v8Q.css": "13AB27F97443B312009F6BDC0131748E109C0C9CB13447FAA8C4384595426FB3",
+    "dist/assets/index-CdqQL-fR.js": "15B1D640F69AAD38A1A02EE6D8FC63A438A27015D6C7A5ADEB0B8333767562CF"
+  },
+  "executable": {
+    "truthPath": "D:\\agent-desk-m3a-truth-8df03f3\\release\\agent-desk.exe",
+    "canonicalPath": "D:\\agent-desk-target\\release\\agent-desk.exe",
+    "sha256": "BFB1F90BD6A36ABFE86C50A2B8C92182C8A48481A03BEDFDADC0A59F2B305FFB",
+    "size": 14687744,
+    "timestampUtc": "2026-08-21T05:52:35.1194254Z",
+    "truthEqualsCanonical": true
+  },
+  "nativeSmoke": {
+    "isolationRoot": "D:\\agent-desk-m3a-smoke-8df03f3-20260821-05",
+    "firstLaunchAliveAfter10Seconds": true,
+    "miniStickyPinned": true,
+    "planCount": 1,
+    "planStatusAfterRestart": "completed",
+    "deliveryCount": 1,
+    "deliveryOpenedAfterRestart": true,
+    "unreadAfterRestart": 0,
+    "recordCount": 1,
+    "recordSourceReferenceCount": 1,
+    "readingSessionCount": 1,
+    "readerDocumentCount": 3,
+    "currentReaderVisibleAfterRestart": true,
+    "residualAgentDeskProcesses": 0,
+    "residualSmokeWebView2Processes": 0
+  },
+  "databaseTruth": {
+    "migrations": [1, 2, 3, 4, 5, 6],
+    "migrationSuccess": true,
+    "readingPlanDeliveryLinks": 1,
+    "readingSessionEstimatedMinutes": 1,
+    "duplicateDeliveries": 0,
+    "duplicateReadingSessions": 0
+  },
+  "productOwnerAppData": {
+    "%APPDATA%\\com.agentdesk.desktop": {
+      "fileCountBefore": 3,
+      "fileCountAfter": 3,
+      "bytesBefore": 168664,
+      "bytesAfter": 168664,
+      "metadataDigestBefore": "48DDAE43AD3AF7C2B935B667FC153D17853403E772C777BD882190583AC2F317",
+      "metadataDigestAfter": "48DDAE43AD3AF7C2B935B667FC153D17853403E772C777BD882190583AC2F317",
+      "contentDigestBefore": "B377C41B5CD1ECF29C8B67A580FB70881EE38456DD367A54C7226DFCBC6333FA",
+      "contentDigestAfter": "B377C41B5CD1ECF29C8B67A580FB70881EE38456DD367A54C7226DFCBC6333FA"
+    },
+    "%LOCALAPPDATA%\\com.agentdesk.desktop": {
+      "fileCountBefore": 398,
+      "fileCountAfter": 398,
+      "bytesBefore": 60971632,
+      "bytesAfter": 60971632,
+      "metadataDigestBefore": "0657E850A9F0A4B6CC880D18A84EFDE36D52751B3534D46F4199043A27E2178A",
+      "metadataDigestAfter": "0657E850A9F0A4B6CC880D18A84EFDE36D52751B3534D46F4199043A27E2178A",
+      "contentDigestBefore": "3A6CE836B78448483C3C704012BB510A091CD54E36A894292BD1A2AA0302B388",
+      "contentDigestAfter": "3A6CE836B78448483C3C704012BB510A091CD54E36A894292BD1A2AA0302B388"
+    }
+  },
+  "hostedCi": {
+    "implementationRun": 32451905186,
+    "windowsJob": 96681813573,
+    "windowsResult": "PASS",
+    "macosJob": 96681813694,
+    "macosResult": "PASS"
+  },
+  "evidenceSha256": {
+    "01-plan-created.png": "C7472030AC7539E1228A9502D8DD33E6541FD2705E844CC4458BBF2F12A8E01B",
+    "02-inbox-reading-delivery.png": "C0EB7CE05E32827C2A20AAABAB69F1677A38E77E637E537F3FE50D2A8D46F2AE",
+    "03-reader-delivery.png": "857213BB1D7E96B8E730EF84350E82E5F9ACFF9839B57379B4CCC55E260E0439",
+    "04-selection-saved-to-record.png": "D3F5878589C8FC539A4258384B0DB4E431ADD86F9F45BC57F545D3BF5D7B7B0A",
+    "05-reading-session.png": "01ED0B712032EA675DA89CE03CDC8D8951723DA9AE510F4F1BD83A022C3FF5AA",
+    "06-reading-completed.png": "D551D1E1EE0A1624895811E3F2B3079D063C38160B5CD443D6B8B57C2841417F",
+    "07-restart-persistence.png": "01ED0B712032EA675DA89CE03CDC8D8951723DA9AE510F4F1BD83A022C3FF5AA"
+  }
+}
