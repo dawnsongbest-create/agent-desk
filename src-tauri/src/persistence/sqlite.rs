@@ -38,7 +38,9 @@ const EXPECTED_STICKY_SCHEMA: [(&str, &str); 6] = [
 fn legacy_sticky_checksum() -> Vec<u8> {
     LEGACY_STICKY_CHECKSUM
         .as_bytes()
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|pair| {
             let hex_digit = |digit: u8| match digit {
                 b'0'..=b'9' => digit - b'0',
