@@ -1,0 +1,53 @@
+{
+  "gate": "M3-B Agent Suggestions & Workspace Actions",
+  "source": {
+    "implementationCommit": "08a5095aab2c48c32f9e76cab9e9e04c8270514d",
+    "branch": "codex/m3-b-agent-proposals"
+  },
+  "toolchain": {
+    "node": "22.23.2",
+    "pnpm": "11.16.0",
+    "cargoLock": "locked",
+    "windowsCompiler": "MSVC x64"
+  },
+  "frontendBundles": {
+    "dist/index.html": "1360F893020304623E1A4CC7C725C405297A39CA0622432FD81957A67B875437",
+    "dist/assets/index-Bz225wox.css": "8D71DC37B54E3565140A8B54AD5B919E4F9F15C5F90E0554B8AB711AB71BAB2F",
+    "dist/assets/index-BEYg7U0K.js": "F981DE9C98FB4F6FE1ABB9DA57E20EAD79B194EA2D64E101705E99D52C617701"
+  },
+  "executable": {
+    "truthPath": "D:\\agent-desk-m3b-truth-target\\release\\agent-desk.exe",
+    "canonicalPath": "D:\\agent-desk-target\\release\\agent-desk.exe",
+    "sha256": "52A6B513549FD39DEF7383C6881C874484F8E1F4ABE352AABDB1BD3D8312D18B",
+    "size": 15002112,
+    "timestampUtc": "2026-08-21T22:23:52.3797997Z",
+    "truthEqualsCanonical": true
+  },
+  "nativeSmoke": {
+    "isolationRoot": "D:\\agent-desk-m3b-smoke-08a5095-20260822-05",
+    "firstLaunchAliveAfter10Seconds": true,
+    "restartAliveAfter10Seconds": true,
+    "proposalStatusAfterRestart": "accepted",
+    "todoCountAfterRestart": 1,
+    "proposalCountAfterRestart": 1,
+    "residualAgentDeskProcesses": 0,
+    "residualSmokeWebView2Processes": 0,
+    "productOwnerAppDataUnchanged": true
+  },
+  "databaseTruth": {
+    "migrations": [1, 2, 3, 4, 5, 6, 7],
+    "proposalCount": 1,
+    "acceptedProposalCount": 1,
+    "smokeTodoCount": 1,
+    "deliveryCount": 1
+  },
+  "hostedCi": {
+    "status": "PENDING"
+  },
+  "evidenceSha256": {
+    "01-reader-proposal.png": "D814E4B7A08DC149BBF654C01BA3B8446128ED116EF1FC613B46E3D0C667D9B1",
+    "02-todo-accepted.png": "9BFF799681D8ED5994CFAB28B701678496076892C6057FE2CB5101487FA76DB4",
+    "03-restart-restored.png": "A85C4D0A974D27A96DB022FB970D56F04CBE735A1D8F50BB5863C694C5D3745F",
+    "native-smoke-runtime.json": "8C541141A937C1F094EFDCF059E5F21773C86CFA14488CD287FA1C7423AE2F2C"
+  }
+}

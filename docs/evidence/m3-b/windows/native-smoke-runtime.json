@@ -1,0 +1,49 @@
+{
+  "status": "PASS",
+  "executable": "D:\\agent-desk-m3b-truth-target\\release\\agent-desk.exe",
+  "isolationRoot": "D:\\agent-desk-m3b-smoke-08a5095-20260822-05",
+  "firstLaunchAliveAfter10Seconds": true,
+  "restartAliveAfter10Seconds": true,
+  "sourceDocumentId": "reader_cd735ad76911ea13f465c89ebadbd523",
+  "sourceDeliveryId": "delivery_6099156f3f5c26c1a3fcb3450dacc488",
+  "proposalId": "proposal_af3987a04b3bd354c530ab50c40e28b3",
+  "proposalStatusAfterRestart": "accepted",
+  "todoContent": "M3-B 原生验收：确认负责人并发送项目时间表",
+  "todoCountAfterRestart": 1,
+  "proposalCountAfterRestart": 1,
+  "residualAgentDeskProcesses": 0,
+  "residualSmokeWebView2Processes": 0,
+  "productOwnerAppDataBefore": {
+    "roaming": {
+      "path": "%APPDATA%\\com.agentdesk.desktop",
+      "fileCount": 3,
+      "bytes": 230105.0,
+      "metadataDigest": "5E648A514B580DAA4A1F1E6D6D36A0C7EF0A7D59EE11C012868D67D0308C4237",
+      "contentDigest": "A956FA212714FE0146DB3E6BBB1D77F9E2D71D8C6E662080BE8EEDC3AD13AC8D"
+    },
+    "local": {
+      "path": "%LOCALAPPDATA%\\com.agentdesk.desktop",
+      "fileCount": 402,
+      "bytes": 59978068.0,
+      "metadataDigest": "3678B5FAE05C6887BE3652C4DADC4C2610A25D644A043FC7902A3649AA7D022A",
+      "contentDigest": "D154CEB82A7F152AD8BB845FAFEB8BD6A5BF866C9E1F96B983D9706130C1E31D"
+    }
+  },
+  "productOwnerAppDataAfter": {
+    "roaming": {
+      "path": "%APPDATA%\\com.agentdesk.desktop",
+      "fileCount": 3,
+      "bytes": 230105.0,
+      "metadataDigest": "5E648A514B580DAA4A1F1E6D6D36A0C7EF0A7D59EE11C012868D67D0308C4237",
+      "contentDigest": "A956FA212714FE0146DB3E6BBB1D77F9E2D71D8C6E662080BE8EEDC3AD13AC8D"
+    },
+    "local": {
+      "path": "%LOCALAPPDATA%\\com.agentdesk.desktop",
+      "fileCount": 402,
+      "bytes": 59978068.0,
+      "metadataDigest": "3678B5FAE05C6887BE3652C4DADC4C2610A25D644A043FC7902A3649AA7D022A",
+      "contentDigest": "D154CEB82A7F152AD8BB845FAFEB8BD6A5BF866C9E1F96B983D9706130C1E31D"
+    }
+  },
+  "productOwnerAppDataUnchanged": true
+}
