@@ -3,7 +3,7 @@
 Gate status at this revision:
 
 ```text
-M3_B_GATE_STATUS: HOSTED_CI_PENDING
+M3_B_GATE_STATUS: AWAITING_PRODUCT_AND_TECH_REVIEW
 PROPOSAL_STATUS: FOUNDATION_READY
 AGENT_GATEWAY_STATUS: NOT_STARTED
 ```
@@ -107,6 +107,13 @@ Truth and canonical files are byte-identical, size `15,002,112` bytes. Product s
 
 ## Hosted CI
 
-Windows/macOS GitHub Actions results will be recorded after the default-branch handoff run completes. Until then, the final review status remains pending.
+GitHub Actions run [32534848404](https://github.com/dawnsongbest-create/agent-desk/actions/runs/32534848404) validated implementation commit `08a5095aab2c48c32f9e76cab9e9e04c8270514d` through the Pull Request workflow.
+
+| Job | Job ID | Result |
+| --- | --- | --- |
+| Windows | `96933709653` | PASS |
+| macOS | `96933709823` | PASS |
+
+Both jobs used `.node-version`, frozen pnpm install, frontend format/typecheck/lint/tests/build, Rust fmt/Clippy/tests, and a real non-bundled Tauri build.
 
 No M3-C work may begin from this report.

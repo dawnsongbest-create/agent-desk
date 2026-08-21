@@ -42,7 +42,12 @@
     "deliveryCount": 1
   },
   "hostedCi": {
-    "status": "PENDING"
+    "runId": 32534848404,
+    "runUrl": "https://github.com/dawnsongbest-create/agent-desk/actions/runs/32534848404",
+    "windowsJobId": 96933709653,
+    "windowsResult": "PASS",
+    "macosJobId": 96933709823,
+    "macosResult": "PASS"
   },
   "evidenceSha256": {
     "01-reader-proposal.png": "D814E4B7A08DC149BBF654C01BA3B8446128ED116EF1FC613B46E3D0C667D9B1",
