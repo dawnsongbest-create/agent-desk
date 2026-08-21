@@ -2,6 +2,7 @@ import type { StickyCardsPort } from "../../application/ports/sticky";
 import type { ReaderDocumentsPort } from "../../application/ports/reader";
 import type { DeliveriesPort } from "../../application/ports/delivery";
 import type { ReadingPlansPort } from "../../application/ports/reading";
+import type { AgentProposalsPort } from "../../application/ports/proposal";
 import type { CreateReadingPlanInput, ReadingPlanStatus } from "../../domain/reading";
 import type {
   Preferences,
@@ -17,12 +18,14 @@ import { useStickyCards } from "./useStickyCards";
 import { useReaderDocument } from "../reader/useReaderDocument";
 import { useInbox } from "../inbox/useInbox";
 import { useReadingPlans } from "../reading/useReadingPlans";
+import { useAgentProposals } from "../proposal/useAgentProposals";
 
 type StickyHomeProps = {
   port: StickyCardsPort;
   readerPort: ReaderDocumentsPort;
   deliveryPort: DeliveriesPort;
   readingPort: ReadingPlansPort;
+  proposalPort: AgentProposalsPort;
   preferences: Preferences;
   preferenceSaveState: "loading" | "idle" | "saving" | "saved" | "error";
   now?: Date;
@@ -42,6 +45,7 @@ export function StickyHome({
   readerPort,
   deliveryPort,
   readingPort,
+  proposalPort,
   preferences,
   preferenceSaveState,
   now,
@@ -64,6 +68,7 @@ export function StickyHome({
   );
   const inbox = useInbox(deliveryPort, preferenceSaveState !== "loading");
   const reading = useReadingPlans(readingPort, preferenceSaveState !== "loading");
+  const proposals = useAgentProposals(proposalPort, reader.document?.id ?? null);
 
   async function captureSelection(documentId: string, text: string) {
     try {
@@ -111,6 +116,18 @@ export function StickyHome({
     }
   }
 
+  async function acceptProposal(id: string) {
+    const accepted = await proposals.accept(id);
+    if (!accepted) return false;
+    if (accepted.card) sticky.acceptCreated(accepted.card);
+    if (accepted.readingSession) {
+      reader.acceptOpened(accepted.readingSession.document);
+      onCurrentReaderDocumentChange(accepted.readingSession.document.id);
+      onReaderContentVisibilityChange(true);
+    }
+    return true;
+  }
+
   return (
     <StickyShell
       preferences={preferences}
@@ -125,6 +142,9 @@ export function StickyHome({
       readingPlansState={reading.state}
       readingPlansError={reading.error}
       readingBusyPlanId={reading.busyPlanId}
+      agentProposals={proposals.proposals}
+      proposalBusyId={proposals.busyId}
+      proposalErrorId={proposals.errorId}
       preferenceSaveState={preferenceSaveState}
       cards={sticky.cards}
       profile={sticky.profile}
@@ -149,6 +169,8 @@ export function StickyHome({
       onCreateReadingPlan={createReadingPlan}
       onGenerateReadingDelivery={generateReadingDelivery}
       onSetReadingPlanStatus={setReadingPlanStatus}
+      onAcceptProposal={acceptProposal}
+      onRejectProposal={proposals.reject}
       onCreate={sticky.create}
       onUpdateText={sticky.updateText}
       onTaskCompleted={sticky.setTaskCompleted}

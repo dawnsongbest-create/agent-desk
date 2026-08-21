@@ -151,27 +151,19 @@ impl SqliteStickyRepository {
         .await?
         .ok_or(StickyRepositoryError::NotFound)
     }
-}
 
-#[async_trait]
-impl StickyRepository for SqliteStickyRepository {
-    async fn list(&self) -> Result<Vec<StickyCard>, StickyRepositoryError> {
-        let rows = sqlx::query_as::<_, StickyCardRow>(SELECT_STICKY_CARDS)
-            .fetch_all(&self.pool)
-            .await?;
-        rows.into_iter().map(TryInto::try_into).collect()
-    }
-
-    async fn create(&self, card: &NewStickyCard) -> Result<StickyCard, StickyRepositoryError> {
-        let mut transaction = self.pool.begin().await?;
+    pub(crate) async fn create_in_transaction(
+        transaction: &mut Transaction<'_, Sqlite>,
+        card: &NewStickyCard,
+    ) -> Result<StickyCard, StickyRepositoryError> {
         let id: String = sqlx::query_scalar("SELECT 'card_' || lower(hex(randomblob(16)))")
-            .fetch_one(&mut *transaction)
+            .fetch_one(&mut **transaction)
             .await?;
-        let timestamp = Self::timestamp(&mut transaction).await?;
+        let timestamp = Self::timestamp(transaction).await?;
         let position: i64 = sqlx::query_scalar(
             "SELECT COALESCE(MAX(position) + 1, 0) FROM card_placements WHERE surface = 'sticky'",
         )
-        .fetch_one(&mut *transaction)
+        .fetch_one(&mut **transaction)
         .await?;
 
         sqlx::query(
@@ -187,7 +179,7 @@ impl StickyRepository for SqliteStickyRepository {
         .bind(card.kind.as_str())
         .bind(&timestamp)
         .bind(&timestamp)
-        .execute(&mut *transaction)
+        .execute(&mut **transaction)
         .await?;
 
         match card.kind {
@@ -195,7 +187,7 @@ impl StickyRepository for SqliteStickyRepository {
                 sqlx::query("INSERT INTO note_payloads (card_id, body) VALUES (?, ?)")
                     .bind(&id)
                     .bind(&card.text)
-                    .execute(&mut *transaction)
+                    .execute(&mut **transaction)
                     .await?;
             }
             StickyCardKind::Task => {
@@ -203,7 +195,7 @@ impl StickyRepository for SqliteStickyRepository {
                     .bind(&id)
                     .bind(&card.text)
                     .bind(&card.due_date)
-                    .execute(&mut *transaction)
+                    .execute(&mut **transaction)
                     .await?;
             }
         }
@@ -218,10 +210,25 @@ impl StickyRepository for SqliteStickyRepository {
         .bind(position)
         .bind(&timestamp)
         .bind(&timestamp)
-        .execute(&mut *transaction)
+        .execute(&mut **transaction)
         .await?;
 
-        let created = Self::fetch_in_transaction(&mut transaction, &id).await?;
+        Self::fetch_in_transaction(transaction, &id).await
+    }
+}
+
+#[async_trait]
+impl StickyRepository for SqliteStickyRepository {
+    async fn list(&self) -> Result<Vec<StickyCard>, StickyRepositoryError> {
+        let rows = sqlx::query_as::<_, StickyCardRow>(SELECT_STICKY_CARDS)
+            .fetch_all(&self.pool)
+            .await?;
+        rows.into_iter().map(TryInto::try_into).collect()
+    }
+
+    async fn create(&self, card: &NewStickyCard) -> Result<StickyCard, StickyRepositoryError> {
+        let mut transaction = self.pool.begin().await?;
+        let created = Self::create_in_transaction(&mut transaction, card).await?;
         transaction.commit().await?;
         Ok(created)
     }

@@ -153,6 +153,76 @@ impl SqliteReadingRepository {
             .ok_or(ReadingRepositoryError::NotFound)?
             .try_into()
     }
+
+    pub(crate) async fn create_session_in_transaction(
+        transaction: &mut Transaction<'_, Sqlite>,
+        source_document_id: &str,
+        content: &str,
+        estimated_minutes: i64,
+    ) -> Result<ReadingSessionResult, ReadingRepositoryError> {
+        let source_title: String =
+            sqlx::query_scalar("SELECT title FROM reader_documents WHERE id = ?")
+                .bind(source_document_id)
+                .fetch_optional(&mut **transaction)
+                .await?
+                .ok_or(ReadingRepositoryError::NotFound)?;
+        let session_id: String =
+            sqlx::query_scalar("SELECT 'reading_session_' || lower(hex(randomblob(16)))")
+                .fetch_one(&mut **transaction)
+                .await?;
+        let document_id: String =
+            sqlx::query_scalar("SELECT 'reader_' || lower(hex(randomblob(16)))")
+                .fetch_one(&mut **transaction)
+                .await?;
+        let timestamp = Self::timestamp(transaction).await?;
+        let title = format!("今日阅读 · {source_title}");
+        let subtitle = format!("今日阅读 · 预计 {estimated_minutes} 分钟");
+        sqlx::query(
+            r#"
+            INSERT INTO reader_documents (
+                id, document_type, title, subtitle, content_markdown,
+                source_type, source_label, created_at, updated_at
+            ) VALUES (?, 'reading', ?, ?, ?, 'local', ?, ?, ?)
+            "#,
+        )
+        .bind(&document_id)
+        .bind(&title)
+        .bind(&subtitle)
+        .bind(content)
+        .bind(format!("选自《{source_title}》"))
+        .bind(&timestamp)
+        .bind(&timestamp)
+        .execute(&mut **transaction)
+        .await?;
+        sqlx::query(
+            r#"
+            INSERT INTO reading_sessions (
+                id, source_document_id, reader_document_id,
+                content, estimated_minutes, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(&session_id)
+        .bind(source_document_id)
+        .bind(&document_id)
+        .bind(content)
+        .bind(estimated_minutes)
+        .bind(&timestamp)
+        .execute(&mut **transaction)
+        .await?;
+        let session =
+            sqlx::query_as::<_, ReadingSession>("SELECT * FROM reading_sessions WHERE id = ?")
+                .bind(&session_id)
+                .fetch_one(&mut **transaction)
+                .await?;
+        let document =
+            sqlx::query_as::<_, ReaderDocumentRow>("SELECT * FROM reader_documents WHERE id = ?")
+                .bind(&document_id)
+                .fetch_one(&mut **transaction)
+                .await?
+                .try_into()?;
+        Ok(ReadingSessionResult { session, document })
+    }
 }
 
 #[async_trait]
@@ -315,69 +385,15 @@ impl ReadingRepository for SqliteReadingRepository {
         estimated_minutes: i64,
     ) -> Result<ReadingSessionResult, ReadingRepositoryError> {
         let mut transaction = self.pool.begin().await?;
-        let source_title: String =
-            sqlx::query_scalar("SELECT title FROM reader_documents WHERE id = ?")
-                .bind(source_document_id)
-                .fetch_optional(&mut *transaction)
-                .await?
-                .ok_or(ReadingRepositoryError::NotFound)?;
-        let session_id: String =
-            sqlx::query_scalar("SELECT 'reading_session_' || lower(hex(randomblob(16)))")
-                .fetch_one(&mut *transaction)
-                .await?;
-        let document_id: String =
-            sqlx::query_scalar("SELECT 'reader_' || lower(hex(randomblob(16)))")
-                .fetch_one(&mut *transaction)
-                .await?;
-        let timestamp = Self::timestamp(&mut transaction).await?;
-        let title = format!("今日阅读 · {source_title}");
-        let subtitle = format!("今日阅读 · 预计 {estimated_minutes} 分钟");
-        sqlx::query(
-            r#"
-            INSERT INTO reader_documents (
-                id, document_type, title, subtitle, content_markdown,
-                source_type, source_label, created_at, updated_at
-            ) VALUES (?, 'reading', ?, ?, ?, 'local', ?, ?, ?)
-            "#,
+        let result = Self::create_session_in_transaction(
+            &mut transaction,
+            source_document_id,
+            content,
+            estimated_minutes,
         )
-        .bind(&document_id)
-        .bind(&title)
-        .bind(&subtitle)
-        .bind(content)
-        .bind(format!("选自《{source_title}》"))
-        .bind(&timestamp)
-        .bind(&timestamp)
-        .execute(&mut *transaction)
         .await?;
-        sqlx::query(
-            r#"
-            INSERT INTO reading_sessions (
-                id, source_document_id, reader_document_id,
-                content, estimated_minutes, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?)
-            "#,
-        )
-        .bind(&session_id)
-        .bind(source_document_id)
-        .bind(&document_id)
-        .bind(content)
-        .bind(estimated_minutes)
-        .bind(&timestamp)
-        .execute(&mut *transaction)
-        .await?;
-        let session =
-            sqlx::query_as::<_, ReadingSession>("SELECT * FROM reading_sessions WHERE id = ?")
-                .bind(&session_id)
-                .fetch_one(&mut *transaction)
-                .await?;
-        let document =
-            sqlx::query_as::<_, ReaderDocumentRow>("SELECT * FROM reader_documents WHERE id = ?")
-                .bind(&document_id)
-                .fetch_one(&mut *transaction)
-                .await?
-                .try_into()?;
         transaction.commit().await?;
-        Ok(ReadingSessionResult { session, document })
+        Ok(result)
     }
 
     async fn get_session(

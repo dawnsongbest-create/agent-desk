@@ -38,11 +38,20 @@ impl StickyService {
         text: String,
         due_date: Option<String>,
     ) -> Result<StickyCard, StickyServiceError> {
+        let card = Self::prepare_create(kind, text, due_date)?;
+        Ok(self.repository.create(&card).await?)
+    }
+
+    pub fn prepare_create(
+        kind: StickyCardKind,
+        text: String,
+        due_date: Option<String>,
+    ) -> Result<NewStickyCard, StickyServiceError> {
         let due_date = validate_due_date(due_date)?;
         if kind == StickyCardKind::Note && due_date.is_some() {
             return Err(StickyValidationError::NoteDueDate.into());
         }
-        let card = NewStickyCard {
+        Ok(NewStickyCard {
             kind,
             text: normalize_text(
                 text,
@@ -53,8 +62,7 @@ impl StickyService {
                 },
             )?,
             due_date,
-        };
-        Ok(self.repository.create(&card).await?)
+        })
     }
 
     pub async fn update_text(

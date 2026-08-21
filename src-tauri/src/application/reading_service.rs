@@ -127,13 +127,26 @@ impl ReadingService {
         source_document_id: &str,
         content: String,
     ) -> Result<ReadingSessionResult, ReadingServiceError> {
-        let content = validate_session_content(content)?;
-        let difficulty = infer_difficulty(&content);
-        let estimated_minutes = estimate_reading_minutes(&content, difficulty);
+        let (content, estimated_minutes) = Self::prepare_session(content, None)?;
         Ok(self
             .repository
             .create_session(source_document_id, &content, estimated_minutes)
             .await?)
+    }
+
+    pub fn prepare_session(
+        content: String,
+        requested_minutes: Option<i64>,
+    ) -> Result<(String, i64), ReadingServiceError> {
+        let content = validate_session_content(content)?;
+        let estimated_minutes = requested_minutes.unwrap_or_else(|| {
+            let difficulty = infer_difficulty(&content);
+            estimate_reading_minutes(&content, difficulty)
+        });
+        if !(1..=240).contains(&estimated_minutes) {
+            return Err(ReadingValidationError::InvalidDailyMinutes.into());
+        }
+        Ok((content, estimated_minutes))
     }
 }
 

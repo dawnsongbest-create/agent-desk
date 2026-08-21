@@ -35,6 +35,7 @@ import type {
 import type { ReaderDocument } from "../../domain/reader";
 import type { InboxDelivery } from "../../domain/delivery";
 import type { CreateReadingPlanInput, ReadingPlan, ReadingPlanStatus } from "../../domain/reading";
+import type { AgentProposal } from "../../domain/proposal";
 import {
   compactDragFrame,
   readerFontSizes,
@@ -77,6 +78,9 @@ type StickyShellProps = {
   readingPlansState: ReadingPlansState;
   readingPlansError: string | null;
   readingBusyPlanId: string | null;
+  agentProposals: AgentProposal[];
+  proposalBusyId: string | null;
+  proposalErrorId: string | null;
   preferenceSaveState: SaveState;
   cards: StickyCard[];
   profile: StickyProfile;
@@ -101,6 +105,8 @@ type StickyShellProps = {
   onCreateReadingPlan(input: CreateReadingPlanInput): Promise<boolean>;
   onGenerateReadingDelivery(id: string): Promise<boolean>;
   onSetReadingPlanStatus(id: string, status: ReadingPlanStatus): Promise<void>;
+  onAcceptProposal(id: string): Promise<boolean>;
+  onRejectProposal(id: string): Promise<boolean>;
   onCreate(input: CreateStickyCardInput): Promise<boolean>;
   onUpdateText(id: string, text: string): Promise<boolean>;
   onTaskCompleted(id: string, completed: boolean): Promise<void>;
@@ -989,6 +995,9 @@ export function StickyShell(props: StickyShellProps) {
     readingPlansState,
     readingPlansError,
     readingBusyPlanId,
+    agentProposals,
+    proposalBusyId,
+    proposalErrorId,
     preferenceSaveState,
     cards,
     profile,
@@ -1013,6 +1022,8 @@ export function StickyShell(props: StickyShellProps) {
     onCreateReadingPlan,
     onGenerateReadingDelivery,
     onSetReadingPlanStatus,
+    onAcceptProposal,
+    onRejectProposal,
     onCreate,
     onUpdateText,
     onTaskCompleted,
@@ -1112,6 +1123,9 @@ export function StickyShell(props: StickyShellProps) {
         readingPlansState={readingPlansState}
         readingPlansError={readingPlansError}
         readingBusyPlanId={readingBusyPlanId}
+        agentProposals={agentProposals}
+        proposalBusyId={proposalBusyId}
+        proposalErrorId={proposalErrorId}
         contentVisible={preferences.readerContentVisible}
         onRetry={onRetryReader}
         onRetryInbox={onRetryInbox}
@@ -1131,6 +1145,8 @@ export function StickyShell(props: StickyShellProps) {
           return generated;
         }}
         onSetReadingPlanStatus={onSetReadingPlanStatus}
+        onAcceptProposal={(id) => void onAcceptProposal(id)}
+        onRejectProposal={(id) => void onRejectProposal(id)}
       />
       <header className="board-header">
         <div>

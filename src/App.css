@@ -775,6 +775,119 @@
   opacity: 0.48;
 }
 
+.agent-proposal-stack {
+  display: grid;
+  gap: 12px;
+  margin: 42px 0 8px;
+  border-top: 1px solid color-mix(in srgb, var(--reader-rule) 55%, transparent);
+  padding-top: 20px;
+}
+
+.agent-proposal-stack > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--reader-muted);
+  font-family: sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+}
+
+.agent-proposal-stack > header small {
+  font-size: 0.68rem;
+  letter-spacing: 0;
+}
+
+.agent-proposal-card {
+  position: relative;
+  border: 1px solid color-mix(in srgb, var(--reader-rule) 72%, transparent);
+  border-radius: 3px 8px 5px 3px;
+  padding: 16px 17px 13px;
+  background: color-mix(in srgb, var(--reader-quote-paper) 72%, var(--board-soft));
+  box-shadow: 0 6px 18px rgb(31 26 18 / 8%);
+  font-family: sans-serif;
+}
+
+.agent-proposal-card::before {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: -1px;
+  width: 3px;
+  border-radius: 3px 0 0 3px;
+  background: color-mix(in srgb, var(--reader-link) 48%, var(--reader-rule));
+  content: "";
+}
+
+.agent-proposal-card .agent-proposal-kind {
+  margin: 0 0 5px;
+  color: var(--reader-muted);
+  font-size: 0.67rem;
+  letter-spacing: 0.1em;
+}
+
+.agent-proposal-card h2 {
+  margin: 0;
+  color: var(--reader-ink);
+  font-family: Georgia, "Noto Serif CJK SC", "Songti SC", "SimSun", serif;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.agent-proposal-card h2 + p {
+  margin: 7px 0 0;
+  color: color-mix(in srgb, var(--reader-ink) 76%, var(--reader-muted));
+  font-size: 0.8rem;
+  line-height: 1.62;
+}
+
+.agent-proposal-card footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.agent-proposal-card button {
+  border: 1px solid color-mix(in srgb, var(--reader-rule) 74%, transparent);
+  border-radius: 999px;
+  padding: 5px 11px;
+  color: var(--reader-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.agent-proposal-card button:hover,
+.agent-proposal-card button:focus-visible {
+  color: var(--reader-ink);
+  border-color: color-mix(in srgb, var(--reader-link) 54%, var(--reader-rule));
+}
+
+.agent-proposal-card button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.agent-proposal-card button:disabled {
+  cursor: wait;
+  opacity: 0.56;
+}
+
+.agent-proposal-card .agent-proposal-accept {
+  color: var(--reader-ink);
+  background: color-mix(in srgb, var(--board-soft) 66%, transparent);
+}
+
+.agent-proposal-card .agent-proposal-error {
+  margin: 8px 0 0;
+  color: var(--danger);
+  font-size: 0.7rem;
+  text-align: right;
+}
+
 .sticky-overlay-layer {
   position: absolute;
   inset: 0;

@@ -5,10 +5,12 @@ import type { StickyCardsPort } from "../../application/ports/sticky";
 import type { ReaderDocumentsPort } from "../../application/ports/reader";
 import type { DeliveriesPort } from "../../application/ports/delivery";
 import type { ReadingPlansPort } from "../../application/ports/reading";
+import type { AgentProposalsPort } from "../../application/ports/proposal";
 import { defaultPreferences, type Preferences } from "../../domain/preferences";
 import type { ReaderDocument } from "../../domain/reader";
 import type { CreateStickyCardInput, StickyCard, StickyProfile } from "../../domain/sticky";
 import type { InboxDelivery } from "../../domain/delivery";
+import type { AgentProposal } from "../../domain/proposal";
 import { playPageTurnSound } from "./pageTurnSound";
 import { StickyHome } from "./StickyHome";
 
@@ -48,6 +50,12 @@ const readingPort: ReadingPlansPort = {
   setPlanStatus: vi.fn(),
   generateToday: vi.fn(),
   createSession: vi.fn(),
+};
+
+const proposalPort: AgentProposalsPort = {
+  listForDocument: vi.fn(async () => []),
+  accept: vi.fn(),
+  reject: vi.fn(),
 };
 
 function makeCard(
@@ -133,6 +141,7 @@ function renderHome(
   readerLineSpacingChange = vi.fn(),
   readerDocuments: ReaderDocumentsPort = readerPort,
   deliveries: DeliveriesPort = deliveryPort,
+  proposals: AgentProposalsPort = proposalPort,
 ) {
   return render(
     <StickyHome
@@ -140,6 +149,7 @@ function renderHome(
       readerPort={readerDocuments}
       deliveryPort={deliveries}
       readingPort={readingPort}
+      proposalPort={proposals}
       preferences={preferences}
       preferenceSaveState="idle"
       now={new Date("2026-08-12T12:00:00")}
@@ -154,6 +164,20 @@ function renderHome(
       onCurrentReaderDocumentChange={vi.fn()}
     />,
   );
+}
+
+function todoProposal(id: string, content: string): AgentProposal {
+  return {
+    id,
+    type: "todo",
+    title: content,
+    description: "Agent 从会议总结中提取的下一步行动。",
+    payloadJson: JSON.stringify({ content }),
+    sourceDeliveryId: "delivery-test",
+    status: "pending",
+    createdAt: "2026-08-22T08:00:00Z",
+    resolvedAt: null,
+  };
 }
 
 class MemoryDeliveryPort implements DeliveriesPort {
@@ -220,6 +244,51 @@ async function expand(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("StickyHome M1-B4", () => {
+  it("adds three reviewed Agent suggestions to Sticky Todo only after acceptance", async () => {
+    const user = userEvent.setup();
+    const sticky = new MemoryStickyPort();
+    const suggested = [
+      todoProposal("proposal-1", "整理会议纪要"),
+      todoProposal("proposal-2", "确认下周负责人"),
+      todoProposal("proposal-3", "发送项目时间表"),
+    ];
+    const proposals: AgentProposalsPort = {
+      listForDocument: vi.fn(async () => suggested),
+      accept: vi.fn(async (id: string) => {
+        const proposal = suggested.find((item) => item.id === id)!;
+        proposal.status = "accepted";
+        return {
+          proposal: { ...proposal },
+          card: makeCard(`card-${id}`, "task", proposal.title, sticky.cards.length),
+          readingSession: null,
+        };
+      }),
+      reject: vi.fn(),
+    };
+    renderHome(
+      sticky,
+      vi.fn(),
+      defaultPreferences,
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      readerPort,
+      deliveryPort,
+      proposals,
+    );
+
+    const proposalRegion = await screen.findByRole("complementary", { name: "Agent 建议" });
+    expect(within(proposalRegion).getAllByRole("button", { name: "加入待办" })).toHaveLength(3);
+    for (const button of within(proposalRegion).getAllByRole("button", { name: "加入待办" })) {
+      await user.click(button);
+    }
+    await expand(user);
+    await user.click(screen.getByRole("tab", { name: /待办/ }));
+    expect(screen.getByText("整理会议纪要")).toBeVisible();
+    expect(screen.getByText("确认下周负责人")).toBeVisible();
+    expect(screen.getByText("发送项目时间表")).toBeVisible();
+  });
+
   it("navigates Reader to Inbox and opens a Delivery into visible Reader content", async () => {
     const user = userEvent.setup();
     const deliveries = new MemoryDeliveryPort([inboxDelivery("a", "Agent 今日简报")]);
@@ -574,6 +643,7 @@ describe("StickyHome M1-B4", () => {
         readerPort={readerPort}
         deliveryPort={deliveryPort}
         readingPort={readingPort}
+        proposalPort={proposalPort}
         preferences={{ ...defaultPreferences, stickyMode: "mini" }}
         preferenceSaveState="idle"
         now={new Date("2026-08-12T12:00:00")}

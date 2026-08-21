@@ -171,7 +171,7 @@ mod tests {
               AND name IN (
                   'cards', 'note_payloads', 'task_payloads', 'card_placements',
                   'sticky_surface_profile', 'reader_documents', 'record_source_refs', 'deliveries',
-                  'reading_plans', 'reading_plan_deliveries', 'reading_sessions'
+                  'reading_plans', 'reading_plan_deliveries', 'reading_sessions', 'agent_proposals'
               )
             "#,
         )
@@ -189,8 +189,8 @@ mod tests {
                 .await
                 .expect("migration history query");
 
-        assert_eq!(table_count, 11);
-        assert_eq!(applied_versions, vec![1, 2, 3, 4, 5, 6]);
+        assert_eq!(table_count, 12);
+        assert_eq!(applied_versions, vec![1, 2, 3, 4, 5, 6, 7]);
         assert_eq!(foreign_keys, 1);
     }
 
@@ -264,7 +264,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7]);
         assert_eq!(note, "保留的记录");
         assert_eq!(
             task,
@@ -334,7 +334,7 @@ mod tests {
             .fetch_one(&upgraded.0)
             .await
             .unwrap();
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7]);
         assert_eq!(note, "0004 保留记录");
         assert_eq!(
             reader,
@@ -403,7 +403,7 @@ mod tests {
         .fetch_one(&upgraded.0)
         .await
         .unwrap();
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7]);
         assert_eq!(
             delivery,
             (
@@ -412,6 +412,74 @@ mod tests {
             )
         );
         assert_eq!(reading_tables, 3);
+    }
+
+    #[tokio::test]
+    async fn upgrades_a_0006_database_without_changing_reading_or_delivery_data() {
+        let temp = tempfile::tempdir().expect("temp directory");
+        let database_path = temp.path().join("upgrade-0006.sqlite3");
+        let database = connect(&database_path).await.unwrap();
+        sqlx::raw_sql(
+            r#"
+            DROP TABLE agent_proposals;
+            DELETE FROM _sqlx_migrations WHERE version = 7;
+
+            INSERT INTO reader_documents (
+                id, document_type, title, subtitle, content_markdown,
+                source_type, source_label, created_at, updated_at
+            ) VALUES
+                ('source-0006', 'brief', '0006 来源', NULL, '来源正文', 'agent', '迁移测试',
+                 '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z'),
+                ('session-document-0006', 'reading', '0006 今日阅读', NULL, '会话正文', 'local',
+                 '迁移测试', '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z');
+            INSERT INTO deliveries (
+                id, document_id, idempotency_key, delivered_at, opened_at
+            ) VALUES (
+                'delivery-0006', 'source-0006', 'existing-key-0006',
+                '2026-08-01T00:00:00Z', '2026-08-01T01:00:00Z'
+            );
+            INSERT INTO reading_sessions (
+                id, source_document_id, reader_document_id, content, estimated_minutes, created_at
+            ) VALUES (
+                'session-0006', 'source-0006', 'session-document-0006',
+                '会话正文', 2, '2026-08-01T01:00:00Z'
+            );
+            "#,
+        )
+        .execute(&database.0)
+        .await
+        .unwrap();
+        database.0.close().await;
+
+        let upgraded = connect(&database_path).await.unwrap();
+        let versions: Vec<i64> =
+            sqlx::query_scalar("SELECT version FROM _sqlx_migrations ORDER BY version")
+                .fetch_all(&upgraded.0)
+                .await
+                .unwrap();
+        let preserved: (String, String, i64) = sqlx::query_as(
+            r#"
+            SELECT d.id, s.content, s.estimated_minutes
+            FROM deliveries d
+            JOIN reading_sessions s ON s.source_document_id = d.document_id
+            WHERE d.id = 'delivery-0006'
+            "#,
+        )
+        .fetch_one(&upgraded.0)
+        .await
+        .unwrap();
+        let proposal_table: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'agent_proposals'",
+        )
+        .fetch_one(&upgraded.0)
+        .await
+        .unwrap();
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(
+            preserved,
+            ("delivery-0006".to_owned(), "会话正文".to_owned(), 2)
+        );
+        assert_eq!(proposal_table, 1);
     }
 
     #[tokio::test]

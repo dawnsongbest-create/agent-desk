@@ -3,6 +3,7 @@ mod delivery;
 pub mod domain;
 pub mod persistence;
 mod preferences;
+mod proposal;
 mod reader;
 mod reading;
 mod shell;
@@ -60,6 +61,8 @@ pub fn run() {
                 persistence::delivery_repository::SqliteDeliveryRepository::new(database.0.clone());
             let reading_repository =
                 persistence::reading_repository::SqliteReadingRepository::new(database.0.clone());
+            let proposal_repository =
+                persistence::proposal_repository::SqliteProposalRepository::new(database.0.clone());
 
             app.manage(database);
             app.manage(sticky::StickyState::new(sticky_repository));
@@ -69,6 +72,7 @@ pub fn run() {
                 reading_repository,
                 delivery_repository,
             ));
+            app.manage(proposal::ProposalState::new(proposal_repository));
             preferences::initialize(app.handle()).map_err(std::io::Error::other)?;
             shell::setup_tray(app)?;
             shell::restore_main_window(app.handle())?;
@@ -112,7 +116,11 @@ pub fn run() {
             reading::list_reading_plans,
             reading::set_reading_plan_status,
             reading::generate_reading_delivery,
-            reading::create_reading_session
+            reading::create_reading_session,
+            proposal::create_agent_proposal,
+            proposal::list_agent_proposals,
+            proposal::accept_agent_proposal,
+            proposal::reject_agent_proposal
         ])
         .run(tauri::generate_context!())
         .expect("error while running Agent Desk");

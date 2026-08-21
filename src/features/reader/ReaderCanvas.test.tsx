@@ -67,6 +67,11 @@ function emptyReadingProps() {
     onCreateReadingPlan: vi.fn(async () => true),
     onGenerateReadingDelivery: vi.fn(async () => true),
     onSetReadingPlanStatus: vi.fn(async () => undefined),
+    agentProposals: [],
+    proposalBusyId: null,
+    proposalErrorId: null,
+    onAcceptProposal: vi.fn(),
+    onRejectProposal: vi.fn(),
   };
 }
 

@@ -9,11 +9,13 @@ import type {
 import type { ReaderDocument } from "../../domain/reader";
 import type { InboxDelivery } from "../../domain/delivery";
 import type { CreateReadingPlanInput, ReadingPlan, ReadingPlanStatus } from "../../domain/reading";
+import type { AgentProposal } from "../../domain/proposal";
 import { InboxList } from "../inbox/InboxList";
 import type { InboxLoadState } from "../inbox/useInbox";
 import { ReadingPlanPanel } from "../reading/ReadingPlanPanel";
 import type { ReadingPlansState } from "../reading/useReadingPlans";
 import type { ReaderLoadState } from "./useReaderDocument";
+import { AgentProposalCards } from "../proposal/AgentProposalCards";
 
 type ReaderCanvasProps = {
   skin: ReaderSkin;
@@ -32,6 +34,9 @@ type ReaderCanvasProps = {
   readingPlansState: ReadingPlansState;
   readingPlansError: string | null;
   readingBusyPlanId: string | null;
+  agentProposals: AgentProposal[];
+  proposalBusyId: string | null;
+  proposalErrorId: string | null;
   contentVisible: boolean;
   onRetry(): void;
   onRetryInbox(): void;
@@ -45,6 +50,8 @@ type ReaderCanvasProps = {
   onCreateReadingPlan(input: CreateReadingPlanInput): Promise<boolean>;
   onGenerateReadingDelivery(id: string): Promise<boolean>;
   onSetReadingPlanStatus(id: string, status: ReadingPlanStatus): Promise<void>;
+  onAcceptProposal(id: string): void;
+  onRejectProposal(id: string): void;
 };
 
 type SelectionStatus =
@@ -102,6 +109,9 @@ export function ReaderCanvas({
   readingPlansState,
   readingPlansError,
   readingBusyPlanId,
+  agentProposals,
+  proposalBusyId,
+  proposalErrorId,
   contentVisible,
   onRetry,
   onRetryInbox,
@@ -115,6 +125,8 @@ export function ReaderCanvas({
   onCreateReadingPlan,
   onGenerateReadingDelivery,
   onSetReadingPlanStatus,
+  onAcceptProposal,
+  onRejectProposal,
 }: ReaderCanvasProps) {
   const contentRef = useRef<HTMLElement>(null);
   const scrollViewportRef = useRef<HTMLDivElement>(null);
@@ -368,6 +380,13 @@ export function ReaderCanvas({
                 {document.contentMarkdown}
               </ReactMarkdown>
             </div>
+            <AgentProposalCards
+              proposals={agentProposals}
+              busyId={proposalBusyId}
+              errorId={proposalErrorId}
+              onAccept={onAcceptProposal}
+              onReject={onRejectProposal}
+            />
             <p className="reader-end-mark" aria-hidden="true">
               ✦
             </p>
