@@ -1,0 +1,69 @@
+{
+  "gate": "M3-C2",
+  "fixture": "D:\\agent-desk-m3c2-smoke-1abda22-20260822-04",
+  "productOwnerAppDataUsed": false,
+  "executable": "D:\\agent-desk-target\\release\\agent-desk.exe",
+  "executableSha256": "380E75E14926D25395F02B4E939F7761DF1FA36503CA199CDE52EA6C6A3AB9B6",
+  "process": {
+    "firstPid": 5016,
+    "restartPid": 31128,
+    "aliveBeyondTenSeconds": true,
+    "webView2Loaded": true,
+    "nativeWindowObserved": true,
+    "residualSmokeProcesses": 0
+  },
+  "bridge": {
+    "bind": "127.0.0.1:47432",
+    "apiVersion": "v1",
+    "missingTokenStatus": 401,
+    "invalidTokenStatus": 401,
+    "healthStatus": 200,
+    "capabilitiesStatus": 200,
+    "restartHealthStatusWithSameToken": 200,
+    "plaintextTokenMatchesInDatabase": 0,
+    "plaintextTokenVisibleAfterReloadOrRestart": false
+  },
+  "openClaw": {
+    "deliveryStatus": 200,
+    "duplicateCreated": false,
+    "changedIdempotencyPayloadStatus": 409,
+    "directTodoMutationStatus": 403,
+    "spoofedAgentIdentityStatus": 400,
+    "proposalStatus": 200,
+    "readingPlanStatus": 200,
+    "deliveryId": "delivery_4627f5669b4ddb2a35f4be90817267a3",
+    "proposalId": "proposal_05d256380b9890a6b4c224665fdc52ea",
+    "readingPlanId": "reading_plan_b9ea771d9a9138386c3806c6d49a3431"
+  },
+  "uiWorkflow": {
+    "deliveryOpenedFromInbox": true,
+    "readerDisplayedDelivery": true,
+    "proposalDisplayedInReader": true,
+    "proposalAcceptedByUserAction": true,
+    "readingSessionDisplayed": true,
+    "readingPlanDisplayed": true,
+    "restartRestoredReadingSession": true,
+    "restartRestoredReadingPlan": true
+  },
+  "databaseAfterRestart": {
+    "sha256": "2DFCBCA5D3EA4C1DE64632DAB8A4CE7697081F9337949281F0CF4F008FD9C99C",
+    "migrations": [1, 2, 3, 4, 5, 6, 7, 8],
+    "deliveries": 1,
+    "openedDeliveries": 1,
+    "proposals": 1,
+    "acceptedProposals": 1,
+    "readingPlans": 1,
+    "readingSessions": 1,
+    "workspaceCards": 0,
+    "agentConnections": 1,
+    "activeHashedConnections": 1
+  },
+  "screenshots": [
+    "01-bridge-enabled-redacted.png",
+    "02-delivery-reader-proposal.png",
+    "03-proposal-accepted-reading-session.png",
+    "04-reading-plan.png",
+    "05-restart-reading-session.png",
+    "06-restart-reading-plan.png"
+  ]
+}
