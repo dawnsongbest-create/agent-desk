@@ -1,0 +1,41 @@
+{
+  "gate": "M3-C1 Local Agent Bridge Foundation",
+  "source": {
+    "implementationCommit": "8acd8be85523187fd43a83d74ddf173332b022c8",
+    "branch": "main"
+  },
+  "toolchain": {
+    "node": "22.23.2",
+    "pnpm": "11.16.0",
+    "rustc": "1.97.1",
+    "cargoLock": "locked",
+    "target": "x86_64-pc-windows-msvc"
+  },
+  "frontendBundles": {
+    "dist/index.html": "60571290D6FF6BE5F135BD0C66CD012D894E8AD268A288C01FB7CEBAC95E24BF",
+    "dist/assets/index-CKRSNhVG.css": "CB3811CCA635265E9BC3C0F72FA602DEEAB683EA050F9613DC2A79F51EF3BA36",
+    "dist/assets/index-jZ25nxVs.js": "EA307EC245A3857253F7F775B6EFA8D96C7588D6C2A53700AF5DE9E0FE202312"
+  },
+  "executable": {
+    "truthPath": "D:\\agent-desk-m3c1-truth-target\\release\\agent-desk.exe",
+    "canonicalPath": "D:\\agent-desk-target\\release\\agent-desk.exe",
+    "sha256": "84D7A89AD908B338D89446C1021BE71EA0D1DA27B246EED905F3248F0216A920",
+    "size": 15324160,
+    "timestampUtc": "2026-08-22T04:21:43.5902835Z",
+    "truthEqualsCanonical": true
+  },
+  "productionProof": [
+    "Agent Bridge",
+    "generate_agent_token",
+    "127.0.0.1",
+    "/api/v1",
+    "仅显示这一次"
+  ],
+  "evidenceSha256": {
+    "01-bridge-enabled-token-issued-redacted.png": "E7C4945890BA670B4B1C633EDFBFE10146C28681DF2B5D65251F138065D99937",
+    "02-bridge-restored-after-restart.png": "0A944F64C32FE0E8D7F8F2018504A53C3FF46B13E600F72EA6BAD7C9771ACA4A"
+  },
+  "hostedCi": {
+    "status": "PENDING"
+  }
+}

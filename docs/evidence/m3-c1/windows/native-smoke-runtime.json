@@ -1,0 +1,58 @@
+{
+  "gate": "M3-C1 Local Agent Bridge Foundation",
+  "executable": "D:\\agent-desk-m3c1-truth-target\\release\\agent-desk.exe",
+  "executableSha256": "84D7A89AD908B338D89446C1021BE71EA0D1DA27B246EED905F3248F0216A920",
+  "isolationRoot": "D:\\agent-desk-m3c1-smoke-8acd8be-20260822-02",
+  "firstLaunch": {
+    "pid": 38104,
+    "aliveAfter10Seconds": true,
+    "bridgeEnabledThroughNativeUi": true,
+    "tokenGeneratedThroughNativeUi": true,
+    "tokenShape": {
+      "prefix": "adk_",
+      "length": 68
+    },
+    "tokenIncludedInEvidence": false,
+    "invalidTokenStatus": 401,
+    "health": {
+      "status": 200,
+      "body": {
+        "version": "v1",
+        "status": "ok"
+      }
+    },
+    "capabilities": {
+      "status": 200,
+      "body": {
+        "version": "v1",
+        "delivery": true,
+        "proposal": true,
+        "reading": true
+      }
+    }
+  },
+  "restart": {
+    "pid": 23136,
+    "aliveAfter10Seconds": true,
+    "bridgeRestored": true,
+    "sameTokenHealthStatus": 200,
+    "sameTokenCapabilitiesStatus": 200,
+    "plaintextTokenAbsentFromUi": true,
+    "stickyVisible": true,
+    "readerVisible": true
+  },
+  "database": {
+    "migrations": [1, 2, 3, 4, 5, 6, 7, 8],
+    "connectionCount": 1,
+    "status": "active",
+    "tokenHashLength": 64,
+    "tokenHashHasPlaintextPrefix": false,
+    "lastUsedAtRecorded": true
+  },
+  "finalShutdown": {
+    "residualAgentDeskProcesses": 0,
+    "canonicalLaunchAliveAfter10Seconds": true,
+    "canonicalBridgeRestored": true,
+    "canonicalWebViewLoaded": true
+  }
+}
