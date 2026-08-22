@@ -7,6 +7,7 @@ use tauri::State;
 use tokio::sync::{Mutex, RwLock};
 
 use crate::{
+    adapters::openclaw::OpenClawAdapter,
     application::{
         agent_connection_service::{AgentConnectionService, IssuedAgentToken},
         capability_service::CapabilityService,
@@ -42,13 +43,14 @@ pub struct GenerateAgentTokenResult {
 pub struct AgentBridgeState {
     connections: Arc<AgentConnectionService>,
     capabilities: Arc<CapabilityService>,
+    openclaw: Arc<OpenClawAdapter>,
     configured_port: u16,
     runtime: Mutex<Option<RunningAgentBridge>>,
     last_error: RwLock<Option<String>>,
 }
 
 impl AgentBridgeState {
-    pub fn new(repository: SqliteAgentConnectionRepository) -> Self {
+    pub fn new(repository: SqliteAgentConnectionRepository, openclaw: OpenClawAdapter) -> Self {
         let configured_port = std::env::var(BRIDGE_PORT_ENV)
             .ok()
             .and_then(|value| value.parse().ok())
@@ -56,6 +58,7 @@ impl AgentBridgeState {
         Self {
             connections: Arc::new(AgentConnectionService::new(Arc::new(repository))),
             capabilities: Arc::new(CapabilityService),
+            openclaw: Arc::new(openclaw),
             configured_port,
             runtime: Mutex::new(None),
             last_error: RwLock::new(None),
@@ -81,6 +84,7 @@ impl AgentBridgeState {
                 self.configured_port,
                 self.connections.clone(),
                 self.capabilities.clone(),
+                self.openclaw.clone(),
             )
             .await
             .map_err(|error| format!("Local Agent Bridge could not bind to localhost: {error}"))?;

@@ -86,7 +86,6 @@ pub enum AgentCapabilityAction {
 #[serde(deny_unknown_fields)]
 pub struct AgentRequest {
     pub version: String,
-    pub agent_id: String,
     pub action: AgentCapabilityAction,
 }
 
@@ -104,7 +103,6 @@ mod tests {
     fn request_contract_is_versioned_and_rejects_unknown_fields() {
         let request: AgentRequest = serde_json::from_value(serde_json::json!({
             "version": "v1",
-            "agent_id": "openclaw",
             "action": "capability_check"
         }))
         .unwrap();
@@ -113,8 +111,7 @@ mod tests {
         assert!(serde_json::from_value::<AgentRequest>(serde_json::json!({
             "version": "v1",
             "agent_id": "openclaw",
-            "action": "capability_check",
-            "payload": {}
+            "action": "capability_check"
         }))
         .is_err());
     }

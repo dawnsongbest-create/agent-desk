@@ -11,6 +11,8 @@ mod reading;
 mod shell;
 mod sticky;
 
+use std::sync::Arc;
+
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
@@ -69,8 +71,20 @@ pub fn run() {
                 persistence::agent_connection_repository::SqliteAgentConnectionRepository::new(
                     database.0.clone(),
                 );
+            let openclaw_adapter = adapters::openclaw::OpenClawAdapter::new(
+                application::delivery_service::DeliveryService::new(Arc::new(
+                    delivery_repository.clone(),
+                )),
+                application::proposal_service::ProposalService::new(Arc::new(
+                    proposal_repository.clone(),
+                )),
+                application::reading_service::ReadingService::new(
+                    Arc::new(reading_repository.clone()),
+                    Arc::new(delivery_repository.clone()),
+                ),
+            );
             let agent_bridge_state =
-                agent_bridge::AgentBridgeState::new(agent_connection_repository);
+                agent_bridge::AgentBridgeState::new(agent_connection_repository, openclaw_adapter);
             tauri::async_runtime::block_on(agent_bridge_state.restore());
 
             app.manage(database);

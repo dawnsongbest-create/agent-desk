@@ -25,6 +25,12 @@ pub struct IssuedAgentToken {
     pub connection: AgentConnection,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthenticatedAgentConnection {
+    pub id: String,
+    pub name: String,
+}
+
 #[derive(Clone)]
 pub struct AgentConnectionService {
     repository: Arc<dyn AgentConnectionRepository>,
@@ -62,22 +68,32 @@ impl AgentConnectionService {
         })
     }
 
-    pub async fn authenticate(&self, token: &str) -> Result<bool, AgentConnectionServiceError> {
+    pub async fn authenticate_identity(
+        &self,
+        token: &str,
+    ) -> Result<Option<AuthenticatedAgentConnection>, AgentConnectionServiceError> {
         let Some(connection) = self.repository.get().await? else {
-            return Ok(false);
+            return Ok(None);
         };
         if connection.status != AgentConnectionStatus::Active {
-            return Ok(false);
+            return Ok(None);
         }
         let Some(expected_hash) = connection.token_hash else {
-            return Ok(false);
+            return Ok(None);
         };
         let supplied_hash = hash_token(token);
         if !constant_time_equal(expected_hash.as_bytes(), supplied_hash.as_bytes()) {
-            return Ok(false);
+            return Ok(None);
         }
         self.repository.touch_last_used().await?;
-        Ok(true)
+        Ok(Some(AuthenticatedAgentConnection {
+            id: connection.id,
+            name: connection.name,
+        }))
+    }
+
+    pub async fn authenticate(&self, token: &str) -> Result<bool, AgentConnectionServiceError> {
+        Ok(self.authenticate_identity(token).await?.is_some())
     }
 }
 
