@@ -36,6 +36,12 @@
     "02-bridge-restored-after-restart.png": "0A944F64C32FE0E8D7F8F2018504A53C3FF46B13E600F72EA6BAD7C9771ACA4A"
   },
   "hostedCi": {
-    "status": "PENDING"
+    "runId": 32559004365,
+    "runUrl": "https://github.com/dawnsongbest-create/agent-desk/actions/runs/32559004365",
+    "validatedCommit": "cc650dc0aa1599553929f07f6aa1f6e766b49698",
+    "windowsJobId": 96997567709,
+    "windowsResult": "PASS",
+    "macosJobId": 96997567627,
+    "macosResult": "PASS"
   }
 }

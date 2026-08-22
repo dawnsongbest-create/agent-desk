@@ -86,8 +86,8 @@ Exact local toolchain: Node `22.23.2`, pnpm `11.16.0`, Rust `1.97.1`, locked Car
 | Rust Clippy `-D warnings` | PASS |
 | Rust tests | PASS — 46/46 |
 | Fresh non-bundled Tauri release | PASS |
-| Windows GitHub Actions | PENDING |
-| macOS GitHub Actions | PENDING |
+| Windows GitHub Actions | PASS — job `96997567709` |
+| macOS GitHub Actions | PASS — job `96997567627` |
 
 Regression coverage includes Sticky, Todo, Record large-text save/collapse, Reader, Inbox, Delivery, Reading Agent, and Proposal acceptance/rejection.
 
@@ -134,11 +134,15 @@ Provenance: [Windows provenance](evidence/m3-c1/windows/provenance.json).
 
 ## Hosted CI
 
-Final Windows and macOS workflow results are pending the handoff push.
+GitHub Actions run [`32559004365`](https://github.com/dawnsongbest-create/agent-desk/actions/runs/32559004365) validated the Public `main` handoff commit `cc650dc0aa1599553929f07f6aa1f6e766b49698`.
+
+- Windows `96997567709`: PASS. Format, typecheck, lint, 79 frontend tests, Rust fmt, Clippy, 46 Rust tests, and non-bundled Tauri build all passed.
+- macOS `96997567627`: PASS. The same full workflow, including the real non-bundled Tauri build, passed.
+- Repository visibility remained `public`; default branch remained `main`.
 
 ```text
-M3_C1_GATE_STATUS: PENDING_HOSTED_CI
-AGENT_BRIDGE_STATUS: LOCAL_FOUNDATION_READY
+M3_C1_GATE_STATUS: AWAITING_PRODUCT_AND_TECH_REVIEW
+AGENT_BRIDGE_STATUS: FOUNDATION_READY
 OPENCLAW_STATUS: READY_FOR_ADAPTER_IMPLEMENTATION
 MCP_STATUS: NOT_STARTED
 A2A_STATUS: NOT_STARTED
