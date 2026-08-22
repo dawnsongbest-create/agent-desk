@@ -15,6 +15,7 @@ dependencies = [
  "async-trait",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "sqlx",
  "tauri",
  "tauri-build",
@@ -25,6 +26,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

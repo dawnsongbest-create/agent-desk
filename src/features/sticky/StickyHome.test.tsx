@@ -6,6 +6,7 @@ import type { ReaderDocumentsPort } from "../../application/ports/reader";
 import type { DeliveriesPort } from "../../application/ports/delivery";
 import type { ReadingPlansPort } from "../../application/ports/reading";
 import type { AgentProposalsPort } from "../../application/ports/proposal";
+import type { AgentConnectionPort } from "../../application/ports/agentConnection";
 import { defaultPreferences, type Preferences } from "../../domain/preferences";
 import type { ReaderDocument } from "../../domain/reader";
 import type { CreateStickyCardInput, StickyCard, StickyProfile } from "../../domain/sticky";
@@ -56,6 +57,23 @@ const proposalPort: AgentProposalsPort = {
   listForDocument: vi.fn(async () => []),
   accept: vi.fn(),
   reject: vi.fn(),
+};
+
+const agentConnectionPort: AgentConnectionPort = {
+  getStatus: vi.fn(async () => ({
+    version: "v1" as const,
+    enabled: false,
+    running: false,
+    bindAddress: "127.0.0.1" as const,
+    port: 47321,
+    endpoint: "http://127.0.0.1:47321/api/v1",
+    connection: null,
+    lastError: null,
+  })),
+  start: vi.fn(),
+  stop: vi.fn(),
+  generateToken: vi.fn(),
+  copyToken: vi.fn(),
 };
 
 function makeCard(
@@ -150,6 +168,7 @@ function renderHome(
       deliveryPort={deliveries}
       readingPort={readingPort}
       proposalPort={proposals}
+      agentConnectionPort={agentConnectionPort}
       preferences={preferences}
       preferenceSaveState="idle"
       now={new Date("2026-08-12T12:00:00")}
@@ -644,6 +663,7 @@ describe("StickyHome M1-B4", () => {
         deliveryPort={deliveryPort}
         readingPort={readingPort}
         proposalPort={proposalPort}
+        agentConnectionPort={agentConnectionPort}
         preferences={{ ...defaultPreferences, stickyMode: "mini" }}
         preferenceSaveState="idle"
         now={new Date("2026-08-12T12:00:00")}

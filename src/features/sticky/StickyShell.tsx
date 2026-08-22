@@ -36,6 +36,7 @@ import type { ReaderDocument } from "../../domain/reader";
 import type { InboxDelivery } from "../../domain/delivery";
 import type { CreateReadingPlanInput, ReadingPlan, ReadingPlanStatus } from "../../domain/reading";
 import type { AgentProposal } from "../../domain/proposal";
+import type { AgentBridgeStatus } from "../../domain/agentConnection";
 import {
   compactDragFrame,
   readerFontSizes,
@@ -60,6 +61,8 @@ import type { ReaderLoadState } from "../reader/useReaderDocument";
 import type { ReadingPlansState } from "../reading/useReadingPlans";
 import { playPageTurnSound } from "./pageTurnSound";
 import type { StickyLoadState } from "./useStickyCards";
+import { AgentBridgeSettings } from "../agentBridge/AgentBridgeSettings";
+import type { AgentBridgeLoadState } from "../agentBridge/useAgentBridge";
 
 type SaveState = "loading" | "idle" | "saving" | "saved" | "error";
 type StickyFace = "note" | "task";
@@ -81,6 +84,10 @@ type StickyShellProps = {
   agentProposals: AgentProposal[];
   proposalBusyId: string | null;
   proposalErrorId: string | null;
+  agentBridgeStatus: AgentBridgeStatus | null;
+  agentBridgeState: AgentBridgeLoadState;
+  issuedAgentToken: string | null;
+  agentTokenCopied: boolean;
   preferenceSaveState: SaveState;
   cards: StickyCard[];
   profile: StickyProfile;
@@ -107,6 +114,10 @@ type StickyShellProps = {
   onSetReadingPlanStatus(id: string, status: ReadingPlanStatus): Promise<void>;
   onAcceptProposal(id: string): Promise<boolean>;
   onRejectProposal(id: string): Promise<boolean>;
+  onAgentBridgeEnabledChange(enabled: boolean): Promise<void>;
+  onGenerateAgentToken(): Promise<void>;
+  onCopyAgentToken(): Promise<void>;
+  onRetryAgentBridge(): Promise<void>;
   onCreate(input: CreateStickyCardInput): Promise<boolean>;
   onUpdateText(id: string, text: string): Promise<boolean>;
   onTaskCompleted(id: string, completed: boolean): Promise<void>;
@@ -149,19 +160,35 @@ const SNAP_DISTANCE = 28;
 function SettingsMenu({
   preferences,
   saveState,
+  agentBridgeStatus,
+  agentBridgeState,
+  issuedAgentToken,
+  agentTokenCopied,
   onThemeChange,
   onAlwaysOnTopChange,
   onWindowPresetChange,
   onReaderFontSizeChange,
   onReaderLineSpacingChange,
+  onAgentBridgeEnabledChange,
+  onGenerateAgentToken,
+  onCopyAgentToken,
+  onRetryAgentBridge,
 }: {
   preferences: Preferences;
   saveState: SaveState;
+  agentBridgeStatus: AgentBridgeStatus | null;
+  agentBridgeState: AgentBridgeLoadState;
+  issuedAgentToken: string | null;
+  agentTokenCopied: boolean;
   onThemeChange(theme: ThemeMode): void;
   onAlwaysOnTopChange(alwaysOnTop: boolean): void;
   onWindowPresetChange(preset: WindowPreset): void;
   onReaderFontSizeChange(size: ReaderFontSize): void;
   onReaderLineSpacingChange(spacing: ReaderLineSpacing): void;
+  onAgentBridgeEnabledChange(enabled: boolean): void;
+  onGenerateAgentToken(): void;
+  onCopyAgentToken(): void;
+  onRetryAgentBridge(): void;
 }) {
   const [open, setOpen] = useState(false);
   const disabled = saveState === "loading" || saveState === "saving";
@@ -255,6 +282,23 @@ function SettingsMenu({
                 ))}
             </div>
             {preferences.windowPreset === "custom" ? <small>当前：Custom</small> : null}
+          </div>
+          <div className="settings-rule" />
+          <div className="settings-section">
+            <div className="settings-heading">
+              <strong>Agent Bridge</strong>
+              <span>本机连接</span>
+            </div>
+            <AgentBridgeSettings
+              status={agentBridgeStatus}
+              state={agentBridgeState}
+              issuedToken={issuedAgentToken}
+              copied={agentTokenCopied}
+              onEnabledChange={onAgentBridgeEnabledChange}
+              onGenerateToken={onGenerateAgentToken}
+              onCopyToken={onCopyAgentToken}
+              onRetry={onRetryAgentBridge}
+            />
           </div>
           <div className="settings-rule" />
           <button
@@ -998,6 +1042,10 @@ export function StickyShell(props: StickyShellProps) {
     agentProposals,
     proposalBusyId,
     proposalErrorId,
+    agentBridgeStatus,
+    agentBridgeState,
+    issuedAgentToken,
+    agentTokenCopied,
     preferenceSaveState,
     cards,
     profile,
@@ -1024,6 +1072,10 @@ export function StickyShell(props: StickyShellProps) {
     onSetReadingPlanStatus,
     onAcceptProposal,
     onRejectProposal,
+    onAgentBridgeEnabledChange,
+    onGenerateAgentToken,
+    onCopyAgentToken,
+    onRetryAgentBridge,
     onCreate,
     onUpdateText,
     onTaskCompleted,
@@ -1198,11 +1250,19 @@ export function StickyShell(props: StickyShellProps) {
           <SettingsMenu
             preferences={preferences}
             saveState={preferenceSaveState}
+            agentBridgeStatus={agentBridgeStatus}
+            agentBridgeState={agentBridgeState}
+            issuedAgentToken={issuedAgentToken}
+            agentTokenCopied={agentTokenCopied}
             onThemeChange={onThemeChange}
             onAlwaysOnTopChange={onAlwaysOnTopChange}
             onWindowPresetChange={onWindowPresetChange}
             onReaderFontSizeChange={onReaderFontSizeChange}
             onReaderLineSpacingChange={onReaderLineSpacingChange}
+            onAgentBridgeEnabledChange={(enabled) => void onAgentBridgeEnabledChange(enabled)}
+            onGenerateAgentToken={() => void onGenerateAgentToken()}
+            onCopyAgentToken={() => void onCopyAgentToken()}
+            onRetryAgentBridge={() => void onRetryAgentBridge()}
           />
         </div>
       </header>

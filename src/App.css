@@ -1998,6 +1998,89 @@ textarea:disabled {
   font-size: 0.58rem;
 }
 
+.agent-bridge-settings {
+  display: grid;
+  gap: 7px;
+}
+
+.agent-bridge-status-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--popover-muted);
+  font-size: 0.6rem;
+}
+
+.agent-bridge-status-row code {
+  margin-left: auto;
+  color: var(--popover-ink);
+  font-size: 0.55rem;
+}
+
+.agent-bridge-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #9a958b;
+  box-shadow: 0 0 0 2px rgb(154 149 139 / 15%);
+}
+
+.agent-bridge-status-dot[data-running="true"] {
+  background: #53846a;
+  box-shadow: 0 0 0 2px rgb(83 132 106 / 18%);
+}
+
+.agent-bridge-endpoint,
+.agent-token-once code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--popover-ink);
+  font-size: 0.56rem;
+  line-height: 1.35;
+}
+
+.agent-bridge-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.agent-bridge-actions button,
+.agent-bridge-settings > button,
+.agent-token-once button {
+  border: 1px solid var(--popover-line);
+  border-radius: 7px;
+  padding: 6px 4px;
+  color: var(--popover-ink);
+  background: transparent;
+  font: inherit;
+  font-size: 0.59rem;
+  cursor: pointer;
+}
+
+.agent-bridge-settings button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.agent-bridge-settings > small,
+.agent-token-once small,
+.agent-bridge-settings p {
+  margin: 0;
+  color: var(--popover-muted);
+  font-size: 0.56rem;
+  line-height: 1.4;
+}
+
+.agent-token-once {
+  display: grid;
+  gap: 6px;
+  border: 1px dashed var(--popover-line);
+  border-radius: 8px;
+  padding: 7px;
+  background: var(--popover-soft);
+}
+
 .preset-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

@@ -171,7 +171,8 @@ mod tests {
               AND name IN (
                   'cards', 'note_payloads', 'task_payloads', 'card_placements',
                   'sticky_surface_profile', 'reader_documents', 'record_source_refs', 'deliveries',
-                  'reading_plans', 'reading_plan_deliveries', 'reading_sessions', 'agent_proposals'
+                  'reading_plans', 'reading_plan_deliveries', 'reading_sessions', 'agent_proposals',
+                  'agent_connections'
               )
             "#,
         )
@@ -189,8 +190,8 @@ mod tests {
                 .await
                 .expect("migration history query");
 
-        assert_eq!(table_count, 12);
-        assert_eq!(applied_versions, vec![1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(table_count, 13);
+        assert_eq!(applied_versions, vec![1, 2, 3, 4, 5, 6, 7, 8]);
         assert_eq!(foreign_keys, 1);
     }
 
@@ -264,7 +265,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8]);
         assert_eq!(note, "保留的记录");
         assert_eq!(
             task,
@@ -334,7 +335,7 @@ mod tests {
             .fetch_one(&upgraded.0)
             .await
             .unwrap();
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8]);
         assert_eq!(note, "0004 保留记录");
         assert_eq!(
             reader,
@@ -403,7 +404,7 @@ mod tests {
         .fetch_one(&upgraded.0)
         .await
         .unwrap();
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8]);
         assert_eq!(
             delivery,
             (
@@ -474,7 +475,7 @@ mod tests {
         .fetch_one(&upgraded.0)
         .await
         .unwrap();
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8]);
         assert_eq!(
             preserved,
             ("delivery-0006".to_owned(), "会话正文".to_owned(), 2)

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   openReader: vi.fn(),
   captureSelection: vi.fn(),
   copyText: vi.fn(),
+  getAgentBridgeStatus: vi.fn(),
 }));
 
 vi.mock("./infrastructure/tauri/preferences", () => ({
@@ -48,6 +49,16 @@ vi.mock("./infrastructure/tauri/reader", () => ({
   },
 }));
 
+vi.mock("./infrastructure/tauri/agentConnection", () => ({
+  tauriAgentConnection: {
+    getStatus: mocks.getAgentBridgeStatus,
+    start: vi.fn(),
+    stop: vi.fn(),
+    generateToken: vi.fn(),
+    copyToken: vi.fn(),
+  },
+}));
+
 import App from "./App";
 
 describe("App Reader preferences", () => {
@@ -67,6 +78,16 @@ describe("App Reader preferences", () => {
       sourceLabel: "测试",
       createdAt: "2026-08-12T00:00:00Z",
       updatedAt: "2026-08-12T00:00:00Z",
+    });
+    mocks.getAgentBridgeStatus.mockResolvedValue({
+      version: "v1",
+      enabled: false,
+      running: false,
+      bindAddress: "127.0.0.1",
+      port: 47321,
+      endpoint: "http://127.0.0.1:47321/api/v1",
+      connection: null,
+      lastError: null,
     });
   });
 

@@ -7,6 +7,7 @@ import { tauriDeliveries } from "./infrastructure/tauri/delivery";
 import { tauriReaderDocuments } from "./infrastructure/tauri/reader";
 import { tauriReadingPlans } from "./infrastructure/tauri/reading";
 import { tauriAgentProposals } from "./infrastructure/tauri/proposal";
+import { tauriAgentConnection } from "./infrastructure/tauri/agentConnection";
 import { tauriStickyCards } from "./infrastructure/tauri/sticky";
 import { applyTheme } from "./styles/theme";
 import "./App.css";
@@ -70,6 +71,7 @@ function App() {
       deliveryPort={tauriDeliveries}
       readingPort={tauriReadingPlans}
       proposalPort={tauriAgentProposals}
+      agentConnectionPort={tauriAgentConnection}
       preferences={preferences}
       preferenceSaveState={saveState}
       onThemeChange={(theme) => save({ ...preferencesRef.current, theme })}

@@ -17,3 +17,7 @@
 `0005_delivery_inbox.sql` adds the minimal Delivery envelope linked one-to-one to a durable ReaderDocument, with a unique idempotency key and nullable first-open timestamp. It does not add Gateway, Agent, notification, archive, status, progress, or cursor state.
 
 `0006_reading_plan.sql` adds the local Reading Plan, its durable mapping to deliveries created through the existing Delivery Service, and selection-derived Reading Sessions. It does not add an Agent Gateway, remote credentials, cloud state, notifications, or scheduler execution.
+
+`0007_agent_proposal.sql` adds durable, reviewable Agent proposals. Workspace mutation remains behind explicit user acceptance.
+
+`0008_agent_connection.sql` adds the single local Bridge connection and stores only a one-way token hash, lifecycle state, and audit timestamps. It does not store plaintext credentials or grant direct workspace mutation.

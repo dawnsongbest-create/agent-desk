@@ -3,6 +3,7 @@ import type { ReaderDocumentsPort } from "../../application/ports/reader";
 import type { DeliveriesPort } from "../../application/ports/delivery";
 import type { ReadingPlansPort } from "../../application/ports/reading";
 import type { AgentProposalsPort } from "../../application/ports/proposal";
+import type { AgentConnectionPort } from "../../application/ports/agentConnection";
 import type { CreateReadingPlanInput, ReadingPlanStatus } from "../../domain/reading";
 import type {
   Preferences,
@@ -19,6 +20,7 @@ import { useReaderDocument } from "../reader/useReaderDocument";
 import { useInbox } from "../inbox/useInbox";
 import { useReadingPlans } from "../reading/useReadingPlans";
 import { useAgentProposals } from "../proposal/useAgentProposals";
+import { useAgentBridge } from "../agentBridge/useAgentBridge";
 
 type StickyHomeProps = {
   port: StickyCardsPort;
@@ -26,6 +28,7 @@ type StickyHomeProps = {
   deliveryPort: DeliveriesPort;
   readingPort: ReadingPlansPort;
   proposalPort: AgentProposalsPort;
+  agentConnectionPort: AgentConnectionPort;
   preferences: Preferences;
   preferenceSaveState: "loading" | "idle" | "saving" | "saved" | "error";
   now?: Date;
@@ -46,6 +49,7 @@ export function StickyHome({
   deliveryPort,
   readingPort,
   proposalPort,
+  agentConnectionPort,
   preferences,
   preferenceSaveState,
   now,
@@ -69,6 +73,7 @@ export function StickyHome({
   const inbox = useInbox(deliveryPort, preferenceSaveState !== "loading");
   const reading = useReadingPlans(readingPort, preferenceSaveState !== "loading");
   const proposals = useAgentProposals(proposalPort, reader.document?.id ?? null);
+  const agentBridge = useAgentBridge(agentConnectionPort);
 
   async function captureSelection(documentId: string, text: string) {
     try {
@@ -145,6 +150,10 @@ export function StickyHome({
       agentProposals={proposals.proposals}
       proposalBusyId={proposals.busyId}
       proposalErrorId={proposals.errorId}
+      agentBridgeStatus={agentBridge.status}
+      agentBridgeState={agentBridge.state}
+      issuedAgentToken={agentBridge.issuedToken}
+      agentTokenCopied={agentBridge.copied}
       preferenceSaveState={preferenceSaveState}
       cards={sticky.cards}
       profile={sticky.profile}
@@ -171,6 +180,10 @@ export function StickyHome({
       onSetReadingPlanStatus={setReadingPlanStatus}
       onAcceptProposal={acceptProposal}
       onRejectProposal={proposals.reject}
+      onAgentBridgeEnabledChange={agentBridge.setEnabled}
+      onGenerateAgentToken={agentBridge.generateToken}
+      onCopyAgentToken={agentBridge.copyToken}
+      onRetryAgentBridge={agentBridge.refresh}
       onCreate={sticky.create}
       onUpdateText={sticky.updateText}
       onTaskCompleted={sticky.setTaskCompleted}

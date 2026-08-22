@@ -1,3 +1,5 @@
+pub mod adapters;
+mod agent_bridge;
 pub mod application;
 mod delivery;
 pub mod domain;
@@ -63,6 +65,13 @@ pub fn run() {
                 persistence::reading_repository::SqliteReadingRepository::new(database.0.clone());
             let proposal_repository =
                 persistence::proposal_repository::SqliteProposalRepository::new(database.0.clone());
+            let agent_connection_repository =
+                persistence::agent_connection_repository::SqliteAgentConnectionRepository::new(
+                    database.0.clone(),
+                );
+            let agent_bridge_state =
+                agent_bridge::AgentBridgeState::new(agent_connection_repository);
+            tauri::async_runtime::block_on(agent_bridge_state.restore());
 
             app.manage(database);
             app.manage(sticky::StickyState::new(sticky_repository));
@@ -73,6 +82,7 @@ pub fn run() {
                 delivery_repository,
             ));
             app.manage(proposal::ProposalState::new(proposal_repository));
+            app.manage(agent_bridge_state);
             preferences::initialize(app.handle()).map_err(std::io::Error::other)?;
             shell::setup_tray(app)?;
             shell::restore_main_window(app.handle())?;
@@ -120,7 +130,11 @@ pub fn run() {
             proposal::create_agent_proposal,
             proposal::list_agent_proposals,
             proposal::accept_agent_proposal,
-            proposal::reject_agent_proposal
+            proposal::reject_agent_proposal,
+            agent_bridge::get_agent_bridge_status,
+            agent_bridge::start_agent_bridge,
+            agent_bridge::stop_agent_bridge,
+            agent_bridge::generate_agent_token
         ])
         .run(tauri::generate_context!())
         .expect("error while running Agent Desk");
