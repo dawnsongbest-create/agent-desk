@@ -164,10 +164,13 @@ Truth and canonical are byte-identical, size `15,775,232` bytes. Full provenance
 
 ## Hosted CI
 
-Final Windows/macOS GitHub Actions: pending public `main` handoff.
+GitHub Actions run: [32871182646](https://github.com/dawnsongbest-create/agent-desk/actions/runs/32871182646)
+
+- Windows (`windows-latest`): PASS — [job 97878313820](https://github.com/dawnsongbest-create/agent-desk/actions/runs/32871182646/job/97878313820)
+- macOS (`macos-latest`): PASS — [job 97878314198](https://github.com/dawnsongbest-create/agent-desk/actions/runs/32871182646/job/97878314198)
 
 ```text
-M4_A1_1_GATE_STATUS: LOCAL_GATES_PASS_CI_PENDING
+M4_A1_1_GATE_STATUS: AWAITING_PRODUCT_AND_TECH_REVIEW
 DESKTOP_FIRST_STATUS: READY
 EDGE_DOCK_STATUS: FOUNDATION_READY
 AI_READING_STATUS: NOT_STARTED
