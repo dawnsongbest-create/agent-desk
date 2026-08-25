@@ -1,0 +1,85 @@
+{
+  "gate": "M4-A1.1 + M4-A2",
+  "platform": "Windows",
+  "canonicalExecutable": {
+    "path": "D:\\agent-desk-target\\release\\agent-desk.exe",
+    "sha256": "6AA3655672EFF0DD3E040BA99351EEF3E21EECD54F552DF7341D55CA8C678586"
+  },
+  "isolation": {
+    "fixtureRoot": "D:\\agent-desk-m4a2-smoke-65b78cd-20260826-01",
+    "isolatedSqlite": true,
+    "isolatedPreferenceStore": true,
+    "isolatedWindowState": true,
+    "isolatedWebView2Profile": true,
+    "fixtureRemovedAfterSmoke": true,
+    "productOwnerAppDataUsed": false,
+    "productOwnerDatabaseUnchanged": true,
+    "productOwnerPreferencesUnchanged": true,
+    "productOwnerWindowStateUnchanged": true
+  },
+  "process": {
+    "firstLaunchPid": 40040,
+    "classicRestartPid": 44076,
+    "edgeRestartPid": 38516,
+    "aliveBeyondTenSeconds": true,
+    "webView2Loaded": true,
+    "exactCanonicalPath": true,
+    "finalResidualAgentDeskCount": 0,
+    "finalResidualFixtureWebView2Count": 0
+  },
+  "desktopFirstFlow": {
+    "defaultDesktopStickyVisible": true,
+    "desktopWindowIsNativeTauriWindow": true,
+    "desktopWindowAlwaysOnTop": true,
+    "desktopClickOpenedCompactTab": true,
+    "compactHasTopRightFoldControl": true,
+    "compactHasReaderEntry": true,
+    "compactHasDashboardContent": false,
+    "compactHasObsoleteTapHint": false,
+    "openReaderEnteredWorkspace": true
+  },
+  "startupPreferences": {
+    "options": ["desktop_sticky", "last_state", "sticky_over_reader"],
+    "classicRestartRestoredReader": true,
+    "classicRestartRestoredStickyOverlay": true,
+    "lastStateRestartRestoredEdgeDock": true
+  },
+  "edgeDock": {
+    "rightSafeZoneTriggered": true,
+    "synchronousWindowCreationDeadlockReproducedBeforeFix": true,
+    "deadlockRootCause": "synchronous Tauri command created a WebviewWindow while servicing the source WebView invoke",
+    "deadlockFix": "dock_desktop_sticky_if_near_right_edge changed to an async Tauri command",
+    "deadlockFixCommit": "65b78cd27a81edcc53f1f6432c1389a67567b318",
+    "dockCommandReturnedAfterFix": true,
+    "desktopHiddenAfterDock": true,
+    "mainHiddenAfterDock": true,
+    "edgeWindowVisible": true,
+    "edgeWindowAlwaysOnTop": true,
+    "collapsedRect": [1502, 77, 1536, 189],
+    "expandedRect": [1360, 77, 1536, 189],
+    "collapsedWidth": 34,
+    "expandedWidth": 176,
+    "hoverExpanded": true,
+    "leaveCollapsed": true,
+    "storedPhysicalY": 96,
+    "storedScreen": "DISPLAY1",
+    "restartRestoredRect": [1502, 77, 1536, 189],
+    "restartRestoredExactPosition": true,
+    "entryContentOnly": true,
+    "readerEntryLabel": "打开阅读器",
+    "dashboardContentPresent": false,
+    "readerEntryOpenedReader": true,
+    "edgeHiddenAfterReaderOpen": true
+  },
+  "movementMethod": "Win32 SetWindowPos placed the isolated native Desktop Sticky inside the right safe zone; the pointer-to-Tauri startDragging chain is covered by the component test, and the native post-drag docking command was executed against the exact WebView2 surface.",
+  "screenshots": [
+    "01-default-desktop.png",
+    "02-compact-entry.png",
+    "03-reader-workspace.png",
+    "04-classic-restart.png",
+    "05-edge-collapsed.png",
+    "06-edge-expanded.png",
+    "07-edge-restart.png",
+    "08-edge-open-reader.png"
+  ]
+}
