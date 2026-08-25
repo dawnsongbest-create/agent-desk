@@ -9,6 +9,7 @@ import type {
   Preferences,
   ReaderFontSize,
   ReaderLineSpacing,
+  StartupDisplayMode,
   StickyMode,
   StickyPosition,
   ThemeMode,
@@ -37,6 +38,8 @@ type StickyHomeProps = {
   onWindowPresetChange(windowPreset: WindowPreset): void;
   onStickyPositionChange(position: StickyPosition): void;
   onStickyModeChange(mode: StickyMode): void;
+  onStartupDisplayModeChange(mode: StartupDisplayMode): void;
+  onOpenReaderWorkspace(): void;
   onReaderFontSizeChange(size: ReaderFontSize): void;
   onReaderLineSpacingChange(spacing: ReaderLineSpacing): void;
   onReaderContentVisibilityChange(visible: boolean): void;
@@ -58,6 +61,8 @@ export function StickyHome({
   onWindowPresetChange,
   onStickyPositionChange,
   onStickyModeChange,
+  onStartupDisplayModeChange,
+  onOpenReaderWorkspace,
   onReaderFontSizeChange,
   onReaderLineSpacingChange,
   onReaderContentVisibilityChange,
@@ -165,6 +170,8 @@ export function StickyHome({
       onWindowPresetChange={onWindowPresetChange}
       onStickyPositionChange={onStickyPositionChange}
       onStickyModeChange={onStickyModeChange}
+      onStartupDisplayModeChange={onStartupDisplayModeChange}
+      onOpenReaderWorkspace={onOpenReaderWorkspace}
       onReaderFontSizeChange={onReaderFontSizeChange}
       onReaderLineSpacingChange={onReaderLineSpacingChange}
       onReaderContentVisibilityChange={onReaderContentVisibilityChange}

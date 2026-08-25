@@ -38,6 +38,26 @@ pub enum StickyMode {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+pub enum StartupDisplayMode {
+    #[default]
+    DesktopSticky,
+    LastState,
+    StickyOverReader,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspaceDisplayMode {
+    #[default]
+    DesktopSticky,
+    CompactTab,
+    Reader,
+    StickyOverReader,
+    EdgeDock,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum DesktopStickyKind {
     #[default]
     Todo,
@@ -121,6 +141,13 @@ pub struct DesktopStickyPosition {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct EdgeDockPosition {
+    pub y: i32,
+    pub screen: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Preferences {
     pub schema_version: u8,
     pub theme: ThemeMode,
@@ -133,9 +160,15 @@ pub struct Preferences {
     #[serde(default)]
     pub sticky_mode: StickyMode,
     #[serde(default)]
+    pub startup_display_mode: StartupDisplayMode,
+    #[serde(default)]
+    pub workspace_display_mode: WorkspaceDisplayMode,
+    #[serde(default)]
     pub desktop_sticky_kind: DesktopStickyKind,
     #[serde(default)]
     pub desktop_sticky_position: Option<DesktopStickyPosition>,
+    #[serde(default)]
+    pub edge_dock_position: Option<EdgeDockPosition>,
     #[serde(default)]
     pub reader_skin: ReaderSkin,
     #[serde(default)]
@@ -152,6 +185,16 @@ const fn default_true() -> bool {
     true
 }
 
+impl Preferences {
+    pub const fn startup_workspace_mode(&self) -> WorkspaceDisplayMode {
+        match self.startup_display_mode {
+            StartupDisplayMode::DesktopSticky => WorkspaceDisplayMode::DesktopSticky,
+            StartupDisplayMode::LastState => self.workspace_display_mode,
+            StartupDisplayMode::StickyOverReader => WorkspaceDisplayMode::StickyOverReader,
+        }
+    }
+}
+
 impl Default for Preferences {
     fn default() -> Self {
         Self {
@@ -162,8 +205,11 @@ impl Default for Preferences {
             window_preset: WindowPreset::Sticky,
             sticky_position: StickyPosition::default(),
             sticky_mode: StickyMode::Compact,
+            startup_display_mode: StartupDisplayMode::DesktopSticky,
+            workspace_display_mode: WorkspaceDisplayMode::DesktopSticky,
             desktop_sticky_kind: DesktopStickyKind::Todo,
             desktop_sticky_position: None,
+            edge_dock_position: None,
             reader_skin: ReaderSkin::Grid,
             reader_font_size: ReaderFontSize::Standard,
             reader_line_spacing: ReaderLineSpacing::Standard,
@@ -188,8 +234,11 @@ mod tests {
         assert_eq!(value["windowPreset"], "sticky");
         assert_eq!(value["stickyPosition"]["xRatio"], 0.5);
         assert_eq!(value["stickyMode"], "compact");
+        assert_eq!(value["startupDisplayMode"], "desktop_sticky");
+        assert_eq!(value["workspaceDisplayMode"], "desktop_sticky");
         assert_eq!(value["desktopStickyKind"], "todo");
         assert_eq!(value["desktopStickyPosition"], serde_json::Value::Null);
+        assert_eq!(value["edgeDockPosition"], serde_json::Value::Null);
         assert_eq!(value["readerSkin"], "grid");
         assert_eq!(value["readerFontSize"], "standard");
         assert_eq!(value["readerLineSpacing"], "standard");
@@ -210,8 +259,17 @@ mod tests {
         .expect("deserialize legacy preferences");
 
         assert_eq!(preferences.sticky_mode, StickyMode::Compact);
+        assert_eq!(
+            preferences.startup_display_mode,
+            StartupDisplayMode::DesktopSticky
+        );
+        assert_eq!(
+            preferences.workspace_display_mode,
+            WorkspaceDisplayMode::DesktopSticky
+        );
         assert_eq!(preferences.desktop_sticky_kind, DesktopStickyKind::Todo);
         assert_eq!(preferences.desktop_sticky_position, None);
+        assert_eq!(preferences.edge_dock_position, None);
         assert_eq!(preferences.reader_skin, ReaderSkin::Grid);
         assert_eq!(preferences.reader_font_size, ReaderFontSize::Standard);
         assert_eq!(preferences.reader_line_spacing, ReaderLineSpacing::Standard);
@@ -229,12 +287,23 @@ mod tests {
             "windowPreset": "sticky",
             "stickyPosition": { "xRatio": 0.5, "yRatio": 0.28, "snap": null },
             "stickyMode": "desktop",
+            "startupDisplayMode": "last_state",
+            "workspaceDisplayMode": "edge_dock",
             "desktopStickyKind": "record",
-            "desktopStickyPosition": { "x": 1430, "y": 82, "screen": "DISPLAY2" }
+            "desktopStickyPosition": { "x": 1430, "y": 82, "screen": "DISPLAY2" },
+            "edgeDockPosition": { "y": 96, "screen": "DISPLAY2" }
         }))
         .expect("deserialize desktop preferences");
 
         assert_eq!(preferences.sticky_mode, StickyMode::Desktop);
+        assert_eq!(
+            preferences.startup_display_mode,
+            StartupDisplayMode::LastState
+        );
+        assert_eq!(
+            preferences.workspace_display_mode,
+            WorkspaceDisplayMode::EdgeDock
+        );
         assert_eq!(preferences.desktop_sticky_kind, DesktopStickyKind::Record);
         assert_eq!(
             preferences.desktop_sticky_position,
@@ -243,6 +312,37 @@ mod tests {
                 y: 82,
                 screen: Some("DISPLAY2".to_string())
             })
+        );
+        assert_eq!(
+            preferences.edge_dock_position,
+            Some(EdgeDockPosition {
+                y: 96,
+                screen: Some("DISPLAY2".to_string())
+            })
+        );
+    }
+
+    #[test]
+    fn resolves_each_startup_policy_without_losing_last_workspace_state() {
+        let mut preferences = Preferences {
+            workspace_display_mode: WorkspaceDisplayMode::EdgeDock,
+            ..Preferences::default()
+        };
+        assert_eq!(
+            preferences.startup_workspace_mode(),
+            WorkspaceDisplayMode::DesktopSticky
+        );
+
+        preferences.startup_display_mode = StartupDisplayMode::LastState;
+        assert_eq!(
+            preferences.startup_workspace_mode(),
+            WorkspaceDisplayMode::EdgeDock
+        );
+
+        preferences.startup_display_mode = StartupDisplayMode::StickyOverReader;
+        assert_eq!(
+            preferences.startup_workspace_mode(),
+            WorkspaceDisplayMode::StickyOverReader
         );
     }
 }

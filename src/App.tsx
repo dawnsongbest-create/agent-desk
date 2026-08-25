@@ -122,6 +122,20 @@ function App() {
           })
           .catch(() => setSaveState("error"));
       }}
+      onStartupDisplayModeChange={(startupDisplayMode) =>
+        save({ ...preferencesRef.current, startupDisplayMode })
+      }
+      onOpenReaderWorkspace={() => {
+        setSaveState("saving");
+        void tauriDesktopSticky
+          .openReader()
+          .then((stored) => {
+            preferencesRef.current = stored;
+            setPreferences(stored);
+            setSaveState("saved");
+          })
+          .catch(() => setSaveState("error"));
+      }}
       onReaderFontSizeChange={(readerFontSize) =>
         save({ ...preferencesRef.current, readerFontSize })
       }

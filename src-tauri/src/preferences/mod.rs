@@ -2,7 +2,8 @@ use tauri::{AppHandle, Emitter, LogicalSize, Manager, Size};
 use tauri_plugin_store::StoreExt;
 
 use crate::domain::preferences::{
-    DesktopStickyKind, DesktopStickyPosition, Preferences, StickyMode, WindowPreset,
+    DesktopStickyKind, DesktopStickyPosition, EdgeDockPosition, Preferences, StickyMode,
+    WindowPreset, WorkspaceDisplayMode,
 };
 use std::path::PathBuf;
 
@@ -39,11 +40,24 @@ fn publish(app: &AppHandle, preferences: &Preferences) {
     let _ = app.emit("agent-desk://preferences-changed", preferences);
 }
 
-pub(crate) fn set_sticky_mode(
+pub(crate) fn set_workspace_display_mode(
     app: &AppHandle,
+    workspace_display_mode: WorkspaceDisplayMode,
+) -> Result<Preferences, String> {
+    let mut preferences = read(app)?;
+    preferences.workspace_display_mode = workspace_display_mode;
+    write(app, &preferences)?;
+    publish(app, &preferences);
+    Ok(preferences)
+}
+
+pub(crate) fn set_workspace_and_sticky_mode(
+    app: &AppHandle,
+    workspace_display_mode: WorkspaceDisplayMode,
     sticky_mode: StickyMode,
 ) -> Result<Preferences, String> {
     let mut preferences = read(app)?;
+    preferences.workspace_display_mode = workspace_display_mode;
     preferences.sticky_mode = sticky_mode;
     write(app, &preferences)?;
     publish(app, &preferences);
@@ -66,15 +80,33 @@ pub(crate) fn save_desktop_sticky_position(
     position: DesktopStickyPosition,
 ) -> Result<(), String> {
     let mut preferences = read(app)?;
-    if preferences.sticky_mode != StickyMode::Desktop {
+    if preferences.workspace_display_mode != WorkspaceDisplayMode::DesktopSticky {
         return Ok(());
     }
     preferences.desktop_sticky_position = Some(position);
     write(app, &preferences)
 }
 
+pub(crate) fn save_edge_dock_position(
+    app: &AppHandle,
+    position: EdgeDockPosition,
+) -> Result<(), String> {
+    let mut preferences = read(app)?;
+    if preferences.workspace_display_mode != WorkspaceDisplayMode::EdgeDock {
+        return Ok(());
+    }
+    preferences.edge_dock_position = Some(position);
+    write(app, &preferences)
+}
+
 pub fn initialize(app: &AppHandle) -> Result<Preferences, String> {
-    let preferences = read(app)?;
+    let mut preferences = read(app)?;
+    preferences.workspace_display_mode = preferences.startup_workspace_mode();
+    if preferences.workspace_display_mode == WorkspaceDisplayMode::DesktopSticky {
+        preferences.sticky_mode = StickyMode::Desktop;
+    } else if preferences.workspace_display_mode == WorkspaceDisplayMode::StickyOverReader {
+        preferences.sticky_mode = StickyMode::Compact;
+    }
     write(app, &preferences)?;
     apply_window_preferences(app, &preferences)?;
     Ok(preferences)

@@ -177,6 +177,8 @@ function renderHome(
       onWindowPresetChange={vi.fn()}
       onStickyPositionChange={positionChange}
       onStickyModeChange={modeChange}
+      onStartupDisplayModeChange={vi.fn()}
+      onOpenReaderWorkspace={vi.fn()}
       onReaderFontSizeChange={readerFontSizeChange}
       onReaderLineSpacingChange={readerLineSpacingChange}
       onReaderContentVisibilityChange={vi.fn()}
@@ -672,6 +674,8 @@ describe("StickyHome M1-B4", () => {
         onWindowPresetChange={vi.fn()}
         onStickyPositionChange={vi.fn()}
         onStickyModeChange={modeChange}
+        onStartupDisplayModeChange={vi.fn()}
+        onOpenReaderWorkspace={vi.fn()}
         onReaderFontSizeChange={vi.fn()}
         onReaderLineSpacingChange={vi.fn()}
         onReaderContentVisibilityChange={vi.fn()}

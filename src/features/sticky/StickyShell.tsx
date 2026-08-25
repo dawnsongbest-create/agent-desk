@@ -29,6 +29,7 @@ import type {
   DesktopStickyKind,
   ReaderFontSize,
   ReaderLineSpacing,
+  StartupDisplayMode,
   StickyMode,
   StickyPosition,
   ThemeMode,
@@ -44,6 +45,7 @@ import {
   readerFontSizes,
   readerLineSpacings,
   settleCompactPosition,
+  startupDisplayModes,
   themeModes,
   windowPresets,
 } from "../../domain/preferences";
@@ -65,6 +67,7 @@ import { playPageTurnSound } from "./pageTurnSound";
 import type { StickyLoadState } from "./useStickyCards";
 import { AgentBridgeSettings } from "../agentBridge/AgentBridgeSettings";
 import type { AgentBridgeLoadState } from "../agentBridge/useAgentBridge";
+import { CompactTab } from "../workspace/CompactTab";
 
 type SaveState = "loading" | "idle" | "saving" | "saved" | "error";
 type StickyFace = "note" | "task";
@@ -101,6 +104,8 @@ type StickyShellProps = {
   onWindowPresetChange(preset: WindowPreset): void;
   onStickyPositionChange(position: StickyPosition): void;
   onStickyModeChange(mode: StickyMode): void;
+  onStartupDisplayModeChange(mode: StartupDisplayMode): void;
+  onOpenReaderWorkspace(): void;
   onReaderFontSizeChange(size: ReaderFontSize): void;
   onReaderLineSpacingChange(spacing: ReaderLineSpacing): void;
   onReaderContentVisibilityChange(visible: boolean): void;
@@ -157,6 +162,11 @@ const readerLineSpacingLabels: Record<ReaderLineSpacing, string> = {
   standard: "标准",
   relaxed: "宽松",
 };
+const startupDisplayModeLabels: Record<StartupDisplayMode, string> = {
+  desktop_sticky: "便利贴",
+  last_state: "上次状态",
+  sticky_over_reader: "便利贴贴在阅读器上",
+};
 const SNAP_DISTANCE = 28;
 
 function SettingsMenu({
@@ -169,6 +179,7 @@ function SettingsMenu({
   onThemeChange,
   onAlwaysOnTopChange,
   onWindowPresetChange,
+  onStartupDisplayModeChange,
   onReaderFontSizeChange,
   onReaderLineSpacingChange,
   onAgentBridgeEnabledChange,
@@ -185,6 +196,7 @@ function SettingsMenu({
   onThemeChange(theme: ThemeMode): void;
   onAlwaysOnTopChange(alwaysOnTop: boolean): void;
   onWindowPresetChange(preset: WindowPreset): void;
+  onStartupDisplayModeChange(mode: StartupDisplayMode): void;
   onReaderFontSizeChange(size: ReaderFontSize): void;
   onReaderLineSpacingChange(spacing: ReaderLineSpacing): void;
   onAgentBridgeEnabledChange(enabled: boolean): void;
@@ -261,6 +273,25 @@ function SettingsMenu({
                   </button>
                 ))}
               </div>
+            </div>
+          </div>
+          <div className="settings-section startup-settings">
+            <div className="settings-heading">
+              <strong>启动显示模式</strong>
+              <span>默认从桌面便利贴开始</span>
+            </div>
+            <div className="startup-option-grid" role="group" aria-label="启动显示模式">
+              {startupDisplayModes.map((mode) => (
+                <button
+                  type="button"
+                  key={mode}
+                  disabled={disabled}
+                  aria-pressed={preferences.startupDisplayMode === mode}
+                  onClick={() => onStartupDisplayModeChange(mode)}
+                >
+                  {startupDisplayModeLabels[mode]}
+                </button>
+              ))}
             </div>
           </div>
           <div className="settings-section">
@@ -943,23 +974,22 @@ function StickyPreview({
       onPositionChange={onPositionChange}
     >
       <span className="tape" aria-hidden="true" />
+      <button
+        className="compact-corner-control"
+        type="button"
+        data-no-drag
+        aria-label="缩成 Mini Tab"
+        onClick={(event) => {
+          event.stopPropagation();
+          onMinimize();
+        }}
+      />
       <header>
         <span>TODAY</span>
         <span className="compact-header-actions">
           <small>
             {openTasks.length ? `${Math.min(3, openTasks.length)} / ${openTasks.length}` : "quiet"}
           </small>
-          <button
-            type="button"
-            data-no-drag
-            aria-label="缩成 Mini Tab"
-            onClick={(event) => {
-              event.stopPropagation();
-              onMinimize();
-            }}
-          >
-            −
-          </button>
         </span>
       </header>
       {loading ? (
@@ -988,9 +1018,6 @@ function StickyPreview({
         </div>
       )}
       <blockquote>{quote || "留一句愿意常常看到的话。"}</blockquote>
-      <span className="preview-open">
-        轻触展开 <span aria-hidden="true">→</span>
-      </span>
     </StickySurface>
   );
 }
@@ -1082,6 +1109,8 @@ export function StickyShell(props: StickyShellProps) {
     onWindowPresetChange,
     onStickyPositionChange,
     onStickyModeChange,
+    onStartupDisplayModeChange,
+    onOpenReaderWorkspace,
     onReaderFontSizeChange,
     onReaderLineSpacingChange,
     onReaderContentVisibilityChange,
@@ -1218,6 +1247,15 @@ export function StickyShell(props: StickyShellProps) {
     setReaderSurfaceMode("reader");
   }
 
+  if (preferences.workspaceDisplayMode === "compact_tab") {
+    return (
+      <CompactTab
+        onDesktop={() => changeStickyMode("desktop")}
+        onOpenReader={onOpenReaderWorkspace}
+      />
+    );
+  }
+
   return (
     <main className="desk-board" aria-label="Agent Desk Sticky Home">
       <ReaderCanvas
@@ -1319,6 +1357,7 @@ export function StickyShell(props: StickyShellProps) {
             onThemeChange={onThemeChange}
             onAlwaysOnTopChange={onAlwaysOnTopChange}
             onWindowPresetChange={onWindowPresetChange}
+            onStartupDisplayModeChange={onStartupDisplayModeChange}
             onReaderFontSizeChange={onReaderFontSizeChange}
             onReaderLineSpacingChange={onReaderLineSpacingChange}
             onAgentBridgeEnabledChange={(enabled) => void onAgentBridgeEnabledChange(enabled)}

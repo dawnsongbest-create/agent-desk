@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   copyText: vi.fn(),
   getAgentBridgeStatus: vi.fn(),
   enterDesktopSticky: vi.fn(),
+  openReaderWorkspace: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn().mockResolvedValue(vi.fn()) }));
@@ -66,8 +67,11 @@ vi.mock("./infrastructure/tauri/desktopSticky", () => ({
   tauriDesktopSticky: {
     enter: mocks.enterDesktopSticky,
     open: vi.fn(),
+    openReader: mocks.openReaderWorkspace,
     startDragging: vi.fn(),
+    dockIfNearRightEdge: vi.fn(),
     showContextMenu: vi.fn(),
+    setEdgeDockExpanded: vi.fn(),
   },
 }));
 
@@ -104,6 +108,10 @@ describe("App Reader preferences", () => {
     mocks.enterDesktopSticky.mockResolvedValue({
       ...defaultPreferences,
       stickyMode: "desktop",
+    });
+    mocks.openReaderWorkspace.mockResolvedValue({
+      ...defaultPreferences,
+      workspaceDisplayMode: "reader",
     });
   });
 
@@ -254,5 +262,46 @@ describe("App Reader preferences", () => {
     await user.click(await screen.findByRole("button", { name: "驻留到桌面" }));
 
     await waitFor(() => expect(mocks.enterDesktopSticky).toHaveBeenCalledOnce());
+  });
+
+  it("keeps Compact Tab entry-only and opens the Reader through the native workspace command", async () => {
+    const user = userEvent.setup();
+    mocks.loadPreferences.mockResolvedValue({
+      ...defaultPreferences,
+      workspaceDisplayMode: "compact_tab",
+      currentReaderDocumentId: "reader-test",
+    });
+    mocks.openReaderWorkspace.mockResolvedValue({
+      ...defaultPreferences,
+      workspaceDisplayMode: "reader",
+      currentReaderDocumentId: "reader-test",
+    });
+
+    render(<App />);
+
+    expect(await screen.findByRole("main", { name: "Agent Desk Compact Tab" })).toBeVisible();
+    expect(screen.queryByRole("region", { name: "Reader Canvas" })).not.toBeInTheDocument();
+    expect(screen.queryByText("收件")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "打开阅读器" }));
+
+    await waitFor(() => expect(mocks.openReaderWorkspace).toHaveBeenCalledOnce());
+    expect(await screen.findByRole("region", { name: "Reader Canvas" })).toBeVisible();
+  });
+
+  it("persists the three-way startup display preference", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("region", { name: "Reader Canvas" });
+
+    await user.click(screen.getByRole("button", { name: "外观与窗口设置" }));
+    await user.click(
+      within(screen.getByRole("group", { name: "启动显示模式" })).getByText("便利贴贴在阅读器上"),
+    );
+
+    await waitFor(() =>
+      expect(mocks.savePreferences).toHaveBeenLastCalledWith(
+        expect.objectContaining({ startupDisplayMode: "sticky_over_reader" }),
+      ),
+    );
   });
 });

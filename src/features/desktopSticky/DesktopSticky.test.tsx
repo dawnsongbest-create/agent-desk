@@ -59,8 +59,11 @@ function windowPort(): DesktopStickyWindowPort {
   return {
     enter: vi.fn(),
     open: vi.fn().mockResolvedValue(defaultPreferences),
+    openReader: vi.fn().mockResolvedValue(defaultPreferences),
     startDragging: vi.fn().mockResolvedValue(undefined),
+    dockIfNearRightEdge: vi.fn().mockResolvedValue(undefined),
     showContextMenu: vi.fn().mockResolvedValue(undefined),
+    setEdgeDockExpanded: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -96,6 +99,7 @@ describe("Desktop Sticky native surface", () => {
     dispatchPointer(sticky, "pointerDown", { button: 0, clientX: 10, clientY: 10 });
     dispatchPointer(sticky, "pointerMove", { button: 0, clientX: 20, clientY: 18 });
     expect(native.startDragging).toHaveBeenCalledOnce();
+    await waitFor(() => expect(native.dockIfNearRightEdge).toHaveBeenCalledOnce());
 
     fireEvent.contextMenu(sticky);
     expect(native.showContextMenu).toHaveBeenCalledOnce();

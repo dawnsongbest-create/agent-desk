@@ -114,7 +114,10 @@ export function DesktopSticky({
     if (Math.hypot(event.clientX - current.x, event.clientY - current.y) < 4) return;
     current.dragging = true;
     cancelClick();
-    void windowPort.startDragging();
+    void windowPort
+      .startDragging()
+      .then(() => windowPort.dockIfNearRightEdge())
+      .catch(() => undefined);
   }
 
   return (
