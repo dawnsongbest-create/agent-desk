@@ -1,0 +1,50 @@
+{
+  "gate": "M4-A1",
+  "generatedAtUtc": "2026-08-25T09:52:56.9624464Z",
+  "gitHead": "5370a396cfec90f0eed3569cb1bef15d62b9c40d",
+  "toolchain": {
+    "node": "22.23.2",
+    "pnpm": "11.16.0",
+    "rust": "1.97.1",
+    "target": "x86_64-pc-windows-msvc",
+    "cargoLocked": true
+  },
+  "frontendAssets": [
+    {
+      "path": "dist/index.html",
+      "sha256": "1F15EC9BCE48ACBEAA0F439CC4A7B08B1942D2A692BF27A46A4362B139AD9647",
+      "size": 446
+    },
+    {
+      "path": "dist/assets/index-BImTNJf-.css",
+      "sha256": "05596644B4C2E30F4A5DD1B431895C11F87A2CC89E69B0A203B8ECB21B599A2E",
+      "size": 49377
+    },
+    {
+      "path": "dist/assets/index-ECIkk77c.js",
+      "sha256": "A424EFA46C7DECE6A0D47DE3739C45C8282D11DC22D536DB8D0709586A1174E9",
+      "size": 417707
+    }
+  ],
+  "truthExecutable": {
+    "path": "D:\\agent-desk-m4a1-truth-target\\release\\agent-desk.exe",
+    "sha256": "A7CC17AAE955B86241EA24DA81E35B755F21B10047A0E4FDEAFF72DC10B5642B",
+    "size": 15667200,
+    "lastWriteTimeUtc": "2026-08-25T09:30:47.2429499Z"
+  },
+  "canonicalExecutable": {
+    "path": "D:\\agent-desk-target\\release\\agent-desk.exe",
+    "sha256": "A7CC17AAE955B86241EA24DA81E35B755F21B10047A0E4FDEAFF72DC10B5642B",
+    "size": 15667200,
+    "lastWriteTimeUtc": "2026-08-25T09:30:47.2429499Z",
+    "byteIdenticalToTruth": true
+  },
+  "publicSafety": {
+    "repositoryVisibilityExpected": "public",
+    "secretsFound": false,
+    "environmentFilesTracked": false,
+    "userDatabasesTracked": false,
+    "buildArtifactsTracked": false,
+    "personalProfilePathsFound": false
+  }
+}

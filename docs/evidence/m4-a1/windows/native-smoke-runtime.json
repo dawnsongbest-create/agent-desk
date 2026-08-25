@@ -1,0 +1,67 @@
+{
+  "gate": "M4-A1",
+  "platform": "Windows",
+  "executable": {
+    "path": "D:\\agent-desk-target\\release\\agent-desk.exe",
+    "sha256": "A7CC17AAE955B86241EA24DA81E35B755F21B10047A0E4FDEAFF72DC10B5642B"
+  },
+  "isolation": {
+    "fixtureRoot": "D:\\agent-desk-m4a1-smoke-5370a39-20260825-01",
+    "isolatedSqlite": true,
+    "isolatedPreferenceStore": true,
+    "isolatedWebView2Profile": true,
+    "productOwnerAppDataUsed": false
+  },
+  "process": {
+    "firstLaunchPid": 33644,
+    "restartPid": 12228,
+    "aliveBeyondTenSeconds": true,
+    "webView2Loaded": true,
+    "finalResidualSmokeProcessCount": 0
+  },
+  "flow": {
+    "fullReaderVisible": true,
+    "compactVisible": true,
+    "miniVisible": true,
+    "desktopModeVisible": true,
+    "desktopWindowIsNativeTauriWindow": true,
+    "desktopWindowAlwaysOnTop": true,
+    "mainWindowHiddenInDesktopMode": true,
+    "clickRestoresExistingMainWindow": true,
+    "doubleClickOpenedTodoEditor": true,
+    "readerUnaffectedAfterRestore": true
+  },
+  "positionPersistence": {
+    "initialVirtualizedRect": [154, 154, 290, 216],
+    "movedVirtualizedRect": [420, 260, 556, 322],
+    "restartVirtualizedRect": [420, 260, 556, 322],
+    "storedPhysicalPosition": {
+      "x": 525,
+      "y": 325,
+      "screen": "\\\\.\\DISPLAY1"
+    },
+    "restartRestoredExactRect": true,
+    "nativeMoveMethod": "Win32 SetWindowPos on the locked Default desktop; pointer-to-Tauri startDragging is covered by the component test"
+  },
+  "dataReuse": {
+    "fixtureTodoCreatedThroughUi": "M4 桌面同步验证",
+    "desktopSurfaceUpdatedFromSameSqlite": true,
+    "todoPresentAfterRestart": true,
+    "duplicatedWorkspaceData": false
+  },
+  "nativeContextMenu": [
+    "打开 Agent Desk",
+    "切换 Sticky 类型",
+    "隐藏",
+    "退出"
+  ],
+  "screenshots": [
+    "01-full-compact.png",
+    "02-mini-in-reader.png",
+    "03-desktop-sticky-todo.png",
+    "04-desktop-sticky-synced-todo.png",
+    "05-desktop-double-click-edit.png",
+    "06-restart-restored-desktop.png",
+    "07-restart-reader-and-compact.png"
+  ]
+}
