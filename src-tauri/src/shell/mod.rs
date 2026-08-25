@@ -352,7 +352,7 @@ pub fn start_desktop_sticky_drag(window: WebviewWindow) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn dock_desktop_sticky_if_near_right_edge(window: WebviewWindow) -> Result<(), String> {
+pub async fn dock_desktop_sticky_if_near_right_edge(window: WebviewWindow) -> Result<(), String> {
     if window.label() != DESKTOP_STICKY_WINDOW_LABEL {
         return Err("desktop docking is only available to the Desktop Sticky window".to_string());
     }
