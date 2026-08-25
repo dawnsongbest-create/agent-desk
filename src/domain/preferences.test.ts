@@ -74,3 +74,11 @@ describe("Reader preference defaults", () => {
     expect(defaultPreferences.readerContentVisible).toBe(true);
   });
 });
+
+describe("Desktop Sticky preference defaults", () => {
+  it("keeps the legacy startup in Compact while reserving one persisted desktop size", () => {
+    expect(defaultPreferences.stickyMode).toBe("compact");
+    expect(defaultPreferences.desktopStickyKind).toBe("todo");
+    expect(defaultPreferences.desktopStickyPosition).toBeNull();
+  });
+});

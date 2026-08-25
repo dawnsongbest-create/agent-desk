@@ -4,8 +4,10 @@ export type ThemeMode = (typeof themeModes)[number];
 export type WindowBehavior = "hide_to_tray";
 export const windowPresets = ["sticky", "iphone5", "pocket", "book", "custom"] as const;
 export type WindowPreset = (typeof windowPresets)[number];
-export const stickyModes = ["compact", "mini"] as const;
+export const stickyModes = ["compact", "mini", "desktop"] as const;
 export type StickyMode = (typeof stickyModes)[number];
+export const desktopStickyKinds = ["todo", "record", "quote"] as const;
+export type DesktopStickyKind = (typeof desktopStickyKinds)[number];
 export const readerSkins = ["grid"] as const;
 export type ReaderSkin = (typeof readerSkins)[number];
 export const readerFontSizes = ["small", "standard", "large"] as const;
@@ -19,6 +21,12 @@ export type StickyPosition = {
   snap: "top_left" | "top_right" | "bottom_left" | "bottom_right" | null;
 };
 
+export type DesktopStickyPosition = {
+  x: number;
+  y: number;
+  screen: string | null;
+};
+
 export type Preferences = {
   schemaVersion: 1;
   theme: ThemeMode;
@@ -27,6 +35,8 @@ export type Preferences = {
   windowPreset: WindowPreset;
   stickyPosition: StickyPosition;
   stickyMode: StickyMode;
+  desktopStickyKind: DesktopStickyKind;
+  desktopStickyPosition: DesktopStickyPosition | null;
   readerSkin: ReaderSkin;
   readerFontSize: ReaderFontSize;
   readerLineSpacing: ReaderLineSpacing;
@@ -42,6 +52,8 @@ export const defaultPreferences: Preferences = {
   windowPreset: "sticky",
   stickyPosition: { xRatio: 0.5, yRatio: 0.28, snap: null },
   stickyMode: "compact",
+  desktopStickyKind: "todo",
+  desktopStickyPosition: null,
   readerSkin: "grid",
   readerFontSize: "standard",
   readerLineSpacing: "standard",

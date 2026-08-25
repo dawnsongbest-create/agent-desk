@@ -1,7 +1,9 @@
-use tauri::{AppHandle, LogicalSize, Manager, Size};
+use tauri::{AppHandle, Emitter, LogicalSize, Manager, Size};
 use tauri_plugin_store::StoreExt;
 
-use crate::domain::preferences::{Preferences, WindowPreset};
+use crate::domain::preferences::{
+    DesktopStickyKind, DesktopStickyPosition, Preferences, StickyMode, WindowPreset,
+};
 use std::path::PathBuf;
 
 const PREFERENCES_FILE: &str = "preferences.json";
@@ -13,7 +15,7 @@ fn preferences_file() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(PREFERENCES_FILE))
 }
 
-fn read(app: &AppHandle) -> Result<Preferences, String> {
+pub(crate) fn read(app: &AppHandle) -> Result<Preferences, String> {
     let store = app
         .store(preferences_file())
         .map_err(|error| error.to_string())?;
@@ -24,13 +26,51 @@ fn read(app: &AppHandle) -> Result<Preferences, String> {
     Ok(serde_json::from_value(value).unwrap_or_default())
 }
 
-fn write(app: &AppHandle, preferences: &Preferences) -> Result<(), String> {
+pub(crate) fn write(app: &AppHandle, preferences: &Preferences) -> Result<(), String> {
     let store = app
         .store(preferences_file())
         .map_err(|error| error.to_string())?;
     let value = serde_json::to_value(preferences).map_err(|error| error.to_string())?;
     store.set(PREFERENCES_KEY.to_string(), value);
     store.save().map_err(|error| error.to_string())
+}
+
+fn publish(app: &AppHandle, preferences: &Preferences) {
+    let _ = app.emit("agent-desk://preferences-changed", preferences);
+}
+
+pub(crate) fn set_sticky_mode(
+    app: &AppHandle,
+    sticky_mode: StickyMode,
+) -> Result<Preferences, String> {
+    let mut preferences = read(app)?;
+    preferences.sticky_mode = sticky_mode;
+    write(app, &preferences)?;
+    publish(app, &preferences);
+    Ok(preferences)
+}
+
+pub(crate) fn set_desktop_sticky_kind(
+    app: &AppHandle,
+    desktop_sticky_kind: DesktopStickyKind,
+) -> Result<Preferences, String> {
+    let mut preferences = read(app)?;
+    preferences.desktop_sticky_kind = desktop_sticky_kind;
+    write(app, &preferences)?;
+    publish(app, &preferences);
+    Ok(preferences)
+}
+
+pub(crate) fn save_desktop_sticky_position(
+    app: &AppHandle,
+    position: DesktopStickyPosition,
+) -> Result<(), String> {
+    let mut preferences = read(app)?;
+    if preferences.sticky_mode != StickyMode::Desktop {
+        return Ok(());
+    }
+    preferences.desktop_sticky_position = Some(position);
+    write(app, &preferences)
 }
 
 pub fn initialize(app: &AppHandle) -> Result<Preferences, String> {
@@ -63,6 +103,7 @@ pub fn update_preferences(app: AppHandle, preferences: Preferences) -> Result<Pr
 
     apply_window_preferences(&app, &preferences)?;
     write(&app, &preferences)?;
+    publish(&app, &preferences);
     Ok(preferences)
 }
 

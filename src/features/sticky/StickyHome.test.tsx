@@ -678,10 +678,13 @@ describe("StickyHome M1-B4", () => {
         onCurrentReaderDocumentChange={vi.fn()}
       />,
     );
-    const mini = screen.getByRole("button", { name: "恢复 Compact Sticky" });
+    const miniButton = screen.getByRole("button", { name: "恢复 Compact Sticky" });
+    const mini = miniButton.closest(".sticky-surface")!;
     expect(mini).toHaveTextContent("TODAY1");
     expect(mini).toHaveAttribute("data-pinned-to-shelf", "true");
-    await user.click(mini);
+    await user.click(screen.getByRole("button", { name: "驻留到桌面" }));
+    expect(modeChange).toHaveBeenLastCalledWith("desktop");
+    await user.click(miniButton);
     expect(modeChange).toHaveBeenLastCalledWith("compact");
   });
 
@@ -694,9 +697,10 @@ describe("StickyHome M1-B4", () => {
       { ...defaultPreferences, stickyMode: "mini" },
       modeChange,
     );
-    const mini = await screen.findByRole("button", {
+    const miniButton = await screen.findByRole("button", {
       name: "恢复 Compact Sticky",
     });
+    const mini = miniButton.closest(".sticky-surface")!;
     dispatchPointer(mini, "pointerDown", { pointerId: 3, clientX: 110, clientY: 210 });
     dispatchPointer(mini, "pointerMove", { pointerId: 3, clientX: 140, clientY: 240 });
     dispatchPointer(mini, "pointerUp", { pointerId: 3, clientX: 140, clientY: 240 });

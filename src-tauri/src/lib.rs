@@ -16,6 +16,8 @@ use std::sync::Arc;
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
+use domain::preferences::StickyMode;
+
 const AUDIT_DATA_DIR_ENV: &str = "AGENT_DESK_AUDIT_DATA_DIR";
 
 pub(crate) fn audit_data_dir() -> Option<std::path::PathBuf> {
@@ -97,11 +99,17 @@ pub fn run() {
             ));
             app.manage(proposal::ProposalState::new(proposal_repository));
             app.manage(agent_bridge_state);
-            preferences::initialize(app.handle()).map_err(std::io::Error::other)?;
+            let preferences =
+                preferences::initialize(app.handle()).map_err(std::io::Error::other)?;
             shell::setup_tray(app)?;
-            shell::restore_main_window(app.handle())?;
+            if preferences.sticky_mode == StickyMode::Desktop {
+                shell::restore_desktop_sticky_window(app.handle(), &preferences)?;
+            } else {
+                shell::restore_main_window(app.handle())?;
+            }
             Ok(())
         })
+        .on_menu_event(|app, event| shell::handle_desktop_menu_event(app, &event))
         .on_window_event(|window, event| {
             if window.label() == "main" {
                 if let WindowEvent::CloseRequested { api, .. } = event {
@@ -111,12 +119,27 @@ pub fn run() {
                         .save_window_state(StateFlags::POSITION | StateFlags::SIZE);
                     let _ = window.hide();
                 }
+            } else if window.label() == shell::DESKTOP_STICKY_WINDOW_LABEL {
+                match event {
+                    WindowEvent::CloseRequested { api, .. } => {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    }
+                    WindowEvent::Moved(position) => {
+                        shell::schedule_desktop_position_save(window, *position);
+                    }
+                    _ => {}
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![
             preferences::get_preferences,
             preferences::update_preferences,
             preferences::apply_window_preset,
+            shell::enter_desktop_sticky,
+            shell::open_agent_desk_from_desktop,
+            shell::start_desktop_sticky_drag,
+            shell::show_desktop_sticky_menu,
             sticky::list_sticky_cards,
             sticky::create_sticky_card,
             sticky::update_sticky_text,

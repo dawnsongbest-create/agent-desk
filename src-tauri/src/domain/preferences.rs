@@ -33,6 +33,16 @@ pub enum StickyMode {
     #[default]
     Compact,
     Mini,
+    Desktop,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DesktopStickyKind {
+    #[default]
+    Todo,
+    Record,
+    Quote,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -103,6 +113,14 @@ impl Default for StickyPosition {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DesktopStickyPosition {
+    pub x: i32,
+    pub y: i32,
+    pub screen: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Preferences {
     pub schema_version: u8,
     pub theme: ThemeMode,
@@ -114,6 +132,10 @@ pub struct Preferences {
     pub sticky_position: StickyPosition,
     #[serde(default)]
     pub sticky_mode: StickyMode,
+    #[serde(default)]
+    pub desktop_sticky_kind: DesktopStickyKind,
+    #[serde(default)]
+    pub desktop_sticky_position: Option<DesktopStickyPosition>,
     #[serde(default)]
     pub reader_skin: ReaderSkin,
     #[serde(default)]
@@ -140,6 +162,8 @@ impl Default for Preferences {
             window_preset: WindowPreset::Sticky,
             sticky_position: StickyPosition::default(),
             sticky_mode: StickyMode::Compact,
+            desktop_sticky_kind: DesktopStickyKind::Todo,
+            desktop_sticky_position: None,
             reader_skin: ReaderSkin::Grid,
             reader_font_size: ReaderFontSize::Standard,
             reader_line_spacing: ReaderLineSpacing::Standard,
@@ -164,6 +188,8 @@ mod tests {
         assert_eq!(value["windowPreset"], "sticky");
         assert_eq!(value["stickyPosition"]["xRatio"], 0.5);
         assert_eq!(value["stickyMode"], "compact");
+        assert_eq!(value["desktopStickyKind"], "todo");
+        assert_eq!(value["desktopStickyPosition"], serde_json::Value::Null);
         assert_eq!(value["readerSkin"], "grid");
         assert_eq!(value["readerFontSize"], "standard");
         assert_eq!(value["readerLineSpacing"], "standard");
@@ -184,10 +210,39 @@ mod tests {
         .expect("deserialize legacy preferences");
 
         assert_eq!(preferences.sticky_mode, StickyMode::Compact);
+        assert_eq!(preferences.desktop_sticky_kind, DesktopStickyKind::Todo);
+        assert_eq!(preferences.desktop_sticky_position, None);
         assert_eq!(preferences.reader_skin, ReaderSkin::Grid);
         assert_eq!(preferences.reader_font_size, ReaderFontSize::Standard);
         assert_eq!(preferences.reader_line_spacing, ReaderLineSpacing::Standard);
         assert!(preferences.reader_content_visible);
         assert_eq!(preferences.current_reader_document_id, None);
+    }
+
+    #[test]
+    fn round_trips_desktop_mode_kind_and_physical_monitor_position() {
+        let preferences: Preferences = serde_json::from_value(serde_json::json!({
+            "schemaVersion": 1,
+            "theme": "system",
+            "alwaysOnTop": false,
+            "windowBehavior": "hide_to_tray",
+            "windowPreset": "sticky",
+            "stickyPosition": { "xRatio": 0.5, "yRatio": 0.28, "snap": null },
+            "stickyMode": "desktop",
+            "desktopStickyKind": "record",
+            "desktopStickyPosition": { "x": 1430, "y": 82, "screen": "DISPLAY2" }
+        }))
+        .expect("deserialize desktop preferences");
+
+        assert_eq!(preferences.sticky_mode, StickyMode::Desktop);
+        assert_eq!(preferences.desktop_sticky_kind, DesktopStickyKind::Record);
+        assert_eq!(
+            preferences.desktop_sticky_position,
+            Some(DesktopStickyPosition {
+                x: 1430,
+                y: 82,
+                screen: Some("DISPLAY2".to_string())
+            })
+        );
     }
 }

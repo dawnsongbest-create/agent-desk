@@ -1,11 +1,25 @@
 use tauri::{
-    menu::{Menu, MenuItem},
+    menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    App, AppHandle, Manager, PhysicalPosition, WebviewWindow,
+    App, AppHandle, Emitter, Manager, PhysicalPosition, WebviewUrl, WebviewWindow,
+    WebviewWindowBuilder,
 };
 use tauri_plugin_window_state::{AppHandleExt, StateFlags, WindowExt};
 
+use crate::domain::preferences::{
+    DesktopStickyKind, DesktopStickyPosition, Preferences, StickyMode,
+};
+
 const MIN_VISIBLE_EDGE: i32 = 64;
+pub const DESKTOP_STICKY_WINDOW_LABEL: &str = "desktop-sticky";
+const DESKTOP_STICKY_WINDOW_WIDTH: f64 = 94.0;
+const DESKTOP_STICKY_WINDOW_HEIGHT: f64 = 62.0;
+const DESKTOP_MENU_OPEN: &str = "desktop-sticky-open";
+const DESKTOP_MENU_TODO: &str = "desktop-sticky-kind-todo";
+const DESKTOP_MENU_RECORD: &str = "desktop-sticky-kind-record";
+const DESKTOP_MENU_QUOTE: &str = "desktop-sticky-kind-quote";
+const DESKTOP_MENU_HIDE: &str = "desktop-sticky-hide";
+const DESKTOP_MENU_QUIT: &str = "desktop-sticky-quit";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Rect {
@@ -39,12 +53,190 @@ impl Rect {
 }
 
 pub fn surface_main_window(app: &AppHandle) {
+    let _ = crate::preferences::set_sticky_mode(app, StickyMode::Compact);
+    if let Some(desktop) = app.get_webview_window(DESKTOP_STICKY_WINDOW_LABEL) {
+        let _ = desktop.hide();
+    }
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.unminimize();
         let _ = clamp_offscreen_geometry(&window);
         let _ = window.show();
         let _ = window.set_focus();
     }
+}
+
+fn desktop_window(app: &AppHandle, preferences: &Preferences) -> tauri::Result<WebviewWindow> {
+    if let Some(window) = app.get_webview_window(DESKTOP_STICKY_WINDOW_LABEL) {
+        return Ok(window);
+    }
+
+    let window = WebviewWindowBuilder::new(
+        app,
+        DESKTOP_STICKY_WINDOW_LABEL,
+        WebviewUrl::App("index.html?surface=desktop-sticky".into()),
+    )
+    .title("Agent Desk Desktop Sticky")
+    .inner_size(DESKTOP_STICKY_WINDOW_WIDTH, DESKTOP_STICKY_WINDOW_HEIGHT)
+    .min_inner_size(DESKTOP_STICKY_WINDOW_WIDTH, DESKTOP_STICKY_WINDOW_HEIGHT)
+    .max_inner_size(DESKTOP_STICKY_WINDOW_WIDTH, DESKTOP_STICKY_WINDOW_HEIGHT)
+    .resizable(false)
+    .maximizable(false)
+    .minimizable(false)
+    .decorations(false)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .shadow(false)
+    .transparent(true)
+    .visible(false)
+    .focused(false)
+    .build()?;
+
+    if let Some(position) = &preferences.desktop_sticky_position {
+        window.set_position(PhysicalPosition::new(position.x, position.y))?;
+    }
+    clamp_offscreen_geometry(&window)?;
+    Ok(window)
+}
+
+pub fn restore_desktop_sticky_window(
+    app: &AppHandle,
+    preferences: &Preferences,
+) -> tauri::Result<()> {
+    let window = desktop_window(app, preferences)?;
+    window.show()?;
+    let _ = app.emit_to(
+        DESKTOP_STICKY_WINDOW_LABEL,
+        "agent-desk://desktop-sticky-refresh",
+        (),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn enter_desktop_sticky(app: AppHandle) -> Result<Preferences, String> {
+    let stored = crate::preferences::read(&app)?;
+    let window = desktop_window(&app, &stored).map_err(|error| error.to_string())?;
+    let preferences = crate::preferences::set_sticky_mode(&app, StickyMode::Desktop)?;
+    window.show().map_err(|error| error.to_string())?;
+    let _ = app.emit_to(
+        DESKTOP_STICKY_WINDOW_LABEL,
+        "agent-desk://desktop-sticky-refresh",
+        (),
+    );
+    if let Some(main) = app.get_webview_window("main") {
+        main.hide().map_err(|error| error.to_string())?;
+    }
+    Ok(preferences)
+}
+
+#[tauri::command]
+pub async fn open_agent_desk_from_desktop(
+    app: AppHandle,
+    edit_kind: Option<DesktopStickyKind>,
+) -> Result<Preferences, String> {
+    let preferences = crate::preferences::set_sticky_mode(&app, StickyMode::Compact)?;
+    if let Some(desktop) = app.get_webview_window(DESKTOP_STICKY_WINDOW_LABEL) {
+        desktop.hide().map_err(|error| error.to_string())?;
+    }
+    let main = app
+        .get_webview_window("main")
+        .ok_or_else(|| "main window is unavailable".to_string())?;
+    main.unminimize().map_err(|error| error.to_string())?;
+    clamp_offscreen_geometry(&main).map_err(|error| error.to_string())?;
+    main.show().map_err(|error| error.to_string())?;
+    main.set_focus().map_err(|error| error.to_string())?;
+    if let Some(kind) = edit_kind {
+        let _ = app.emit_to("main", "agent-desk://open-sticky-editor", kind);
+    }
+    Ok(preferences)
+}
+
+#[tauri::command]
+pub fn start_desktop_sticky_drag(window: WebviewWindow) -> Result<(), String> {
+    if window.label() != DESKTOP_STICKY_WINDOW_LABEL {
+        return Err("desktop drag is only available to the Desktop Sticky window".to_string());
+    }
+    window.start_dragging().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn show_desktop_sticky_menu(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
+    if window.label() != DESKTOP_STICKY_WINDOW_LABEL {
+        return Err("Desktop Sticky menu is unavailable to this window".to_string());
+    }
+    let open = MenuItem::with_id(
+        &app,
+        DESKTOP_MENU_OPEN,
+        "打开 Agent Desk",
+        true,
+        None::<&str>,
+    )
+    .map_err(|error| error.to_string())?;
+    let todo = MenuItem::with_id(&app, DESKTOP_MENU_TODO, "待办", true, None::<&str>)
+        .map_err(|error| error.to_string())?;
+    let record = MenuItem::with_id(&app, DESKTOP_MENU_RECORD, "记录", true, None::<&str>)
+        .map_err(|error| error.to_string())?;
+    let quote = MenuItem::with_id(&app, DESKTOP_MENU_QUOTE, "便签一句", true, None::<&str>)
+        .map_err(|error| error.to_string())?;
+    let switch = Submenu::with_items(&app, "切换 Sticky 类型", true, &[&todo, &record, &quote])
+        .map_err(|error| error.to_string())?;
+    let separator = PredefinedMenuItem::separator(&app).map_err(|error| error.to_string())?;
+    let hide = MenuItem::with_id(&app, DESKTOP_MENU_HIDE, "隐藏", true, None::<&str>)
+        .map_err(|error| error.to_string())?;
+    let quit = MenuItem::with_id(&app, DESKTOP_MENU_QUIT, "退出", true, None::<&str>)
+        .map_err(|error| error.to_string())?;
+    let menu = Menu::with_items(&app, &[&open, &switch, &separator, &hide, &quit])
+        .map_err(|error| error.to_string())?;
+    window.popup_menu(&menu).map_err(|error| error.to_string())
+}
+
+pub fn handle_desktop_menu_event(app: &AppHandle, event: &MenuEvent) {
+    match event.id().as_ref() {
+        DESKTOP_MENU_OPEN => surface_main_window(app),
+        DESKTOP_MENU_TODO => {
+            let _ = crate::preferences::set_desktop_sticky_kind(app, DesktopStickyKind::Todo);
+        }
+        DESKTOP_MENU_RECORD => {
+            let _ = crate::preferences::set_desktop_sticky_kind(app, DesktopStickyKind::Record);
+        }
+        DESKTOP_MENU_QUOTE => {
+            let _ = crate::preferences::set_desktop_sticky_kind(app, DesktopStickyKind::Quote);
+        }
+        DESKTOP_MENU_HIDE => {
+            if let Some(window) = app.get_webview_window(DESKTOP_STICKY_WINDOW_LABEL) {
+                let _ = window.hide();
+            }
+        }
+        DESKTOP_MENU_QUIT => {
+            let _ = app.save_window_state(StateFlags::POSITION | StateFlags::SIZE);
+            app.exit(0);
+        }
+        _ => {}
+    }
+}
+
+pub fn schedule_desktop_position_save(window: &tauri::Window, expected: PhysicalPosition<i32>) {
+    let app = window.app_handle().clone();
+    let window = window.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        if window.outer_position().ok() != Some(expected) {
+            return;
+        }
+        let screen = window
+            .current_monitor()
+            .ok()
+            .flatten()
+            .and_then(|monitor| monitor.name().cloned());
+        let _ = crate::preferences::save_desktop_sticky_position(
+            &app,
+            DesktopStickyPosition {
+                x: expected.x,
+                y: expected.y,
+                screen,
+            },
+        );
+    });
 }
 
 pub fn restore_main_window(app: &AppHandle) -> tauri::Result<()> {

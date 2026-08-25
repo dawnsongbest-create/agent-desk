@@ -14,6 +14,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { listen } from "@tauri-apps/api/event";
 import {
   useEffect,
   useLayoutEffect,
@@ -25,6 +26,7 @@ import {
 } from "react";
 import type {
   Preferences,
+  DesktopStickyKind,
   ReaderFontSize,
   ReaderLineSpacing,
   StickyMode,
@@ -745,9 +747,10 @@ function consumeTodoWheel(element: HTMLDivElement, event: globalThis.WheelEvent)
 }
 
 type StickySurfaceProps = {
-  mode: StickyMode;
+  mode: Exclude<StickyMode, "desktop">;
   position: StickyPosition;
   pinned?: boolean;
+  interactive?: boolean;
   label: string;
   onActivate(): void;
   onPositionChange(position: StickyPosition): void;
@@ -758,6 +761,7 @@ function StickySurface({
   mode,
   position,
   pinned = false,
+  interactive = true,
   label,
   onActivate,
   onPositionChange,
@@ -881,12 +885,12 @@ function StickySurface({
       data-pinned-to-shelf={pinned}
       data-snap-hint={snapHint ?? "free"}
       style={style}
-      role="button"
-      tabIndex={0}
-      aria-label={label}
-      onClick={pinned ? onActivate : undefined}
+      role={interactive ? "button" : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      aria-label={interactive ? label : undefined}
+      onClick={interactive && pinned ? onActivate : undefined}
       onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") onActivate();
+        if (interactive && (event.key === "Enter" || event.key === " ")) onActivate();
       }}
       onPointerDown={pointerDown}
       onPointerMove={pointerMove}
@@ -995,11 +999,13 @@ function MiniStickyTab({
   openTaskCount,
   position,
   onRestore,
+  onDesktop,
   onPositionChange,
 }: {
   openTaskCount: number;
   position: StickyPosition;
   onRestore(): void;
+  onDesktop(): void;
   onPositionChange(position: StickyPosition): void;
 }) {
   return (
@@ -1007,14 +1013,33 @@ function MiniStickyTab({
       mode="mini"
       position={position}
       pinned
+      interactive={false}
       label="恢复 Compact Sticky"
       onActivate={onRestore}
       onPositionChange={onPositionChange}
     >
+      <button
+        className="mini-restore-hitbox"
+        type="button"
+        aria-label="恢复 Compact Sticky"
+        onClick={onRestore}
+      />
       <span className="mini-fold" aria-hidden="true" />
       <span className="mini-label">TODAY</span>
       <strong>{openTaskCount}</strong>
       <span className="mini-dot" aria-hidden="true" />
+      <button
+        className="mini-desktop-control"
+        type="button"
+        data-no-drag
+        aria-label="驻留到桌面"
+        onClick={(event) => {
+          event.stopPropagation();
+          onDesktop();
+        }}
+      >
+        ↘
+      </button>
     </StickySurface>
   );
 }
@@ -1096,11 +1121,13 @@ export function StickyShell(props: StickyShellProps) {
   const [pendingCapture, setPendingCapture] = useState<StickyFace | null>(null);
   const [turnSerial, setTurnSerial] = useState(0);
   const [turnDirection, setTurnDirection] = useState<"forward" | "backward">("forward");
+  const recordsRef = useRef<StickyCard[]>([]);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
   const records = cards.filter((card) => card.kind === "note");
+  recordsRef.current = records;
   const tasks = cards.filter((card) => card.kind === "task");
   const openTaskCount = tasks.filter((card) => !card.completed).length;
   const busy = stickyState === "loading" || stickyState === "saving";
@@ -1118,6 +1145,41 @@ export function StickyShell(props: StickyShellProps) {
     });
     return () => cancelAnimationFrame(frame);
   }, [pendingCapture, selectedRecord]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let dispose: () => void = () => undefined;
+    void listen<DesktopStickyKind>("agent-desk://open-sticky-editor", ({ payload }) => {
+      setExpanded(true);
+      setRecordDirty(false);
+      if (payload === "todo") {
+        setSelectedRecord(null);
+        setFace("task");
+        return;
+      }
+      setFace("note");
+      if (payload === "record") {
+        const latestRecords = recordsRef.current;
+        const record = latestRecords[latestRecords.length - 1] ?? null;
+        setSelectedRecord(record);
+        if (!record) setPendingCapture("note");
+        return;
+      }
+      setSelectedRecord(null);
+      requestAnimationFrame(() => {
+        document.querySelector<HTMLButtonElement>(".quote-value")?.click();
+      });
+    })
+      .then((unlisten) => {
+        if (cancelled) unlisten();
+        else dispose = unlisten;
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      dispose();
+    };
+  }, []);
 
   function switchFace(nextFace: StickyFace) {
     if (nextFace === face) return;
@@ -1414,6 +1476,7 @@ export function StickyShell(props: StickyShellProps) {
             openTaskCount={openTaskCount}
             position={preferences.stickyPosition}
             onRestore={() => changeStickyMode("compact")}
+            onDesktop={() => changeStickyMode("desktop")}
             onPositionChange={onStickyPositionChange}
           />
         ) : (

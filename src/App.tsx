@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import type { Preferences } from "./domain/preferences";
 import { defaultPreferences } from "./domain/preferences";
 import { StickyHome } from "./features/sticky/StickyHome";
@@ -9,6 +10,7 @@ import { tauriReadingPlans } from "./infrastructure/tauri/reading";
 import { tauriAgentProposals } from "./infrastructure/tauri/proposal";
 import { tauriAgentConnection } from "./infrastructure/tauri/agentConnection";
 import { tauriStickyCards } from "./infrastructure/tauri/sticky";
+import { tauriDesktopSticky } from "./infrastructure/tauri/desktopSticky";
 import { applyTheme } from "./styles/theme";
 import "./App.css";
 
@@ -39,6 +41,26 @@ function App() {
 
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let dispose: () => void = () => undefined;
+    void listen<Preferences>("agent-desk://preferences-changed", ({ payload }) => {
+      preferencesRef.current = payload;
+      setPreferences(payload);
+      applyTheme(payload.theme);
+      setSaveState("idle");
+    })
+      .then((unlisten) => {
+        if (cancelled) unlisten();
+        else dispose = unlisten;
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      dispose();
     };
   }, []);
 
@@ -85,7 +107,21 @@ function App() {
       onStickyPositionChange={(stickyPosition) =>
         save({ ...preferencesRef.current, stickyPosition })
       }
-      onStickyModeChange={(stickyMode) => save({ ...preferencesRef.current, stickyMode })}
+      onStickyModeChange={(stickyMode) => {
+        if (stickyMode !== "desktop") {
+          save({ ...preferencesRef.current, stickyMode });
+          return;
+        }
+        setSaveState("saving");
+        void tauriDesktopSticky
+          .enter()
+          .then((stored) => {
+            preferencesRef.current = stored;
+            setPreferences(stored);
+            setSaveState("saved");
+          })
+          .catch(() => setSaveState("error"));
+      }}
       onReaderFontSizeChange={(readerFontSize) =>
         save({ ...preferencesRef.current, readerFontSize })
       }

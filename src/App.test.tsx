@@ -13,7 +13,10 @@ const mocks = vi.hoisted(() => ({
   captureSelection: vi.fn(),
   copyText: vi.fn(),
   getAgentBridgeStatus: vi.fn(),
+  enterDesktopSticky: vi.fn(),
 }));
+
+vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn().mockResolvedValue(vi.fn()) }));
 
 vi.mock("./infrastructure/tauri/preferences", () => ({
   tauriPreferences: {
@@ -59,6 +62,15 @@ vi.mock("./infrastructure/tauri/agentConnection", () => ({
   },
 }));
 
+vi.mock("./infrastructure/tauri/desktopSticky", () => ({
+  tauriDesktopSticky: {
+    enter: mocks.enterDesktopSticky,
+    open: vi.fn(),
+    startDragging: vi.fn(),
+    showContextMenu: vi.fn(),
+  },
+}));
+
 import App from "./App";
 
 describe("App Reader preferences", () => {
@@ -88,6 +100,10 @@ describe("App Reader preferences", () => {
       endpoint: "http://127.0.0.1:47321/api/v1",
       connection: null,
       lastError: null,
+    });
+    mocks.enterDesktopSticky.mockResolvedValue({
+      ...defaultPreferences,
+      stickyMode: "desktop",
     });
   });
 
@@ -223,5 +239,20 @@ describe("App Reader preferences", () => {
     render(<App />);
     await waitFor(() => expect(mocks.openReader).toHaveBeenCalledWith("reader-test"));
     expect(mocks.savePreferences).not.toHaveBeenCalled();
+  });
+
+  it("hands the second Mini shrink action to the native Desktop Sticky window", async () => {
+    const user = userEvent.setup();
+    mocks.loadPreferences.mockResolvedValue({
+      ...defaultPreferences,
+      stickyMode: "mini",
+      currentReaderDocumentId: "reader-test",
+    });
+
+    render(<App />);
+    await screen.findByRole("region", { name: "Reader Canvas" });
+    await user.click(await screen.findByRole("button", { name: "驻留到桌面" }));
+
+    await waitFor(() => expect(mocks.enterDesktopSticky).toHaveBeenCalledOnce());
   });
 });
