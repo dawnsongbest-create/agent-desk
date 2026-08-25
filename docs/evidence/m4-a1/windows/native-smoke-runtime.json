@@ -1,9 +1,20 @@
 {
   "gate": "M4-A1",
   "platform": "Windows",
-  "executable": {
+  "fullFlowExecutable": {
     "path": "D:\\agent-desk-target\\release\\agent-desk.exe",
     "sha256": "A7CC17AAE955B86241EA24DA81E35B755F21B10047A0E4FDEAFF72DC10B5642B"
+  },
+  "postFixCanonicalSmoke": {
+    "path": "D:\\agent-desk-target\\release\\agent-desk.exe",
+    "sha256": "12E22F7EBE41A5ED685F27B07F441503FD5C18C566DC05173D4477787C157C88",
+    "pid": 3252,
+    "alive": true,
+    "exactPath": true,
+    "compactToMiniToDesktop": true,
+    "webView2TargetCount": 2,
+    "desktopTargetCount": 1,
+    "finalResidualSmokeProcessCount": 0
   },
   "isolation": {
     "fixtureRoot": "D:\\agent-desk-m4a1-smoke-5370a39-20260825-01",
@@ -17,7 +28,8 @@
     "restartPid": 12228,
     "aliveBeyondTenSeconds": true,
     "webView2Loaded": true,
-    "finalResidualSmokeProcessCount": 0
+    "finalResidualSmokeProcessCount": 0,
+    "staleRestartPidDetectedAndClosedBeforeCanonicalReplacement": 12228
   },
   "flow": {
     "fullReaderVisible": true,

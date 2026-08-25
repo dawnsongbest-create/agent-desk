@@ -19,6 +19,8 @@ No Edge Dock, automatic screen-edge expansion, new Sticky system, new size syste
 ## Implementation Truth
 
 - Implementation commit: `5370a396cfec90f0eed3569cb1bef15d62b9c40d`
+- Native evidence commit: `ed760ba7ae71da0eeba075e9bd8ce56a00bcdaca`
+- macOS transparency fix commit: `53543def2d16d276da6b49cf09e49297b5f18b9f`
 - State model: `StickyMode = compact | mini | desktop`
 - Desktop content kind: `todo | record | quote`
 - Persistence: existing preferences/store only; no database migration and no copied workspace data.
@@ -75,7 +77,7 @@ The exact canonical executable used isolated SQLite, preference Store, window st
 D:\agent-desk-m4a1-smoke-5370a39-20260825-01
 ```
 
-Product Owner AppData was not opened or modified. The native smoke proved:
+Product Owner AppData was not opened or modified. The full native flow used executable SHA `A7CC17AAE955B86241EA24DA81E35B755F21B10047A0E4FDEAFF72DC10B5642B` and proved:
 
 1. Full Reader, Compact Sticky, Mini Tab, and the independent Desktop Sticky were visible in the expected sequence.
 2. The desktop child had native class `Tauri Window`, was visible and topmost, while the main window was hidden in Desktop mode.
@@ -85,7 +87,9 @@ Product Owner AppData was not opened or modified. The native smoke proved:
 6. The real native right-click menu exposed all four required actions.
 7. Double-click restored the existing main window and opened the Todo editor; Reader remained available underneath.
 8. After a complete process restart, Desktop mode, exact position, topmost state, Todo content, Reader, and Compact Sticky all restored.
-9. Final shutdown left zero isolated Agent Desk processes.
+9. A final post-fix build from commit `53543de` replaced canonical with SHA `12E22F7EBE41A5ED685F27B07F441503FD5C18C566DC05173D4477787C157C88`.
+10. The exact post-fix canonical stayed alive, loaded WebView2, and completed Compact → Mini → Desktop with two WebView2 targets including exactly one Desktop surface.
+11. Final shutdown left zero isolated Agent Desk processes.
 
 Evidence: [runtime JSON](evidence/m4-a1/windows/native-smoke-runtime.json), [Full + Compact](evidence/m4-a1/windows/01-full-compact.png), [Mini in Reader](evidence/m4-a1/windows/02-mini-in-reader.png), [Desktop Sticky](evidence/m4-a1/windows/03-desktop-sticky-todo.png), [same-data Todo sync](evidence/m4-a1/windows/04-desktop-sticky-synced-todo.png), [double-click Todo editor](evidence/m4-a1/windows/05-desktop-double-click-edit.png), [restart Desktop restore](evidence/m4-a1/windows/06-restart-restored-desktop.png), and [restart Reader + Compact](evidence/m4-a1/windows/07-restart-reader-and-compact.png).
 
@@ -96,18 +100,18 @@ Evidence: [runtime JSON](evidence/m4-a1/windows/native-smoke-runtime.json), [Ful
 | `dist/index.html` | `1F15EC9BCE48ACBEAA0F439CC4A7B08B1942D2A692BF27A46A4362B139AD9647` |
 | `dist/assets/index-BImTNJf-.css` | `05596644B4C2E30F4A5DD1B431895C11F87A2CC89E69B0A203B8ECB21B599A2E` |
 | `dist/assets/index-ECIkk77c.js` | `A424EFA46C7DECE6A0D47DE3739C45C8282D11DC22D536DB8D0709586A1174E9` |
-| truth executable | `A7CC17AAE955B86241EA24DA81E35B755F21B10047A0E4FDEAFF72DC10B5642B` |
-| canonical executable | `A7CC17AAE955B86241EA24DA81E35B755F21B10047A0E4FDEAFF72DC10B5642B` |
+| truth executable | `12E22F7EBE41A5ED685F27B07F441503FD5C18C566DC05173D4477787C157C88` |
+| canonical executable | `12E22F7EBE41A5ED685F27B07F441503FD5C18C566DC05173D4477787C157C88` |
 
 Truth executable:
 
 ```text
-D:\agent-desk-m4a1-truth-target\release\agent-desk.exe
+D:\agent-desk-m4a1-final-53543de-target\release\agent-desk.exe
 ```
 
 `PRODUCT_OWNER_PREVIEW_EXECUTABLE`: `D:\agent-desk-target\release\agent-desk.exe`
 
-Truth and canonical are byte-identical, size `15,667,200` bytes. Provenance: [Windows provenance](evidence/m4-a1/windows/provenance.json).
+Truth and canonical are byte-identical, size `15,667,712` bytes. Provenance: [Windows provenance](evidence/m4-a1/windows/provenance.json).
 
 ## Public Repository Safety
 
@@ -118,11 +122,18 @@ Truth and canonical are byte-identical, size `15,667,200` bytes. Provenance: [Wi
 
 ## Hosted CI
 
-Pending final public `main` push and real Windows/macOS GitHub Actions results.
+Initial run [`32834685208`](https://github.com/dawnsongbest-create/agent-desk/actions/runs/32834685208) proved Windows PASS but found a real macOS compile failure: Tauri's `WebviewWindowBuilder::transparent` is feature-gated on macOS. The minimal fix enabled the official `macos-private-api` feature in `src-tauri/Cargo.toml` and matching `app.macOSPrivateApi` configuration in `src-tauri/tauri.conf.json`; no product behavior or UI was changed.
+
+Replacement run [`32835881532`](https://github.com/dawnsongbest-create/agent-desk/actions/runs/32835881532) validated fix commit `53543def2d16d276da6b49cf09e49297b5f18b9f` on public `main`:
+
+- macOS job [`97764511401`](https://github.com/dawnsongbest-create/agent-desk/actions/runs/32835881532/job/97764511401): PASS.
+- Windows job [`97764511623`](https://github.com/dawnsongbest-create/agent-desk/actions/runs/32835881532/job/97764511623): PASS.
+
+Both jobs completed frontend format/typecheck/lint/tests, Rust fmt/Clippy/tests, and the real non-bundled Tauri build.
 
 ```text
-M4_A1_GATE_STATUS: PENDING_HOSTED_CI
-DESKTOP_STICKY_STATUS: IMPLEMENTED_AND_NATIVE_SMOKE_PASS
+M4_A1_GATE_STATUS: AWAITING_PRODUCT_AND_TECH_REVIEW
+DESKTOP_STICKY_STATUS: FOUNDATION_READY
 EDGE_DOCK_STATUS: NOT_STARTED
 AI_READING_STATUS: NOT_STARTED
 ```
