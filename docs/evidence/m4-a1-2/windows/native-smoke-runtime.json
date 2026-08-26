@@ -1,0 +1,40 @@
+{
+  "executable_sha256": "51CFC559FDDCD26A2218CBBA06D7C503EF9B3F7464BC551611FCB9EC3F95E3D8",
+  "isolated_profile": true,
+  "product_owner_app_data_modified": false,
+  "default_startup": "PASS: DESKTOP + COMPACT",
+  "compact_expanded_mini": "PASS",
+  "reader_transitions": "PASS",
+  "gateway_absent": true,
+  "last_state_restart": {
+    "surface": "reader",
+    "sticky": "expanded",
+    "reader_scroll_top": 240,
+    "reader_surface": "reader",
+    "document": "reader_builtin_foundation_v1",
+    "status": "PASS"
+  },
+  "sticky_over_reader_restart": {
+    "surface": "reader",
+    "sticky": "compact",
+    "placement": "free",
+    "status": "PASS"
+  },
+  "edge_dock": {
+    "collapsed_width": 35,
+    "revealed_width": 176,
+    "retracted_width": 35,
+    "status": "PASS"
+  },
+  "always_on_top": {
+    "desktop_mini": true,
+    "desktop_compact": true,
+    "desktop_expanded": true,
+    "reader": true,
+    "reader_mini": true,
+    "edge_revealed": true,
+    "stole_keyboard_focus": false,
+    "status": "PASS"
+  },
+  "remaining_smoke_processes": 0
+}

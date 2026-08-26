@@ -1,0 +1,47 @@
+{
+  "startup": {
+    "text": "TODAY\nquiet\n\n今天没有未完成待办。\n\n留一句愿意常常看到的话。\n打开阅读器",
+    "compact": true,
+    "mini": false,
+    "gateway": false,
+    "size": [
+      320,
+      420
+    ]
+  },
+  "expanded": {
+    "expanded": true,
+    "text": "记录\n0\n待办\n0\n+ 新记录\n↙\n便签一句\nCompact Sticky 会一直显示\n写下你的便签一句\n\n我的记录\n\n0 篇\n\n还没有记录。让第一段文字从这里开始。\n\n+\n新建记录\n在这张纸上写一篇长记录\n\n✦",
+    "size": [
+      420,
+      595
+    ]
+  },
+  "desktopMini": {
+    "mini": true,
+    "size": [
+      95,
+      63
+    ]
+  },
+  "readerCompact": {
+    "reader": true,
+    "compact": true,
+    "gateway": false
+  },
+  "readerMini": {
+    "reader": true,
+    "mini": true
+  },
+  "secondFold": {
+    "mini": true,
+    "size": [
+      95,
+      63
+    ]
+  },
+  "stickyOnly": {
+    "compact": true,
+    "readerEntry": true
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "reader": true,
+  "compact": true,
+  "expanded": false,
+  "mini": false,
+  "scrollTop": 240,
+  "preferences": {
+    "schemaVersion": 1,
+    "theme": "system",
+    "alwaysOnTop": true,
+    "windowBehavior": "hide_to_tray",
+    "windowPreset": "sticky",
+    "stickyPosition": {
+      "xRatio": 0.5,
+      "yRatio": 0.28,
+      "snap": null
+    },
+    "stickyMode": "compact",
+    "startupDisplayMode": "sticky_over_reader",
+    "surfaceMode": "reader",
+    "placementMode": "free",
+    "desktopStickyKind": "todo",
+    "desktopStickyPosition": null,
+    "edgeDockPosition": null,
+    "readerSkin": "grid",
+    "readerFontSize": "standard",
+    "readerLineSpacing": "standard",
+    "readerContentVisible": true,
+    "currentReaderDocumentId": "reader_builtin_foundation_v1",
+    "readerScrollTop": 240,
+    "readerSurfaceMode": "reader"
+  }
+}
