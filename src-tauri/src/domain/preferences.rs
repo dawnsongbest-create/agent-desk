@@ -109,6 +109,15 @@ pub enum ReaderLineSpacing {
     Relaxed,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReaderSurfaceMode {
+    #[default]
+    Reader,
+    Inbox,
+    Plans,
+}
+
 impl WindowPreset {
     pub const fn logical_size(self) -> Option<(f64, f64)> {
         match self {
@@ -202,6 +211,10 @@ pub struct Preferences {
     pub reader_content_visible: bool,
     #[serde(default)]
     pub current_reader_document_id: Option<String>,
+    #[serde(default)]
+    pub reader_scroll_top: u32,
+    #[serde(default)]
+    pub reader_surface_mode: ReaderSurfaceMode,
 }
 
 const fn default_true() -> bool {
@@ -275,6 +288,8 @@ impl Default for Preferences {
             reader_line_spacing: ReaderLineSpacing::Standard,
             reader_content_visible: true,
             current_reader_document_id: None,
+            reader_scroll_top: 0,
+            reader_surface_mode: ReaderSurfaceMode::Reader,
         }
     }
 }
@@ -306,6 +321,8 @@ mod tests {
         assert_eq!(value["readerLineSpacing"], "standard");
         assert_eq!(value["readerContentVisible"], true);
         assert_eq!(value["currentReaderDocumentId"], serde_json::Value::Null);
+        assert_eq!(value["readerScrollTop"], 0);
+        assert_eq!(value["readerSurfaceMode"], "reader");
     }
 
     #[test]

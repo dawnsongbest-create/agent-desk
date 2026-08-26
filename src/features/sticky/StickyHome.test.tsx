@@ -184,6 +184,8 @@ function renderHome(
       onReaderLineSpacingChange={readerLineSpacingChange}
       onReaderContentVisibilityChange={vi.fn()}
       onCurrentReaderDocumentChange={vi.fn()}
+      onReaderScrollTopChange={vi.fn()}
+      onReaderSurfaceModeChange={vi.fn()}
     />,
   );
 }
@@ -683,6 +685,8 @@ describe("StickyHome M1-B4", () => {
         onReaderLineSpacingChange={vi.fn()}
         onReaderContentVisibilityChange={vi.fn()}
         onCurrentReaderDocumentChange={vi.fn()}
+        onReaderScrollTopChange={vi.fn()}
+        onReaderSurfaceModeChange={vi.fn()}
       />,
     );
     const miniButton = screen.getByRole("button", { name: "恢复 Compact Sticky" });

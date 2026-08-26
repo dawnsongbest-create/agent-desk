@@ -46,6 +46,8 @@ type StickyHomeProps = {
   onReaderLineSpacingChange(spacing: ReaderLineSpacing): void;
   onReaderContentVisibilityChange(visible: boolean): void;
   onCurrentReaderDocumentChange(id: string): void;
+  onReaderScrollTopChange(scrollTop: number): void;
+  onReaderSurfaceModeChange(mode: Preferences["readerSurfaceMode"]): void;
 };
 
 export function StickyHome({
@@ -71,6 +73,8 @@ export function StickyHome({
   onReaderLineSpacingChange,
   onReaderContentVisibilityChange,
   onCurrentReaderDocumentChange,
+  onReaderScrollTopChange,
+  onReaderSurfaceModeChange,
 }: StickyHomeProps) {
   const sticky = useStickyCards(port);
   const reader = useReaderDocument(
@@ -181,6 +185,8 @@ export function StickyHome({
       onReaderFontSizeChange={onReaderFontSizeChange}
       onReaderLineSpacingChange={onReaderLineSpacingChange}
       onReaderContentVisibilityChange={onReaderContentVisibilityChange}
+      onReaderScrollTopChange={onReaderScrollTopChange}
+      onReaderSurfaceModeChange={onReaderSurfaceModeChange}
       onRetryReader={reader.retry}
       onRetryInbox={inbox.retry}
       onOpenDelivery={openDelivery}

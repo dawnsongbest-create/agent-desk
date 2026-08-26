@@ -20,6 +20,8 @@ export const readerFontSizes = ["small", "standard", "large"] as const;
 export type ReaderFontSize = (typeof readerFontSizes)[number];
 export const readerLineSpacings = ["compact", "standard", "relaxed"] as const;
 export type ReaderLineSpacing = (typeof readerLineSpacings)[number];
+export const readerSurfaceModes = ["reader", "inbox", "plans"] as const;
+export type ReaderSurfaceMode = (typeof readerSurfaceModes)[number];
 
 export type StickyPosition = {
   xRatio: number;
@@ -57,6 +59,8 @@ export type Preferences = {
   readerLineSpacing: ReaderLineSpacing;
   readerContentVisible: boolean;
   currentReaderDocumentId: string | null;
+  readerScrollTop: number;
+  readerSurfaceMode: ReaderSurfaceMode;
 };
 
 export const defaultPreferences: Preferences = {
@@ -78,6 +82,8 @@ export const defaultPreferences: Preferences = {
   readerLineSpacing: "standard",
   readerContentVisible: true,
   currentReaderDocumentId: null,
+  readerScrollTop: 0,
+  readerSurfaceMode: "reader",
 };
 
 export type CompactGeometry = {

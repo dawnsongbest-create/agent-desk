@@ -111,6 +111,8 @@ type StickyShellProps = {
   onReaderFontSizeChange(size: ReaderFontSize): void;
   onReaderLineSpacingChange(spacing: ReaderLineSpacing): void;
   onReaderContentVisibilityChange(visible: boolean): void;
+  onReaderScrollTopChange(scrollTop: number): void;
+  onReaderSurfaceModeChange(mode: Preferences["readerSurfaceMode"]): void;
   onRetryReader(): void;
   onRetryInbox(): void;
   onOpenDelivery(id: string): Promise<boolean>;
@@ -1144,6 +1146,8 @@ export function StickyShell(props: StickyShellProps) {
     onReaderFontSizeChange,
     onReaderLineSpacingChange,
     onReaderContentVisibilityChange,
+    onReaderScrollTopChange,
+    onReaderSurfaceModeChange,
     onRetryReader,
     onRetryInbox,
     onOpenDelivery,
@@ -1172,8 +1176,11 @@ export function StickyShell(props: StickyShellProps) {
     onDismissError,
   } = props;
   const [expanded, setExpanded] = useState(preferences.stickyMode === "expanded");
-  const [readerSurfaceMode, setReaderSurfaceMode] = useState<ReaderSurfaceMode>("reader");
-  const readerScrollTopRef = useRef(0);
+  const [readerSurfaceMode, setReaderSurfaceMode] = useState<ReaderSurfaceMode>(
+    preferences.readerSurfaceMode,
+  );
+  const readerScrollTopRef = useRef(preferences.readerScrollTop);
+  const readerScrollSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [face, setFace] = useState<StickyFace>("note");
   const [selectedRecord, setSelectedRecord] = useState<StickyCard | null>(null);
   const [recordDirty, setRecordDirty] = useState(false);
@@ -1199,6 +1206,22 @@ export function StickyShell(props: StickyShellProps) {
   useEffect(() => {
     setExpanded(preferences.stickyMode === "expanded");
   }, [preferences.stickyMode]);
+
+  useEffect(() => {
+    readerScrollTopRef.current = preferences.readerScrollTop;
+  }, [preferences.readerScrollTop]);
+
+  useEffect(
+    () => () => {
+      if (readerScrollSaveTimer.current) clearTimeout(readerScrollSaveTimer.current);
+    },
+    [],
+  );
+
+  function changeReaderSurfaceMode(mode: ReaderSurfaceMode) {
+    setReaderSurfaceMode(mode);
+    onReaderSurfaceModeChange(mode);
+  }
 
   useEffect(() => {
     if (!pendingCapture || selectedRecord) return;
@@ -1278,7 +1301,7 @@ export function StickyShell(props: StickyShellProps) {
   async function openDelivery(id: string) {
     if (!(await onOpenDelivery(id))) return;
     readerScrollTopRef.current = 0;
-    setReaderSurfaceMode("reader");
+    changeReaderSurfaceMode("reader");
   }
 
   return (
@@ -1313,6 +1336,11 @@ export function StickyShell(props: StickyShellProps) {
         onOpenDelivery={(id) => void openDelivery(id)}
         onReaderScrollPositionChange={(scrollTop) => {
           readerScrollTopRef.current = scrollTop;
+          if (readerScrollSaveTimer.current) clearTimeout(readerScrollSaveTimer.current);
+          readerScrollSaveTimer.current = setTimeout(() => {
+            readerScrollSaveTimer.current = null;
+            onReaderScrollTopChange(Math.max(0, Math.round(scrollTop)));
+          }, 180);
         }}
         onContentVisibilityChange={onReaderContentVisibilityChange}
         onCopy={onCopyReaderSelection}
@@ -1322,7 +1350,7 @@ export function StickyShell(props: StickyShellProps) {
         onCreateReadingPlan={onCreateReadingPlan}
         onGenerateReadingDelivery={async (id) => {
           const generated = await onGenerateReadingDelivery(id);
-          if (generated) setReaderSurfaceMode("inbox");
+          if (generated) changeReaderSurfaceMode("inbox");
           return generated;
         }}
         onSetReadingPlanStatus={onSetReadingPlanStatus}
@@ -1342,10 +1370,10 @@ export function StickyShell(props: StickyShellProps) {
             aria-label={readerSurfaceMode === "plans" ? "返回阅读" : "打开阅读计划"}
             onClick={() => {
               if (readerSurfaceMode === "plans") {
-                setReaderSurfaceMode("reader");
+                changeReaderSurfaceMode("reader");
               } else {
                 onRetryReadingPlans();
-                setReaderSurfaceMode("plans");
+                changeReaderSurfaceMode("plans");
               }
             }}
           >
@@ -1364,9 +1392,9 @@ export function StickyShell(props: StickyShellProps) {
             onClick={() => {
               if (readerSurfaceMode !== "inbox") {
                 onRetryInbox();
-                setReaderSurfaceMode("inbox");
+                changeReaderSurfaceMode("inbox");
               } else {
-                setReaderSurfaceMode("reader");
+                changeReaderSurfaceMode("reader");
               }
             }}
           >

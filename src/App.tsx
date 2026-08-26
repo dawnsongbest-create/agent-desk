@@ -161,6 +161,12 @@ function App({ surface = "main" }: AppProps) {
       onCurrentReaderDocumentChange={(currentReaderDocumentId) =>
         save({ ...preferencesRef.current, currentReaderDocumentId })
       }
+      onReaderScrollTopChange={(readerScrollTop) =>
+        save({ ...preferencesRef.current, readerScrollTop })
+      }
+      onReaderSurfaceModeChange={(readerSurfaceMode) =>
+        save({ ...preferencesRef.current, readerSurfaceMode })
+      }
     />
   );
 }
