@@ -1181,6 +1181,7 @@ export function StickyShell(props: StickyShellProps) {
   );
   const readerScrollTopRef = useRef(preferences.readerScrollTop);
   const readerScrollSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onReaderScrollTopChangeRef = useRef(onReaderScrollTopChange);
   const [face, setFace] = useState<StickyFace>("note");
   const [selectedRecord, setSelectedRecord] = useState<StickyCard | null>(null);
   const [recordDirty, setRecordDirty] = useState(false);
@@ -1211,14 +1212,26 @@ export function StickyShell(props: StickyShellProps) {
     readerScrollTopRef.current = preferences.readerScrollTop;
   }, [preferences.readerScrollTop]);
 
+  useEffect(() => {
+    onReaderScrollTopChangeRef.current = onReaderScrollTopChange;
+  }, [onReaderScrollTopChange]);
+
   useEffect(
     () => () => {
-      if (readerScrollSaveTimer.current) clearTimeout(readerScrollSaveTimer.current);
+      if (!readerScrollSaveTimer.current) return;
+      clearTimeout(readerScrollSaveTimer.current);
+      readerScrollSaveTimer.current = null;
+      onReaderScrollTopChangeRef.current(Math.max(0, Math.round(readerScrollTopRef.current)));
     },
     [],
   );
 
   function changeReaderSurfaceMode(mode: ReaderSurfaceMode) {
+    if (readerScrollSaveTimer.current) {
+      clearTimeout(readerScrollSaveTimer.current);
+      readerScrollSaveTimer.current = null;
+      onReaderScrollTopChange(Math.max(0, Math.round(readerScrollTopRef.current)));
+    }
     setReaderSurfaceMode(mode);
     onReaderSurfaceModeChange(mode);
   }
