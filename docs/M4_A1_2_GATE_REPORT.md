@@ -26,7 +26,8 @@ Reader surface and scroll are stored only in Preferences. No SQLite migration wa
 
 ## Artifact Truth
 
-- Source commit: `0560e51ef584362085d86af306e429cbab1dba3b`
+- Published source commit: `5f93e38c15e339684bd6b373cbdc8c74489b9cc6`
+- Source tree: `b7b6bdb6ee3e64b641f2afac0c586acaa6487164`
 - Build environment: Node 22.23.2, pnpm 11.16.0, MSVC x64, Cargo locked
 - Truth executable: `D:\agent-desk-m4a12-truth-0560e51\release\agent-desk.exe`
 - Canonical executable: `D:\agent-desk-target\release\agent-desk.exe`
@@ -68,12 +69,30 @@ The Product Owner AppData was read only. Before/after SHA-256 remained identical
 
 ## Public Repository Safety
 
-Pending final scan and push. The evidence intentionally excludes isolated profiles, databases, WebView2 data, tokens, build outputs and personal profile paths.
+PASS. The repository remains Public with `main` as its default branch. The final scan found no secrets, personal paths, Product Owner data, databases, WebView2 profiles or build outputs. The evidence intentionally contains only isolated, synthetic product state.
 
 ## CI
 
-Pending final Windows and macOS GitHub Actions run.
+- Run: [32949054043](https://github.com/dawnsongbest-create/agent-desk/actions/runs/32949054043)
+- Windows (`windows-latest`): PASS
+- macOS (`macos-latest`): PASS
 
 ## Gate
 
-Local implementation, artifact truth and Native Smoke: PASS. Final status awaits public-repository scan and two-platform CI.
+Implementation, artifact truth, Native Smoke, public safety and two-platform CI: PASS.
+
+`M4_A1_2_TECH_GATE_STATUS: AWAITING_TECH_REVIEW`
+
+`M4_A1_2_PRODUCT_GATE_STATUS: AWAITING_PRODUCT_REVIEW`
+
+`STICKY_STATE_MODEL_STATUS: READY_FOR_REVIEW`
+
+`READER_TRANSITION_STATUS: READY_FOR_REVIEW`
+
+`READER_PERSISTENCE_STATUS: READY_FOR_REVIEW`
+
+`ALWAYS_ON_TOP_STATUS: READY_FOR_REVIEW`
+
+`EDGE_DOCK_STATUS: READY_FOR_PRODUCT_REVIEW`
+
+`AI_READING_STATUS: NOT_STARTED`

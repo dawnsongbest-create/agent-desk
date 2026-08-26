@@ -1,5 +1,6 @@
 {
-  "source_commit": "0560e51ef584362085d86af306e429cbab1dba3b",
+  "source_commit": "5f93e38c15e339684bd6b373cbdc8c74489b9cc6",
+  "source_tree": "b7b6bdb6ee3e64b641f2afac0c586acaa6487164",
   "node": "22.23.2",
   "pnpm": "11.16.0",
   "build": "pnpm tauri build --no-bundle -- --locked",
