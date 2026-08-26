@@ -2816,6 +2816,7 @@ html[data-surface="edge-dock"] #root {
 }
 
 .desk-board[data-native-surface="desktop"] {
+  min-height: 0;
   overflow: hidden;
   background: transparent;
 }
