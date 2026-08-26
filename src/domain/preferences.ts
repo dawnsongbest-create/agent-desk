@@ -4,18 +4,14 @@ export type ThemeMode = (typeof themeModes)[number];
 export type WindowBehavior = "hide_to_tray";
 export const windowPresets = ["sticky", "iphone5", "pocket", "book", "custom"] as const;
 export type WindowPreset = (typeof windowPresets)[number];
-export const stickyModes = ["compact", "mini", "desktop"] as const;
+export const stickyModes = ["mini", "compact", "expanded"] as const;
 export type StickyMode = (typeof stickyModes)[number];
 export const startupDisplayModes = ["desktop_sticky", "last_state", "sticky_over_reader"] as const;
 export type StartupDisplayMode = (typeof startupDisplayModes)[number];
-export const workspaceDisplayModes = [
-  "desktop_sticky",
-  "compact_tab",
-  "reader",
-  "sticky_over_reader",
-  "edge_dock",
-] as const;
-export type WorkspaceDisplayMode = (typeof workspaceDisplayModes)[number];
+export const surfaceModes = ["desktop", "reader"] as const;
+export type SurfaceMode = (typeof surfaceModes)[number];
+export const placementModes = ["free", "right_edge_collapsed", "right_edge_revealed"] as const;
+export type PlacementMode = (typeof placementModes)[number];
 export const desktopStickyKinds = ["todo", "record", "quote"] as const;
 export type DesktopStickyKind = (typeof desktopStickyKinds)[number];
 export const readerSkins = ["grid"] as const;
@@ -51,7 +47,8 @@ export type Preferences = {
   stickyPosition: StickyPosition;
   stickyMode: StickyMode;
   startupDisplayMode: StartupDisplayMode;
-  workspaceDisplayMode: WorkspaceDisplayMode;
+  surfaceMode: SurfaceMode;
+  placementMode: PlacementMode;
   desktopStickyKind: DesktopStickyKind;
   desktopStickyPosition: DesktopStickyPosition | null;
   edgeDockPosition: EdgeDockPosition | null;
@@ -65,13 +62,14 @@ export type Preferences = {
 export const defaultPreferences: Preferences = {
   schemaVersion: 1,
   theme: "system",
-  alwaysOnTop: false,
+  alwaysOnTop: true,
   windowBehavior: "hide_to_tray",
   windowPreset: "sticky",
   stickyPosition: { xRatio: 0.5, yRatio: 0.28, snap: null },
   stickyMode: "compact",
   startupDisplayMode: "desktop_sticky",
-  workspaceDisplayMode: "desktop_sticky",
+  surfaceMode: "desktop",
+  placementMode: "free",
   desktopStickyKind: "todo",
   desktopStickyPosition: null,
   edgeDockPosition: null,

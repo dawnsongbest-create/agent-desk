@@ -1,7 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
-import { DesktopSticky } from "./features/desktopSticky/DesktopSticky";
 import { EdgeDock } from "./features/edgeDock/EdgeDock";
 import "./styles/global.css";
 
@@ -12,7 +11,7 @@ if (surface === "edge-dock") document.documentElement.dataset.surface = "edge-do
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     {surface === "desktop-sticky" ? (
-      <DesktopSticky />
+      <App surface="desktop" />
     ) : surface === "edge-dock" ? (
       <EdgeDock />
     ) : (

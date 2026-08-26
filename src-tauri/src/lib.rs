@@ -16,7 +16,7 @@ use std::sync::Arc;
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
-use domain::preferences::WorkspaceDisplayMode;
+use domain::preferences::{PlacementMode, SurfaceMode};
 
 const AUDIT_DATA_DIR_ENV: &str = "AGENT_DESK_AUDIT_DATA_DIR";
 
@@ -102,16 +102,15 @@ pub fn run() {
             let preferences =
                 preferences::initialize(app.handle()).map_err(std::io::Error::other)?;
             shell::setup_tray(app)?;
-            match preferences.workspace_display_mode {
-                WorkspaceDisplayMode::DesktopSticky => {
-                    shell::restore_desktop_sticky_window(app.handle(), &preferences)?;
-                }
-                WorkspaceDisplayMode::EdgeDock => {
+            match (preferences.surface_mode, preferences.placement_mode) {
+                (SurfaceMode::Desktop, PlacementMode::RightEdgeCollapsed)
+                | (SurfaceMode::Desktop, PlacementMode::RightEdgeRevealed) => {
                     shell::restore_edge_dock_window(app.handle(), &preferences)?;
                 }
-                WorkspaceDisplayMode::CompactTab
-                | WorkspaceDisplayMode::Reader
-                | WorkspaceDisplayMode::StickyOverReader => {
+                (SurfaceMode::Desktop, PlacementMode::Free) => {
+                    shell::restore_desktop_sticky_window(app.handle(), &preferences)?;
+                }
+                (SurfaceMode::Reader, _) => {
                     shell::restore_main_window(app.handle())?;
                 }
             }
@@ -150,6 +149,9 @@ pub fn run() {
             preferences::update_preferences,
             preferences::apply_window_preset,
             shell::enter_desktop_sticky,
+            shell::set_desktop_sticky_mode,
+            shell::set_reader_sticky_mode,
+            shell::leave_reader_to_desktop,
             shell::open_agent_desk_from_desktop,
             shell::open_reader_workspace,
             shell::start_desktop_sticky_drag,

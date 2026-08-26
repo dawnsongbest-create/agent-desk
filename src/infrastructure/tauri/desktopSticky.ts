@@ -12,6 +12,15 @@ export const tauriDesktopSticky: DesktopStickyWindowPort = {
   openReader() {
     return invoke<Preferences>("open_reader_workspace");
   },
+  setDesktopMode(stickyMode) {
+    return invoke<Preferences>("set_desktop_sticky_mode", { stickyMode });
+  },
+  setReaderMode(stickyMode) {
+    return invoke<Preferences>("set_reader_sticky_mode", { stickyMode });
+  },
+  leaveReader(stickyMode) {
+    return invoke<Preferences>("leave_reader_to_desktop", { stickyMode });
+  },
   startDragging() {
     return invoke("start_desktop_sticky_drag");
   },

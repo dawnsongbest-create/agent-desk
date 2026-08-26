@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
   getAgentBridgeStatus: vi.fn(),
   enterDesktopSticky: vi.fn(),
   openReaderWorkspace: vi.fn(),
+  setDesktopStickyMode: vi.fn(),
+  setReaderStickyMode: vi.fn(),
+  leaveReader: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn().mockResolvedValue(vi.fn()) }));
@@ -68,6 +71,9 @@ vi.mock("./infrastructure/tauri/desktopSticky", () => ({
     enter: mocks.enterDesktopSticky,
     open: vi.fn(),
     openReader: mocks.openReaderWorkspace,
+    setDesktopMode: mocks.setDesktopStickyMode,
+    setReaderMode: mocks.setReaderStickyMode,
+    leaveReader: mocks.leaveReader,
     startDragging: vi.fn(),
     dockIfNearRightEdge: vi.fn(),
     showContextMenu: vi.fn(),
@@ -105,13 +111,25 @@ describe("App Reader preferences", () => {
       connection: null,
       lastError: null,
     });
-    mocks.enterDesktopSticky.mockResolvedValue({
+    mocks.enterDesktopSticky.mockResolvedValue(defaultPreferences);
+    mocks.setDesktopStickyMode.mockImplementation(async (stickyMode) => ({
       ...defaultPreferences,
-      stickyMode: "desktop",
-    });
+      surfaceMode: "desktop",
+      stickyMode,
+    }));
+    mocks.setReaderStickyMode.mockImplementation(async (stickyMode) => ({
+      ...defaultPreferences,
+      surfaceMode: "reader",
+      stickyMode,
+    }));
+    mocks.leaveReader.mockImplementation(async (stickyMode) => ({
+      ...defaultPreferences,
+      surfaceMode: "desktop",
+      stickyMode,
+    }));
     mocks.openReaderWorkspace.mockResolvedValue({
       ...defaultPreferences,
-      workspaceDisplayMode: "reader",
+      surfaceMode: "reader",
     });
   });
 
@@ -259,33 +277,32 @@ describe("App Reader preferences", () => {
 
     render(<App />);
     await screen.findByRole("region", { name: "Reader Canvas" });
-    await user.click(await screen.findByRole("button", { name: "驻留到桌面" }));
+    await user.click(await screen.findByRole("button", { name: "隐藏阅读器，只保留 Mini Tab" }));
 
-    await waitFor(() => expect(mocks.enterDesktopSticky).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.leaveReader).toHaveBeenCalledWith("mini"));
   });
 
-  it("keeps Compact Tab entry-only and opens the Reader through the native workspace command", async () => {
+  it("does not render the removed Gateway page", async () => {
     const user = userEvent.setup();
     mocks.loadPreferences.mockResolvedValue({
       ...defaultPreferences,
-      workspaceDisplayMode: "compact_tab",
+      surfaceMode: "desktop",
       currentReaderDocumentId: "reader-test",
     });
     mocks.openReaderWorkspace.mockResolvedValue({
       ...defaultPreferences,
-      workspaceDisplayMode: "reader",
+      surfaceMode: "reader",
       currentReaderDocumentId: "reader-test",
     });
 
-    render(<App />);
+    render(<App surface="desktop" />);
 
-    expect(await screen.findByRole("main", { name: "Agent Desk Compact Tab" })).toBeVisible();
+    expect(await screen.findByText("TODAY")).toBeVisible();
+    expect(screen.queryByText("你的阅读工作空间")).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Reader Canvas" })).not.toBeInTheDocument();
-    expect(screen.queryByText("收件")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "打开阅读器" }));
 
     await waitFor(() => expect(mocks.openReaderWorkspace).toHaveBeenCalledOnce());
-    expect(await screen.findByRole("region", { name: "Reader Canvas" })).toBeVisible();
   });
 
   it("persists the three-way startup display preference", async () => {

@@ -64,16 +64,17 @@ import type { InboxLoadState } from "../inbox/useInbox";
 import type { ReaderLoadState } from "../reader/useReaderDocument";
 import type { ReadingPlansState } from "../reading/useReadingPlans";
 import { playPageTurnSound } from "./pageTurnSound";
+import { tauriDesktopSticky } from "../../infrastructure/tauri/desktopSticky";
 import type { StickyLoadState } from "./useStickyCards";
 import { AgentBridgeSettings } from "../agentBridge/AgentBridgeSettings";
 import type { AgentBridgeLoadState } from "../agentBridge/useAgentBridge";
-import { CompactTab } from "../workspace/CompactTab";
 
 type SaveState = "loading" | "idle" | "saving" | "saved" | "error";
 type StickyFace = "note" | "task";
 type ReaderSurfaceMode = "reader" | "inbox" | "plans";
 
 type StickyShellProps = {
+  nativeSurface?: "main" | "desktop";
   preferences: Preferences;
   readerDocument: ReaderDocument | null;
   readerState: ReaderLoadState;
@@ -106,6 +107,7 @@ type StickyShellProps = {
   onStickyModeChange(mode: StickyMode): void;
   onStartupDisplayModeChange(mode: StartupDisplayMode): void;
   onOpenReaderWorkspace(): void;
+  onLeaveReaderWorkspace(mode: StickyMode): void;
   onReaderFontSizeChange(size: ReaderFontSize): void;
   onReaderLineSpacingChange(spacing: ReaderLineSpacing): void;
   onReaderContentVisibilityChange(visible: boolean): void;
@@ -177,7 +179,6 @@ function SettingsMenu({
   issuedAgentToken,
   agentTokenCopied,
   onThemeChange,
-  onAlwaysOnTopChange,
   onWindowPresetChange,
   onStartupDisplayModeChange,
   onReaderFontSizeChange,
@@ -194,7 +195,6 @@ function SettingsMenu({
   issuedAgentToken: string | null;
   agentTokenCopied: boolean;
   onThemeChange(theme: ThemeMode): void;
-  onAlwaysOnTopChange(alwaysOnTop: boolean): void;
   onWindowPresetChange(preset: WindowPreset): void;
   onStartupDisplayModeChange(mode: StartupDisplayMode): void;
   onReaderFontSizeChange(size: ReaderFontSize): void;
@@ -334,16 +334,10 @@ function SettingsMenu({
             />
           </div>
           <div className="settings-rule" />
-          <button
-            className="pin-button"
-            type="button"
-            disabled={disabled}
-            aria-pressed={preferences.alwaysOnTop}
-            onClick={() => onAlwaysOnTopChange(!preferences.alwaysOnTop)}
-          >
-            <span>{preferences.alwaysOnTop ? "取消窗口置顶" : "将窗口置顶"}</span>
-            <span aria-hidden="true">{preferences.alwaysOnTop ? "✓" : "○"}</span>
-          </button>
+          <div className="pin-button" aria-label="Agent Desk 窗口始终置顶">
+            <span>窗口始终置顶</span>
+            <span aria-hidden="true">✓</span>
+          </div>
         </div>
       ) : null}
     </div>
@@ -778,10 +772,11 @@ function consumeTodoWheel(element: HTMLDivElement, event: globalThis.WheelEvent)
 }
 
 type StickySurfaceProps = {
-  mode: Exclude<StickyMode, "desktop">;
+  mode: "mini" | "compact";
   position: StickyPosition;
   pinned?: boolean;
   interactive?: boolean;
+  nativeWindow?: boolean;
   label: string;
   onActivate(): void;
   onPositionChange(position: StickyPosition): void;
@@ -793,6 +788,7 @@ function StickySurface({
   position,
   pinned = false,
   interactive = true,
+  nativeWindow = false,
   label,
   onActivate,
   onPositionChange,
@@ -853,6 +849,14 @@ function StickySurface({
     const dy = event.clientY - current.startY;
     if (Math.hypot(dx, dy) >= 5) current.moved = true;
     if (!current.moved) return;
+    if (nativeWindow) {
+      drag.current = null;
+      void tauriDesktopSticky
+        .startDragging()
+        .then(() => tauriDesktopSticky.dockIfNearRightEdge())
+        .catch(() => undefined);
+      return;
+    }
     const board = surface.parentElement?.getBoundingClientRect();
     if (!board) return;
     const width = surface.offsetWidth;
@@ -944,6 +948,9 @@ function StickyPreview({
   position,
   onExpand,
   onMinimize,
+  onOpenReader,
+  showReaderEntry,
+  nativeWindow,
   onPositionChange,
 }: {
   cards: StickyCard[];
@@ -952,6 +959,9 @@ function StickyPreview({
   position: StickyPosition;
   onExpand(): void;
   onMinimize(): void;
+  onOpenReader(): void;
+  showReaderEntry: boolean;
+  nativeWindow: boolean;
   onPositionChange(position: StickyPosition): void;
 }) {
   const openTasks = cards.filter((card) => card.kind === "task" && !card.completed);
@@ -972,6 +982,7 @@ function StickyPreview({
       label="展开或拖动便利贴"
       onActivate={onExpand}
       onPositionChange={onPositionChange}
+      nativeWindow={nativeWindow}
     >
       <span className="tape" aria-hidden="true" />
       <button
@@ -1018,6 +1029,19 @@ function StickyPreview({
         </div>
       )}
       <blockquote>{quote || "留一句愿意常常看到的话。"}</blockquote>
+      {showReaderEntry ? (
+        <button
+          className="compact-reader-button"
+          type="button"
+          data-no-drag
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenReader();
+          }}
+        >
+          打开阅读器
+        </button>
+      ) : null}
     </StickySurface>
   );
 }
@@ -1028,22 +1052,25 @@ function MiniStickyTab({
   onRestore,
   onDesktop,
   onPositionChange,
+  nativeWindow,
 }: {
   openTaskCount: number;
   position: StickyPosition;
   onRestore(): void;
   onDesktop(): void;
   onPositionChange(position: StickyPosition): void;
+  nativeWindow: boolean;
 }) {
   return (
     <StickySurface
       mode="mini"
       position={position}
-      pinned
+      pinned={!nativeWindow}
       interactive={false}
       label="恢复 Compact Sticky"
       onActivate={onRestore}
       onPositionChange={onPositionChange}
+      nativeWindow={nativeWindow}
     >
       <button
         className="mini-restore-hitbox"
@@ -1055,18 +1082,20 @@ function MiniStickyTab({
       <span className="mini-label">TODAY</span>
       <strong>{openTaskCount}</strong>
       <span className="mini-dot" aria-hidden="true" />
-      <button
-        className="mini-desktop-control"
-        type="button"
-        data-no-drag
-        aria-label="驻留到桌面"
-        onClick={(event) => {
-          event.stopPropagation();
-          onDesktop();
-        }}
-      >
-        ↘
-      </button>
+      {!nativeWindow ? (
+        <button
+          className="mini-desktop-control"
+          type="button"
+          data-no-drag
+          aria-label="隐藏阅读器，只保留 Mini Tab"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDesktop();
+          }}
+        >
+          <span aria-hidden="true" />
+        </button>
+      ) : null}
     </StickySurface>
   );
 }
@@ -1079,6 +1108,7 @@ function jumpToCapture(face: StickyFace) {
 
 export function StickyShell(props: StickyShellProps) {
   const {
+    nativeSurface = "main",
     preferences,
     readerDocument,
     readerState,
@@ -1105,12 +1135,12 @@ export function StickyShell(props: StickyShellProps) {
     error,
     now = new Date(),
     onThemeChange,
-    onAlwaysOnTopChange,
     onWindowPresetChange,
     onStickyPositionChange,
     onStickyModeChange,
     onStartupDisplayModeChange,
     onOpenReaderWorkspace,
+    onLeaveReaderWorkspace,
     onReaderFontSizeChange,
     onReaderLineSpacingChange,
     onReaderContentVisibilityChange,
@@ -1141,7 +1171,7 @@ export function StickyShell(props: StickyShellProps) {
     onRetry,
     onDismissError,
   } = props;
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(preferences.stickyMode === "expanded");
   const [readerSurfaceMode, setReaderSurfaceMode] = useState<ReaderSurfaceMode>("reader");
   const readerScrollTopRef = useRef(0);
   const [face, setFace] = useState<StickyFace>("note");
@@ -1165,6 +1195,10 @@ export function StickyShell(props: StickyShellProps) {
     month: "short",
     day: "numeric",
   }).format(now);
+
+  useEffect(() => {
+    setExpanded(preferences.stickyMode === "expanded");
+  }, [preferences.stickyMode]);
 
   useEffect(() => {
     if (!pendingCapture || selectedRecord) return;
@@ -1247,17 +1281,12 @@ export function StickyShell(props: StickyShellProps) {
     setReaderSurfaceMode("reader");
   }
 
-  if (preferences.workspaceDisplayMode === "compact_tab") {
-    return (
-      <CompactTab
-        onDesktop={() => changeStickyMode("desktop")}
-        onOpenReader={onOpenReaderWorkspace}
-      />
-    );
-  }
-
   return (
-    <main className="desk-board" aria-label="Agent Desk Sticky Home">
+    <main
+      className="desk-board"
+      data-native-surface={nativeSurface}
+      aria-label="Agent Desk Sticky Home"
+    >
       <ReaderCanvas
         skin={preferences.readerSkin}
         fontSize={preferences.readerFontSize}
@@ -1355,7 +1384,6 @@ export function StickyShell(props: StickyShellProps) {
             issuedAgentToken={issuedAgentToken}
             agentTokenCopied={agentTokenCopied}
             onThemeChange={onThemeChange}
-            onAlwaysOnTopChange={onAlwaysOnTopChange}
             onWindowPresetChange={onWindowPresetChange}
             onStartupDisplayModeChange={onStartupDisplayModeChange}
             onReaderFontSizeChange={onReaderFontSizeChange}
@@ -1365,12 +1393,45 @@ export function StickyShell(props: StickyShellProps) {
             onCopyAgentToken={() => void onCopyAgentToken()}
             onRetryAgentBridge={() => void onRetryAgentBridge()}
           />
+          <button
+            className="board-icon-button sticky-only-button"
+            type="button"
+            title="隐藏阅读器，只保留便利贴"
+            aria-label="只留便利贴"
+            onClick={() => onLeaveReaderWorkspace(expanded ? "expanded" : preferences.stickyMode)}
+          >
+            <span aria-hidden="true">▱</span>
+          </button>
         </div>
       </header>
       <div className="sticky-overlay-layer" data-reader-layer="2">
         {expanded ? (
           <section className="expanded-sticky" aria-label="展开的便利贴">
-            <span className="tape expanded-tape" aria-hidden="true" />
+            {nativeSurface === "desktop" ? (
+              <button
+                className="tape expanded-tape expanded-drag-handle"
+                type="button"
+                aria-label="拖动桌面便利贴"
+                onPointerDown={() => {
+                  void tauriDesktopSticky
+                    .startDragging()
+                    .then(() => tauriDesktopSticky.dockIfNearRightEdge())
+                    .catch(() => undefined);
+                }}
+              />
+            ) : (
+              <span className="tape expanded-tape" aria-hidden="true" />
+            )}
+            <button
+              className="compact-corner-control expanded-fold-control"
+              type="button"
+              aria-label="缩成 Mini Tab"
+              onClick={(event) => {
+                event.stopPropagation();
+                setExpanded(false);
+                changeStickyMode("mini");
+              }}
+            />
             <header className="expanded-header">
               <div className="face-switcher" role="tablist" aria-label="便利贴正反面">
                 {(["note", "task"] as const).map((candidate) => (
@@ -1405,6 +1466,7 @@ export function StickyShell(props: StickyShellProps) {
                     setSelectedRecord(null);
                     setRecordDirty(false);
                     setExpanded(false);
+                    changeStickyMode("compact");
                   }}
                 >
                   ↙
@@ -1435,6 +1497,7 @@ export function StickyShell(props: StickyShellProps) {
                         setSelectedRecord(null);
                         setRecordDirty(false);
                         setExpanded(false);
+                        changeStickyMode("compact");
                       }}
                       onDirtyChange={setRecordDirty}
                     />
@@ -1515,8 +1578,9 @@ export function StickyShell(props: StickyShellProps) {
             openTaskCount={openTaskCount}
             position={preferences.stickyPosition}
             onRestore={() => changeStickyMode("compact")}
-            onDesktop={() => changeStickyMode("desktop")}
+            onDesktop={() => onLeaveReaderWorkspace("mini")}
             onPositionChange={onStickyPositionChange}
+            nativeWindow={nativeSurface === "desktop"}
           />
         ) : (
           <StickyPreview
@@ -1524,8 +1588,14 @@ export function StickyShell(props: StickyShellProps) {
             quote={profile.quoteText}
             loading={stickyState === "loading"}
             position={preferences.stickyPosition}
-            onExpand={() => setExpanded(true)}
+            onExpand={() => {
+              setExpanded(true);
+              changeStickyMode("expanded");
+            }}
             onMinimize={() => changeStickyMode("mini")}
+            onOpenReader={onOpenReaderWorkspace}
+            showReaderEntry={nativeSurface === "desktop"}
+            nativeWindow={nativeSurface === "desktop"}
             onPositionChange={onStickyPositionChange}
           />
         )}

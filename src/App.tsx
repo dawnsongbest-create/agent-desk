@@ -16,7 +16,9 @@ import "./App.css";
 
 type SaveState = "loading" | "idle" | "saving" | "saved" | "error";
 
-function App() {
+type AppProps = { surface?: "main" | "desktop" };
+
+function App({ surface = "main" }: AppProps) {
   const [preferences, setPreferences] = useState<Preferences>(defaultPreferences);
   const [saveState, setSaveState] = useState<SaveState>("loading");
   const preferencesRef = useRef(defaultPreferences);
@@ -95,6 +97,7 @@ function App() {
       proposalPort={tauriAgentProposals}
       agentConnectionPort={tauriAgentConnection}
       preferences={preferences}
+      nativeSurface={surface}
       preferenceSaveState={saveState}
       onThemeChange={(theme) => save({ ...preferencesRef.current, theme })}
       onAlwaysOnTopChange={(alwaysOnTop) => save({ ...preferencesRef.current, alwaysOnTop })}
@@ -108,13 +111,12 @@ function App() {
         save({ ...preferencesRef.current, stickyPosition })
       }
       onStickyModeChange={(stickyMode) => {
-        if (stickyMode !== "desktop") {
-          save({ ...preferencesRef.current, stickyMode });
-          return;
-        }
         setSaveState("saving");
-        void tauriDesktopSticky
-          .enter()
+        const operation =
+          surface === "desktop"
+            ? tauriDesktopSticky.setDesktopMode(stickyMode)
+            : tauriDesktopSticky.setReaderMode(stickyMode);
+        void operation
           .then((stored) => {
             preferencesRef.current = stored;
             setPreferences(stored);
@@ -129,6 +131,17 @@ function App() {
         setSaveState("saving");
         void tauriDesktopSticky
           .openReader()
+          .then((stored) => {
+            preferencesRef.current = stored;
+            setPreferences(stored);
+            setSaveState("saved");
+          })
+          .catch(() => setSaveState("error"));
+      }}
+      onLeaveReaderWorkspace={(stickyMode) => {
+        setSaveState("saving");
+        void tauriDesktopSticky
+          .leaveReader(stickyMode)
           .then((stored) => {
             preferencesRef.current = stored;
             setPreferences(stored);

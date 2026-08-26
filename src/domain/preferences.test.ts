@@ -79,7 +79,8 @@ describe("Desktop Sticky preference defaults", () => {
   it("starts desktop-first while preserving the existing Sticky data and size model", () => {
     expect(defaultPreferences.stickyMode).toBe("compact");
     expect(defaultPreferences.startupDisplayMode).toBe("desktop_sticky");
-    expect(defaultPreferences.workspaceDisplayMode).toBe("desktop_sticky");
+    expect(defaultPreferences.surfaceMode).toBe("desktop");
+    expect(defaultPreferences.placementMode).toBe("free");
     expect(defaultPreferences.desktopStickyKind).toBe("todo");
     expect(defaultPreferences.desktopStickyPosition).toBeNull();
     expect(defaultPreferences.edgeDockPosition).toBeNull();

@@ -7,15 +7,19 @@ use tauri::{
 use tauri_plugin_window_state::{AppHandleExt, StateFlags, WindowExt};
 
 use crate::domain::preferences::{
-    DesktopStickyKind, DesktopStickyPosition, EdgeDockPosition, Preferences, StickyMode,
-    WorkspaceDisplayMode,
+    DesktopStickyKind, DesktopStickyPosition, EdgeDockPosition, PlacementMode, Preferences,
+    StickyMode, SurfaceMode,
 };
 
 const MIN_VISIBLE_EDGE: i32 = 64;
 pub const DESKTOP_STICKY_WINDOW_LABEL: &str = "desktop-sticky";
 pub const EDGE_DOCK_WINDOW_LABEL: &str = "edge-dock";
-const DESKTOP_STICKY_WINDOW_WIDTH: f64 = 94.0;
-const DESKTOP_STICKY_WINDOW_HEIGHT: f64 = 62.0;
+const DESKTOP_MINI_WIDTH: f64 = 94.0;
+const DESKTOP_MINI_HEIGHT: f64 = 62.0;
+const DESKTOP_COMPACT_WIDTH: f64 = 320.0;
+const DESKTOP_COMPACT_HEIGHT: f64 = 420.0;
+const DESKTOP_EXPANDED_WIDTH: f64 = 420.0;
+const DESKTOP_EXPANDED_HEIGHT: f64 = 594.0;
 const EDGE_DOCK_COLLAPSED_WIDTH: f64 = 34.0;
 const EDGE_DOCK_EXPANDED_WIDTH: f64 = 176.0;
 const EDGE_DOCK_HEIGHT: f64 = 112.0;
@@ -65,10 +69,11 @@ impl Rect {
 }
 
 pub fn surface_main_window(app: &AppHandle) {
-    let _ = crate::preferences::set_workspace_and_sticky_mode(
+    let _ = crate::preferences::set_display_state(
         app,
-        WorkspaceDisplayMode::CompactTab,
+        SurfaceMode::Reader,
         StickyMode::Compact,
+        PlacementMode::Free,
     );
     if let Some(desktop) = app.get_webview_window(DESKTOP_STICKY_WINDOW_LABEL) {
         let _ = desktop.hide();
@@ -80,8 +85,30 @@ pub fn surface_main_window(app: &AppHandle) {
         let _ = window.unminimize();
         let _ = clamp_offscreen_geometry(&window);
         let _ = window.show();
+        let _ = window.set_always_on_top(true);
         let _ = window.set_focus();
     }
+}
+
+fn desktop_sticky_size(mode: StickyMode) -> (f64, f64) {
+    match mode {
+        StickyMode::Mini => (DESKTOP_MINI_WIDTH, DESKTOP_MINI_HEIGHT),
+        StickyMode::Expanded => (DESKTOP_EXPANDED_WIDTH, DESKTOP_EXPANDED_HEIGHT),
+        StickyMode::Compact | StickyMode::Desktop => {
+            (DESKTOP_COMPACT_WIDTH, DESKTOP_COMPACT_HEIGHT)
+        }
+    }
+}
+
+fn apply_desktop_sticky_geometry(window: &WebviewWindow, mode: StickyMode) -> tauri::Result<()> {
+    let (width, height) = desktop_sticky_size(mode);
+    window.set_min_size(None::<Size>)?;
+    window.set_max_size(None::<Size>)?;
+    window.set_size(Size::Logical(LogicalSize::new(width, height)))?;
+    window.set_min_size(Some(Size::Logical(LogicalSize::new(width, height))))?;
+    window.set_max_size(Some(Size::Logical(LogicalSize::new(width, height))))?;
+    window.set_always_on_top(true)?;
+    clamp_offscreen_geometry(window)
 }
 
 fn desktop_window(app: &AppHandle, preferences: &Preferences) -> tauri::Result<WebviewWindow> {
@@ -95,9 +122,10 @@ fn desktop_window(app: &AppHandle, preferences: &Preferences) -> tauri::Result<W
         WebviewUrl::App("index.html?surface=desktop-sticky".into()),
     )
     .title("Agent Desk Desktop Sticky")
-    .inner_size(DESKTOP_STICKY_WINDOW_WIDTH, DESKTOP_STICKY_WINDOW_HEIGHT)
-    .min_inner_size(DESKTOP_STICKY_WINDOW_WIDTH, DESKTOP_STICKY_WINDOW_HEIGHT)
-    .max_inner_size(DESKTOP_STICKY_WINDOW_WIDTH, DESKTOP_STICKY_WINDOW_HEIGHT)
+    .inner_size(
+        desktop_sticky_size(preferences.sticky_mode).0,
+        desktop_sticky_size(preferences.sticky_mode).1,
+    )
     .resizable(false)
     .maximizable(false)
     .minimizable(false)
@@ -112,8 +140,10 @@ fn desktop_window(app: &AppHandle, preferences: &Preferences) -> tauri::Result<W
 
     if let Some(position) = &preferences.desktop_sticky_position {
         window.set_position(PhysicalPosition::new(position.x, position.y))?;
+    } else {
+        window.center()?;
     }
-    clamp_offscreen_geometry(&window)?;
+    apply_desktop_sticky_geometry(&window, preferences.sticky_mode)?;
     Ok(window)
 }
 
@@ -122,7 +152,9 @@ pub fn restore_desktop_sticky_window(
     preferences: &Preferences,
 ) -> tauri::Result<()> {
     let window = desktop_window(app, preferences)?;
+    apply_desktop_sticky_geometry(&window, preferences.sticky_mode)?;
     window.show()?;
+    window.set_always_on_top(true)?;
     let _ = app.emit_to(
         DESKTOP_STICKY_WINDOW_LABEL,
         "agent-desk://desktop-sticky-refresh",
@@ -135,15 +167,24 @@ pub fn restore_desktop_sticky_window(
 pub async fn enter_desktop_sticky(app: AppHandle) -> Result<Preferences, String> {
     let stored = crate::preferences::read(&app)?;
     let window = desktop_window(&app, &stored).map_err(|error| error.to_string())?;
-    let preferences = crate::preferences::set_workspace_and_sticky_mode(
+    let mode = match stored.sticky_mode {
+        StickyMode::Desktop => StickyMode::Compact,
+        mode => mode,
+    };
+    let preferences = crate::preferences::set_display_state(
         &app,
-        WorkspaceDisplayMode::DesktopSticky,
-        StickyMode::Desktop,
+        SurfaceMode::Desktop,
+        mode,
+        PlacementMode::Free,
     )?;
     if let Some(dock) = app.get_webview_window(EDGE_DOCK_WINDOW_LABEL) {
         dock.hide().map_err(|error| error.to_string())?;
     }
+    apply_desktop_sticky_geometry(&window, mode).map_err(|error| error.to_string())?;
     window.show().map_err(|error| error.to_string())?;
+    window
+        .set_always_on_top(true)
+        .map_err(|error| error.to_string())?;
     let _ = app.emit_to(
         DESKTOP_STICKY_WINDOW_LABEL,
         "agent-desk://desktop-sticky-refresh",
@@ -160,28 +201,68 @@ pub async fn open_agent_desk_from_desktop(
     app: AppHandle,
     edit_kind: Option<DesktopStickyKind>,
 ) -> Result<Preferences, String> {
-    let workspace_mode = if edit_kind.is_some() {
-        WorkspaceDisplayMode::StickyOverReader
-    } else {
-        WorkspaceDisplayMode::CompactTab
-    };
-    let preferences = crate::preferences::set_workspace_and_sticky_mode(
+    let preferences = crate::preferences::set_display_state(
         &app,
-        workspace_mode,
+        SurfaceMode::Desktop,
         StickyMode::Compact,
+        PlacementMode::Free,
     )?;
-    if let Some(desktop) = app.get_webview_window(DESKTOP_STICKY_WINDOW_LABEL) {
-        desktop.hide().map_err(|error| error.to_string())?;
-    }
-    let main = app
-        .get_webview_window("main")
-        .ok_or_else(|| "main window is unavailable".to_string())?;
-    main.unminimize().map_err(|error| error.to_string())?;
-    clamp_offscreen_geometry(&main).map_err(|error| error.to_string())?;
-    main.show().map_err(|error| error.to_string())?;
-    main.set_focus().map_err(|error| error.to_string())?;
     if let Some(kind) = edit_kind {
-        let _ = app.emit_to("main", "agent-desk://open-sticky-editor", kind);
+        let _ = crate::preferences::set_desktop_sticky_kind(&app, kind);
+        let _ = app.emit_to(
+            DESKTOP_STICKY_WINDOW_LABEL,
+            "agent-desk://open-sticky-editor",
+            kind,
+        );
+    }
+    Ok(preferences)
+}
+
+#[tauri::command]
+pub async fn set_desktop_sticky_mode(
+    app: AppHandle,
+    sticky_mode: StickyMode,
+) -> Result<Preferences, String> {
+    let mode = match sticky_mode {
+        StickyMode::Desktop => StickyMode::Compact,
+        mode => mode,
+    };
+    let preferences = crate::preferences::set_display_state(
+        &app,
+        SurfaceMode::Desktop,
+        mode,
+        PlacementMode::Free,
+    )?;
+    let window = desktop_window(&app, &preferences).map_err(|error| error.to_string())?;
+    apply_desktop_sticky_geometry(&window, mode).map_err(|error| error.to_string())?;
+    window.show().map_err(|error| error.to_string())?;
+    window
+        .set_always_on_top(true)
+        .map_err(|error| error.to_string())?;
+    if let Some(main) = app.get_webview_window("main") {
+        main.hide().map_err(|error| error.to_string())?;
+    }
+    Ok(preferences)
+}
+
+#[tauri::command]
+pub fn set_reader_sticky_mode(
+    app: AppHandle,
+    sticky_mode: StickyMode,
+) -> Result<Preferences, String> {
+    let mode = match sticky_mode {
+        StickyMode::Desktop => StickyMode::Compact,
+        mode => mode,
+    };
+    let preferences = crate::preferences::set_display_state(
+        &app,
+        SurfaceMode::Reader,
+        mode,
+        PlacementMode::Free,
+    )?;
+    if let Some(main) = app.get_webview_window("main") {
+        main.set_always_on_top(true)
+            .map_err(|error| error.to_string())?;
     }
     Ok(preferences)
 }
@@ -276,7 +357,8 @@ pub fn restore_edge_dock_window(app: &AppHandle, preferences: &Preferences) -> t
         position.and_then(|position| position.screen.as_deref()),
         false,
     )?;
-    window.show()
+    window.show()?;
+    window.set_always_on_top(true)
 }
 
 fn enter_edge_dock_from_desktop(
@@ -285,10 +367,14 @@ fn enter_edge_dock_from_desktop(
     screen: Option<String>,
 ) -> Result<(), String> {
     let current = crate::preferences::read(app)?;
-    if current.workspace_display_mode != WorkspaceDisplayMode::DesktopSticky {
+    if current.surface_mode != SurfaceMode::Desktop {
         return Ok(());
     }
-    crate::preferences::set_workspace_display_mode(app, WorkspaceDisplayMode::EdgeDock)?;
+    crate::preferences::set_surface_and_placement(
+        app,
+        SurfaceMode::Desktop,
+        PlacementMode::RightEdgeCollapsed,
+    )?;
     crate::preferences::save_edge_dock_position(
         app,
         EdgeDockPosition {
@@ -300,6 +386,8 @@ fn enter_edge_dock_from_desktop(
     let dock = edge_dock_window(app, &preferences).map_err(|error| error.to_string())?;
     place_edge_dock(&dock, Some(y), screen.as_deref(), false).map_err(|error| error.to_string())?;
     dock.show().map_err(|error| error.to_string())?;
+    dock.set_always_on_top(true)
+        .map_err(|error| error.to_string())?;
     if let Some(desktop) = app.get_webview_window(DESKTOP_STICKY_WINDOW_LABEL) {
         desktop.hide().map_err(|error| error.to_string())?;
     }
@@ -308,10 +396,17 @@ fn enter_edge_dock_from_desktop(
 
 #[tauri::command]
 pub async fn open_reader_workspace(app: AppHandle) -> Result<Preferences, String> {
-    let preferences = crate::preferences::set_workspace_and_sticky_mode(
+    let current = crate::preferences::read(&app)?;
+    let sticky_mode = match current.sticky_mode {
+        StickyMode::Expanded => StickyMode::Expanded,
+        StickyMode::Mini => StickyMode::Mini,
+        StickyMode::Compact | StickyMode::Desktop => StickyMode::Compact,
+    };
+    let preferences = crate::preferences::set_display_state(
         &app,
-        WorkspaceDisplayMode::Reader,
-        StickyMode::Compact,
+        SurfaceMode::Reader,
+        sticky_mode,
+        PlacementMode::Free,
     )?;
     if let Some(desktop) = app.get_webview_window(DESKTOP_STICKY_WINDOW_LABEL) {
         desktop.hide().map_err(|error| error.to_string())?;
@@ -325,7 +420,41 @@ pub async fn open_reader_workspace(app: AppHandle) -> Result<Preferences, String
     main.unminimize().map_err(|error| error.to_string())?;
     clamp_offscreen_geometry(&main).map_err(|error| error.to_string())?;
     main.show().map_err(|error| error.to_string())?;
+    main.set_always_on_top(true)
+        .map_err(|error| error.to_string())?;
     main.set_focus().map_err(|error| error.to_string())?;
+    Ok(preferences)
+}
+
+#[tauri::command]
+pub async fn leave_reader_to_desktop(
+    app: AppHandle,
+    sticky_mode: StickyMode,
+) -> Result<Preferences, String> {
+    let mode = match sticky_mode {
+        StickyMode::Desktop => StickyMode::Compact,
+        mode => mode,
+    };
+    let preferences = crate::preferences::set_display_state(
+        &app,
+        SurfaceMode::Desktop,
+        mode,
+        PlacementMode::Free,
+    )?;
+    let desktop = desktop_window(&app, &preferences).map_err(|error| error.to_string())?;
+    apply_desktop_sticky_geometry(&desktop, mode).map_err(|error| error.to_string())?;
+    desktop.show().map_err(|error| error.to_string())?;
+    desktop
+        .set_always_on_top(true)
+        .map_err(|error| error.to_string())?;
+    let _ = app.emit_to(
+        DESKTOP_STICKY_WINDOW_LABEL,
+        "agent-desk://desktop-sticky-refresh",
+        (),
+    );
+    if let Some(main) = app.get_webview_window("main") {
+        main.hide().map_err(|error| error.to_string())?;
+    }
     Ok(preferences)
 }
 
@@ -339,7 +468,19 @@ pub fn set_edge_dock_expanded(window: WebviewWindow, expanded: bool) -> Result<(
         .current_monitor()
         .map_err(|error| error.to_string())?
         .and_then(|monitor| monitor.name().cloned());
+    crate::preferences::set_surface_and_placement(
+        window.app_handle(),
+        SurfaceMode::Desktop,
+        if expanded {
+            PlacementMode::RightEdgeRevealed
+        } else {
+            PlacementMode::RightEdgeCollapsed
+        },
+    )?;
     place_edge_dock(&window, Some(position.y), screen.as_deref(), expanded)
+        .map_err(|error| error.to_string())?;
+    window
+        .set_always_on_top(true)
         .map_err(|error| error.to_string())
 }
 
@@ -470,7 +611,8 @@ pub fn restore_main_window(app: &AppHandle) -> tauri::Result<()> {
     let flags = StateFlags::POSITION | StateFlags::SIZE;
     let _ = window.restore_state(flags);
     clamp_offscreen_geometry(&window)?;
-    window.show()
+    window.show()?;
+    window.set_always_on_top(true)
 }
 
 fn clamp_offscreen_geometry(window: &WebviewWindow) -> tauri::Result<()> {

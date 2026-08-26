@@ -24,6 +24,7 @@ import { useAgentProposals } from "../proposal/useAgentProposals";
 import { useAgentBridge } from "../agentBridge/useAgentBridge";
 
 type StickyHomeProps = {
+  nativeSurface?: "main" | "desktop";
   port: StickyCardsPort;
   readerPort: ReaderDocumentsPort;
   deliveryPort: DeliveriesPort;
@@ -40,6 +41,7 @@ type StickyHomeProps = {
   onStickyModeChange(mode: StickyMode): void;
   onStartupDisplayModeChange(mode: StartupDisplayMode): void;
   onOpenReaderWorkspace(): void;
+  onLeaveReaderWorkspace(mode: StickyMode): void;
   onReaderFontSizeChange(size: ReaderFontSize): void;
   onReaderLineSpacingChange(spacing: ReaderLineSpacing): void;
   onReaderContentVisibilityChange(visible: boolean): void;
@@ -47,6 +49,7 @@ type StickyHomeProps = {
 };
 
 export function StickyHome({
+  nativeSurface = "main",
   port,
   readerPort,
   deliveryPort,
@@ -63,6 +66,7 @@ export function StickyHome({
   onStickyModeChange,
   onStartupDisplayModeChange,
   onOpenReaderWorkspace,
+  onLeaveReaderWorkspace,
   onReaderFontSizeChange,
   onReaderLineSpacingChange,
   onReaderContentVisibilityChange,
@@ -141,6 +145,7 @@ export function StickyHome({
   return (
     <StickyShell
       preferences={preferences}
+      nativeSurface={nativeSurface}
       readerDocument={reader.document}
       readerState={reader.state}
       inboxItems={inbox.items}
@@ -172,6 +177,7 @@ export function StickyHome({
       onStickyModeChange={onStickyModeChange}
       onStartupDisplayModeChange={onStartupDisplayModeChange}
       onOpenReaderWorkspace={onOpenReaderWorkspace}
+      onLeaveReaderWorkspace={onLeaveReaderWorkspace}
       onReaderFontSizeChange={onReaderFontSizeChange}
       onReaderLineSpacingChange={onReaderLineSpacingChange}
       onReaderContentVisibilityChange={onReaderContentVisibilityChange}

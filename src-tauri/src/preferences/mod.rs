@@ -2,8 +2,8 @@ use tauri::{AppHandle, Emitter, LogicalSize, Manager, Size};
 use tauri_plugin_store::StoreExt;
 
 use crate::domain::preferences::{
-    DesktopStickyKind, DesktopStickyPosition, EdgeDockPosition, Preferences, StickyMode,
-    WindowPreset, WorkspaceDisplayMode,
+    DesktopStickyKind, DesktopStickyPosition, EdgeDockPosition, PlacementMode, Preferences,
+    StickyMode, SurfaceMode, WindowPreset,
 };
 use std::path::PathBuf;
 
@@ -24,7 +24,9 @@ pub(crate) fn read(app: &AppHandle) -> Result<Preferences, String> {
         return Ok(Preferences::default());
     };
 
-    Ok(serde_json::from_value(value).unwrap_or_default())
+    Ok(serde_json::from_value::<Preferences>(value)
+        .unwrap_or_default()
+        .normalize_legacy())
 }
 
 pub(crate) fn write(app: &AppHandle, preferences: &Preferences) -> Result<(), String> {
@@ -40,25 +42,29 @@ fn publish(app: &AppHandle, preferences: &Preferences) {
     let _ = app.emit("agent-desk://preferences-changed", preferences);
 }
 
-pub(crate) fn set_workspace_display_mode(
+pub(crate) fn set_surface_and_placement(
     app: &AppHandle,
-    workspace_display_mode: WorkspaceDisplayMode,
+    surface_mode: SurfaceMode,
+    placement_mode: PlacementMode,
 ) -> Result<Preferences, String> {
     let mut preferences = read(app)?;
-    preferences.workspace_display_mode = workspace_display_mode;
+    preferences.surface_mode = surface_mode;
+    preferences.placement_mode = placement_mode;
     write(app, &preferences)?;
     publish(app, &preferences);
     Ok(preferences)
 }
 
-pub(crate) fn set_workspace_and_sticky_mode(
+pub(crate) fn set_display_state(
     app: &AppHandle,
-    workspace_display_mode: WorkspaceDisplayMode,
+    surface_mode: SurfaceMode,
     sticky_mode: StickyMode,
+    placement_mode: PlacementMode,
 ) -> Result<Preferences, String> {
     let mut preferences = read(app)?;
-    preferences.workspace_display_mode = workspace_display_mode;
+    preferences.surface_mode = surface_mode;
     preferences.sticky_mode = sticky_mode;
+    preferences.placement_mode = placement_mode;
     write(app, &preferences)?;
     publish(app, &preferences);
     Ok(preferences)
@@ -80,7 +86,9 @@ pub(crate) fn save_desktop_sticky_position(
     position: DesktopStickyPosition,
 ) -> Result<(), String> {
     let mut preferences = read(app)?;
-    if preferences.workspace_display_mode != WorkspaceDisplayMode::DesktopSticky {
+    if preferences.surface_mode != SurfaceMode::Desktop
+        || preferences.placement_mode != PlacementMode::Free
+    {
         return Ok(());
     }
     preferences.desktop_sticky_position = Some(position);
@@ -92,7 +100,7 @@ pub(crate) fn save_edge_dock_position(
     position: EdgeDockPosition,
 ) -> Result<(), String> {
     let mut preferences = read(app)?;
-    if preferences.workspace_display_mode != WorkspaceDisplayMode::EdgeDock {
+    if preferences.placement_mode == PlacementMode::Free {
         return Ok(());
     }
     preferences.edge_dock_position = Some(position);
@@ -100,24 +108,19 @@ pub(crate) fn save_edge_dock_position(
 }
 
 pub fn initialize(app: &AppHandle) -> Result<Preferences, String> {
-    let mut preferences = read(app)?;
-    preferences.workspace_display_mode = preferences.startup_workspace_mode();
-    if preferences.workspace_display_mode == WorkspaceDisplayMode::DesktopSticky {
-        preferences.sticky_mode = StickyMode::Desktop;
-    } else if preferences.workspace_display_mode == WorkspaceDisplayMode::StickyOverReader {
-        preferences.sticky_mode = StickyMode::Compact;
-    }
+    let mut preferences = read(app)?.apply_startup_policy();
+    preferences.always_on_top = true;
     write(app, &preferences)?;
     apply_window_preferences(app, &preferences)?;
     Ok(preferences)
 }
 
-fn apply_window_preferences(app: &AppHandle, preferences: &Preferences) -> Result<(), String> {
+fn apply_window_preferences(app: &AppHandle, _preferences: &Preferences) -> Result<(), String> {
     let window = app
         .get_webview_window("main")
         .ok_or_else(|| "main window is unavailable".to_string())?;
     window
-        .set_always_on_top(preferences.always_on_top)
+        .set_always_on_top(true)
         .map_err(|error| error.to_string())?;
     Ok(())
 }
@@ -128,11 +131,15 @@ pub fn get_preferences(app: AppHandle) -> Result<Preferences, String> {
 }
 
 #[tauri::command]
-pub fn update_preferences(app: AppHandle, preferences: Preferences) -> Result<Preferences, String> {
+pub fn update_preferences(
+    app: AppHandle,
+    mut preferences: Preferences,
+) -> Result<Preferences, String> {
     if preferences.schema_version != 1 {
         return Err("unsupported preferences schema version".to_string());
     }
 
+    preferences.always_on_top = true;
     apply_window_preferences(&app, &preferences)?;
     write(&app, &preferences)?;
     publish(&app, &preferences);

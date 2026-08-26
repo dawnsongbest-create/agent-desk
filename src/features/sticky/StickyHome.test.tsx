@@ -179,6 +179,7 @@ function renderHome(
       onStickyModeChange={modeChange}
       onStartupDisplayModeChange={vi.fn()}
       onOpenReaderWorkspace={vi.fn()}
+      onLeaveReaderWorkspace={vi.fn()}
       onReaderFontSizeChange={readerFontSizeChange}
       onReaderLineSpacingChange={readerLineSpacingChange}
       onReaderContentVisibilityChange={vi.fn()}
@@ -652,6 +653,7 @@ describe("StickyHome M1-B4", () => {
   it("switches Compact to Mini Tab and restores Compact without state conflict", async () => {
     const user = userEvent.setup();
     const modeChange = vi.fn();
+    const leaveReader = vi.fn();
     const positionChange = vi.fn();
     const port = new MemoryStickyPort([makeCard("todo", "task", "一件事", 0)]);
     const view = renderHome(port, positionChange, defaultPreferences, modeChange);
@@ -676,6 +678,7 @@ describe("StickyHome M1-B4", () => {
         onStickyModeChange={modeChange}
         onStartupDisplayModeChange={vi.fn()}
         onOpenReaderWorkspace={vi.fn()}
+        onLeaveReaderWorkspace={leaveReader}
         onReaderFontSizeChange={vi.fn()}
         onReaderLineSpacingChange={vi.fn()}
         onReaderContentVisibilityChange={vi.fn()}
@@ -686,8 +689,8 @@ describe("StickyHome M1-B4", () => {
     const mini = miniButton.closest(".sticky-surface")!;
     expect(mini).toHaveTextContent("TODAY1");
     expect(mini).toHaveAttribute("data-pinned-to-shelf", "true");
-    await user.click(screen.getByRole("button", { name: "驻留到桌面" }));
-    expect(modeChange).toHaveBeenLastCalledWith("desktop");
+    await user.click(screen.getByRole("button", { name: "隐藏阅读器，只保留 Mini Tab" }));
+    expect(leaveReader).toHaveBeenCalledWith("mini");
     await user.click(miniButton);
     expect(modeChange).toHaveBeenLastCalledWith("compact");
   });
