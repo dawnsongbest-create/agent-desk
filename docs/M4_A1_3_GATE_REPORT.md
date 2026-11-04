@@ -79,7 +79,27 @@ All three hashes remained identical after the final Native Smoke. No user data w
 
 ## CI and public handoff
 
-Pending final evidence, safety scan and Windows/macOS CI.
+- Evidence handoff commit: `303395cde74a0ee2d64bc38fefd47d2b4fcaa2de`.
+- [GitHub Actions run 41836447626](https://github.com/dawnsongbest-create/agent-desk/actions/runs/41836447626): Windows PASS, macOS PASS. Both jobs completed successfully, including production non-bundled Tauri builds.
+- Public repository safety scan: PASS. No secrets/tokens, personal profile paths, user data, SQLite files, WebView2 profiles or build artifacts were added. README is unchanged.
+- Repository remains Public; default branch is main. Implementation and evidence are on origin/main.
+- Temporary build wrapper, smoke script and downloaded Node portable runtime were removed. Verified truth and canonical releases remain available.
+
+## Gate status
+
+`M4_A1_3_TECH_GATE_STATUS: AWAITING_TECH_REVIEW`
+
+`M4_A1_3_PRODUCT_GATE_STATUS: AWAITING_PRODUCT_REVIEW`
+
+`READER_STICKY_VISIBILITY_STATUS: READY_FOR_REVIEW`
+
+`DESKTOP_STICKY_STATUS: UNCHANGED`
+
+`EDGE_DOCK_STATUS: REGRESSION_VERIFIED`
+
+`CONTENT_IMPORT_STATUS: NOT_STARTED`
+
+`AI_READING_STATUS: NOT_STARTED`
 
 ## Product review checklist
 
