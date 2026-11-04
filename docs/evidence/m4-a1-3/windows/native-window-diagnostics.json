@@ -1,0 +1,20 @@
+{
+  "executableSHA256": "056E053E6B36E5810D18340AFD4D8873D38EE95107B52E227059DB40E02E893E",
+  "isolatedSQLite": true,
+  "isolatedStore": true,
+  "isolatedWindowState": true,
+  "isolatedWebView2": true,
+  "nativeTopmostFlags": {
+    "reader": true,
+    "desktopSticky": true,
+    "edgeDock": true
+  },
+  "foregroundOrdinaryApplication": "msedge",
+  "focusObservationSeconds": 3,
+  "agentStoleFocus": false,
+  "remainingSmokeProcesses": 0,
+  "productOwnerAppDataUnchanged": true,
+  "inputMethod": "production WebView2 DOM and Tauri command harness",
+  "physicalMouseAutomation": "unavailable: Windows Computer Use helper initialization failure",
+  "physicalDragAndHoverFeel": "awaiting Product Owner review"
+}

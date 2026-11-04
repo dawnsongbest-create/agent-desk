@@ -1,0 +1,13 @@
+{
+  "phase": "edge",
+  "checks": {
+    "nativeRightEdgeDock": true,
+    "hoverReveal": true,
+    "leaveRetract": true
+  },
+  "widths": {
+    "collapsed": 35,
+    "revealed": 176,
+    "retracted": 35
+  }
+}

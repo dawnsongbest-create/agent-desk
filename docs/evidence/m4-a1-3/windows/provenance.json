@@ -1,0 +1,17 @@
+{
+  "sourceCommit": "618fb7c7b58565da0e8d0c696d4c7a4e067f9dfe",
+  "node": "22.23.2",
+  "pnpm": "11.16.0",
+  "build": "pnpm tauri build --no-bundle -- --locked",
+  "truthExecutable": "D:\\agent-desk-m4a13-truth-618fb7c\\release\\agent-desk.exe",
+  "canonicalExecutable": "D:\\agent-desk-target\\release\\agent-desk.exe",
+  "truthSHA256": "056E053E6B36E5810D18340AFD4D8873D38EE95107B52E227059DB40E02E893E",
+  "canonicalSHA256": "056E053E6B36E5810D18340AFD4D8873D38EE95107B52E227059DB40E02E893E",
+  "executableSize": 15875584,
+  "timestampUTC": "2026-11-04T13:10:36Z",
+  "frontendHashes": {
+    "index.html": "BF39B819EF55BBFFC3AC0C73118A52C62317CC6FA83C2D824C40230D9DCD3AEF",
+    "assets/index-CqjexM9q.js": "4B16912DE945AB8A93ECF105446DB7FEC8186E423813B3B795689C391D71384C",
+    "assets/index-DpCjCodR.css": "5175465F947C239B65433FBE6A53E06595AC004DB2F1E035271446BCD7724373"
+  }
+}
