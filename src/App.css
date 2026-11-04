@@ -2895,6 +2895,24 @@ html[data-surface="edge-dock"] #root {
   display: none;
 }
 
+.desk-board[data-native-surface="main"] .board-header > div:first-child {
+  min-width: 0;
+}
+
+.desk-board[data-native-surface="main"] .board-header h1 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desk-board[data-native-surface="main"] .board-actions {
+  flex-shrink: 0;
+}
+
+.desk-board[data-native-surface="main"] .inbox-nav-button {
+  white-space: nowrap;
+}
+
 .reader-transition-notice {
   position: absolute;
   z-index: 30;

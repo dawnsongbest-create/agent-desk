@@ -1219,6 +1219,7 @@ export function StickyShell(props: StickyShellProps) {
   }, [preferences.readerStickyVisible]);
 
   function setReaderVisibility(visible: boolean) {
+    setTransitionNotice(null);
     setReaderStickyVisible(visible);
     onReaderStickyVisibilityChange?.(visible);
   }
@@ -1409,7 +1410,7 @@ export function StickyShell(props: StickyShellProps) {
       <header className="board-header">
         <div>
           <p className="board-eyebrow">Agent Desk</p>
-          <h1>{date}</h1>
+          <h1 title={date}>{date}</h1>
         </div>
         <div className="board-actions">
           <span className="persistence-dot" data-state={stickyState} />
