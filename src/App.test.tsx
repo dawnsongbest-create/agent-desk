@@ -84,6 +84,28 @@ vi.mock("./infrastructure/tauri/desktopSticky", () => ({
 import App from "./App";
 
 describe("App Reader preferences", () => {
+  it("persists visibility using a base snapshot and restores a hidden Reader", async () => {
+    const user = userEvent.setup();
+    const view = render(<App />);
+    await screen.findByRole("article");
+    await user.click(screen.getByRole("button", { name: "隐藏便利贴", pressed: true }));
+    await waitFor(() =>
+      expect(mocks.savePreferences).toHaveBeenLastCalledWith(
+        expect.objectContaining({ readerStickyVisible: false }),
+        expect.objectContaining({ readerStickyVisible: true }),
+      ),
+    );
+    expect(document.querySelector(".sticky-overlay-layer")).toHaveAttribute("hidden");
+    expect(document.querySelector(".mini-tab")).toBeNull();
+    view.unmount();
+    mocks.loadPreferences.mockResolvedValue({ ...defaultPreferences, readerStickyVisible: false });
+    render(<App />);
+    await screen.findByRole("article");
+    expect(screen.getByRole("button", { name: "显示便利贴" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.loadPreferences.mockResolvedValue(defaultPreferences);
@@ -145,7 +167,7 @@ describe("App Reader preferences", () => {
     await user.click(within(screen.getByRole("group", { name: "Reader 字号" })).getByText("大"));
 
     await waitFor(() => {
-      expect(mocks.savePreferences).toHaveBeenCalledWith({
+      expect(mocks.savePreferences.mock.lastCall?.[0]).toEqual({
         ...defaultPreferences,
         currentReaderDocumentId: "reader-test",
         readerFontSize: "large",
@@ -156,7 +178,7 @@ describe("App Reader preferences", () => {
     await user.click(within(screen.getByRole("group", { name: "Reader 行距" })).getByText("宽松"));
 
     await waitFor(() => {
-      expect(mocks.savePreferences).toHaveBeenLastCalledWith({
+      expect(mocks.savePreferences.mock.lastCall?.[0]).toEqual({
         ...defaultPreferences,
         currentReaderDocumentId: "reader-test",
         readerFontSize: "large",
@@ -187,7 +209,7 @@ describe("App Reader preferences", () => {
     const first = render(<App />);
     await screen.findByRole("article", { name: "测试文档" });
     await waitFor(() =>
-      expect(mocks.savePreferences).toHaveBeenCalledWith({
+      expect(mocks.savePreferences.mock.lastCall?.[0]).toEqual({
         ...defaultPreferences,
         currentReaderDocumentId: "reader-test",
       }),
@@ -198,7 +220,7 @@ describe("App Reader preferences", () => {
     expect(screen.queryByRole("article")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "显示正文" })).toBeVisible();
     await waitFor(() =>
-      expect(mocks.savePreferences).toHaveBeenCalledWith({
+      expect(mocks.savePreferences.mock.lastCall?.[0]).toEqual({
         ...defaultPreferences,
         currentReaderDocumentId: "reader-test",
         readerContentVisible: false,
@@ -219,12 +241,12 @@ describe("App Reader preferences", () => {
     await screen.findByRole("region", { name: "Reader Canvas" });
     await waitFor(() => expect(mocks.openReader).toHaveBeenCalledWith("reader-test"));
     expect(screen.queryByRole("article")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "恢复 Compact Sticky" })).toBeVisible();
+    expect(document.querySelector(".mini-tab")).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "显示正文" }));
     expect(await screen.findByRole("article", { name: "测试文档" })).toBeVisible();
     await waitFor(() =>
-      expect(mocks.savePreferences).toHaveBeenCalledWith({
+      expect(mocks.savePreferences.mock.lastCall?.[0]).toEqual({
         ...defaultPreferences,
         stickyMode: "mini",
         readerContentVisible: true,
@@ -236,7 +258,7 @@ describe("App Reader preferences", () => {
   it("persists the bootstrapped current document id and reopens by that id", async () => {
     const first = render(<App />);
     await waitFor(() =>
-      expect(mocks.savePreferences).toHaveBeenCalledWith({
+      expect(mocks.savePreferences.mock.lastCall?.[0]).toEqual({
         ...defaultPreferences,
         currentReaderDocumentId: "reader-test",
       }),
@@ -267,19 +289,20 @@ describe("App Reader preferences", () => {
     expect(mocks.savePreferences).not.toHaveBeenCalled();
   });
 
-  it("hands the second Mini shrink action to the native Desktop Sticky window", async () => {
+  it("leaves hidden Reader Sticky as Desktop Compact without a Reader Mini", async () => {
     const user = userEvent.setup();
     mocks.loadPreferences.mockResolvedValue({
       ...defaultPreferences,
-      stickyMode: "mini",
+      stickyMode: "compact",
+      readerStickyVisible: false,
       currentReaderDocumentId: "reader-test",
     });
 
     render(<App />);
     await screen.findByRole("region", { name: "Reader Canvas" });
-    await user.click(await screen.findByRole("button", { name: "隐藏阅读器，只保留 Mini Tab" }));
+    await user.click(await screen.findByRole("button", { name: "只留便利贴" }));
 
-    await waitFor(() => expect(mocks.leaveReader).toHaveBeenCalledWith("mini"));
+    await waitFor(() => expect(mocks.leaveReader).toHaveBeenCalledWith("compact"));
   });
 
   it("does not render the removed Gateway page", async () => {
@@ -318,6 +341,7 @@ describe("App Reader preferences", () => {
     await waitFor(() =>
       expect(mocks.savePreferences).toHaveBeenLastCalledWith(
         expect.objectContaining({ startupDisplayMode: "sticky_over_reader" }),
+        expect.any(Object),
       ),
     );
   });

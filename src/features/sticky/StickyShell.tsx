@@ -113,6 +113,7 @@ type StickyShellProps = {
   onReaderContentVisibilityChange(visible: boolean): void;
   onReaderScrollTopChange(scrollTop: number): void;
   onReaderSurfaceModeChange(mode: Preferences["readerSurfaceMode"]): void;
+  onReaderStickyVisibilityChange?(visible: boolean): void;
   onRetryReader(): void;
   onRetryInbox(): void;
   onOpenDelivery(id: string): Promise<boolean>;
@@ -991,7 +992,7 @@ function StickyPreview({
         className="compact-corner-control"
         type="button"
         data-no-drag
-        aria-label="缩成 Mini Tab"
+        aria-label={nativeWindow ? "缩成 Mini Tab" : "隐藏便利贴"}
         onClick={(event) => {
           event.stopPropagation();
           onMinimize();
@@ -1148,6 +1149,7 @@ export function StickyShell(props: StickyShellProps) {
     onReaderContentVisibilityChange,
     onReaderScrollTopChange,
     onReaderSurfaceModeChange,
+    onReaderStickyVisibilityChange,
     onRetryReader,
     onRetryInbox,
     onOpenDelivery,
@@ -1176,6 +1178,10 @@ export function StickyShell(props: StickyShellProps) {
     onDismissError,
   } = props;
   const [expanded, setExpanded] = useState(preferences.stickyMode === "expanded");
+  const [readerStickyVisible, setReaderStickyVisible] = useState(preferences.readerStickyVisible);
+  const [transitionNotice, setTransitionNotice] = useState<string | null>(null);
+  const stickyOverlayRef = useRef<HTMLDivElement>(null);
+  const desktopSurface = nativeSurface === "desktop";
   const [readerSurfaceMode, setReaderSurfaceMode] = useState<ReaderSurfaceMode>(
     preferences.readerSurfaceMode,
   );
@@ -1207,6 +1213,36 @@ export function StickyShell(props: StickyShellProps) {
   useEffect(() => {
     setExpanded(preferences.stickyMode === "expanded");
   }, [preferences.stickyMode]);
+
+  useEffect(() => {
+    setReaderStickyVisible(preferences.readerStickyVisible);
+  }, [preferences.readerStickyVisible]);
+
+  function setReaderVisibility(visible: boolean) {
+    setReaderStickyVisible(visible);
+    onReaderStickyVisibilityChange?.(visible);
+  }
+
+  function foldSticky() {
+    if (desktopSurface) {
+      setExpanded(false);
+      changeStickyMode("mini");
+    } else {
+      setReaderVisibility(false);
+    }
+  }
+
+  function leaveReader() {
+    const unfinishedComposer = stickyOverlayRef.current?.querySelector(
+      ".quote-composer, .face-capture-composer, .record-create-sheet",
+    );
+    if (recordDirty || unfinishedComposer || busy) {
+      setTransitionNotice("请先显示便利贴，保存或取消正在编辑的内容，再只留便利贴。");
+      return;
+    }
+    setTransitionNotice(null);
+    onLeaveReaderWorkspace(!readerStickyVisible ? "compact" : expanded ? "expanded" : "compact");
+  }
 
   useEffect(() => {
     readerScrollTopRef.current = preferences.readerScrollTop;
@@ -1434,18 +1470,40 @@ export function StickyShell(props: StickyShellProps) {
             onCopyAgentToken={() => void onCopyAgentToken()}
             onRetryAgentBridge={() => void onRetryAgentBridge()}
           />
+          {!desktopSurface ? (
+            <button
+              className="board-icon-button reader-sticky-toggle"
+              type="button"
+              title={readerStickyVisible ? "隐藏便利贴" : "显示便利贴"}
+              aria-label={readerStickyVisible ? "隐藏便利贴" : "显示便利贴"}
+              aria-pressed={readerStickyVisible}
+              onClick={() => setReaderVisibility(!readerStickyVisible)}
+            >
+              <span aria-hidden="true">▣</span>
+            </button>
+          ) : null}
           <button
             className="board-icon-button sticky-only-button"
             type="button"
             title="隐藏阅读器，只保留便利贴"
             aria-label="只留便利贴"
-            onClick={() => onLeaveReaderWorkspace(expanded ? "expanded" : preferences.stickyMode)}
+            onClick={leaveReader}
           >
             <span aria-hidden="true">▱</span>
           </button>
         </div>
       </header>
-      <div className="sticky-overlay-layer" data-reader-layer="2">
+      {transitionNotice ? (
+        <p className="reader-transition-notice" role="alert">
+          {transitionNotice}
+        </p>
+      ) : null}
+      <div
+        ref={stickyOverlayRef}
+        className="sticky-overlay-layer"
+        data-reader-layer="2"
+        hidden={!desktopSurface && !readerStickyVisible}
+      >
         {expanded ? (
           <section className="expanded-sticky" aria-label="展开的便利贴">
             {nativeSurface === "desktop" ? (
@@ -1466,11 +1524,10 @@ export function StickyShell(props: StickyShellProps) {
             <button
               className="compact-corner-control expanded-fold-control"
               type="button"
-              aria-label="缩成 Mini Tab"
+              aria-label={desktopSurface ? "缩成 Mini Tab" : "隐藏便利贴"}
               onClick={(event) => {
                 event.stopPropagation();
-                setExpanded(false);
-                changeStickyMode("mini");
+                foldSticky();
               }}
             />
             <header className="expanded-header">
@@ -1614,7 +1671,7 @@ export function StickyShell(props: StickyShellProps) {
               </div>
             ) : null}
           </section>
-        ) : preferences.stickyMode === "mini" ? (
+        ) : desktopSurface && preferences.stickyMode === "mini" ? (
           <MiniStickyTab
             openTaskCount={openTaskCount}
             position={preferences.stickyPosition}
@@ -1633,7 +1690,7 @@ export function StickyShell(props: StickyShellProps) {
               setExpanded(true);
               changeStickyMode("expanded");
             }}
-            onMinimize={() => changeStickyMode("mini")}
+            onMinimize={foldSticky}
             onOpenReader={onOpenReaderWorkspace}
             showReaderEntry={nativeSurface === "desktop"}
             nativeWindow={nativeSurface === "desktop"}

@@ -2891,3 +2891,19 @@ html[data-surface="edge-dock"] #root {
     transition: none;
   }
 }
+.sticky-overlay-layer[hidden] {
+  display: none;
+}
+
+.reader-transition-notice {
+  position: absolute;
+  z-index: 30;
+  top: 68px;
+  left: 16px;
+  right: 16px;
+  padding: 10px;
+  background: var(--paper-bg, #f4edd6);
+  color: var(--text-primary, #493f2f);
+  border-radius: 8px;
+  font-size: 12px;
+}

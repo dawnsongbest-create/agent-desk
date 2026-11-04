@@ -134,16 +134,62 @@ pub fn get_preferences(app: AppHandle) -> Result<Preferences, String> {
 pub fn update_preferences(
     app: AppHandle,
     mut preferences: Preferences,
+    base: Option<Preferences>,
 ) -> Result<Preferences, String> {
     if preferences.schema_version != 1 {
         return Err("unsupported preferences schema version".to_string());
     }
 
+    if let Some(base) = base {
+        preferences = merge_preferences(read(&app)?, preferences, base)?;
+    }
+    preferences = preferences.normalize_legacy();
     preferences.always_on_top = true;
     apply_window_preferences(&app, &preferences)?;
     write(&app, &preferences)?;
     publish(&app, &preferences);
     Ok(preferences)
+}
+
+fn merge_preferences(
+    current: Preferences,
+    next: Preferences,
+    base: Preferences,
+) -> Result<Preferences, String> {
+    let mut merged = serde_json::to_value(current).map_err(|error| error.to_string())?;
+    let next = serde_json::to_value(next).map_err(|error| error.to_string())?;
+    let base = serde_json::to_value(base).map_err(|error| error.to_string())?;
+    for (key, value) in next.as_object().ok_or("invalid preferences")? {
+        if base.get(key) != Some(value) {
+            merged[key] = value.clone();
+        }
+    }
+    serde_json::from_value(merged).map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod visibility_tests {
+    use super::*;
+
+    #[test]
+    fn stale_scroll_save_preserves_visibility_and_native_display_state() {
+        let base = Preferences::default();
+        let current = Preferences {
+            reader_sticky_visible: false,
+            surface_mode: SurfaceMode::Reader,
+            sticky_mode: StickyMode::Expanded,
+            ..base.clone()
+        };
+        let next = Preferences {
+            reader_scroll_top: 240,
+            ..base.clone()
+        };
+        let merged = merge_preferences(current, next, base).unwrap();
+        assert!(!merged.reader_sticky_visible);
+        assert_eq!(merged.reader_scroll_top, 240);
+        assert_eq!(merged.surface_mode, SurfaceMode::Reader);
+        assert_eq!(merged.sticky_mode, StickyMode::Expanded);
+    }
 }
 
 #[tauri::command]

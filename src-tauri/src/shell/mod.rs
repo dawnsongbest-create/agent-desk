@@ -396,18 +396,13 @@ fn enter_edge_dock_from_desktop(
 
 #[tauri::command]
 pub async fn open_reader_workspace(app: AppHandle) -> Result<Preferences, String> {
-    let current = crate::preferences::read(&app)?;
-    let sticky_mode = match current.sticky_mode {
-        StickyMode::Expanded => StickyMode::Expanded,
-        StickyMode::Mini => StickyMode::Mini,
-        StickyMode::Compact | StickyMode::Desktop => StickyMode::Compact,
-    };
-    let preferences = crate::preferences::set_display_state(
-        &app,
-        SurfaceMode::Reader,
-        sticky_mode,
-        PlacementMode::Free,
-    )?;
+    let mut preferences = crate::preferences::read(&app)?;
+    preferences.surface_mode = SurfaceMode::Reader;
+    preferences.sticky_mode = StickyMode::Compact;
+    preferences.placement_mode = PlacementMode::Free;
+    preferences.reader_sticky_visible = true;
+    crate::preferences::write(&app, &preferences)?;
+    let _ = app.emit("agent-desk://preferences-changed", &preferences);
     if let Some(desktop) = app.get_webview_window(DESKTOP_STICKY_WINDOW_LABEL) {
         desktop.hide().map_err(|error| error.to_string())?;
     }

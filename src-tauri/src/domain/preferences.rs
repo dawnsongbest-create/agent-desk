@@ -209,6 +209,8 @@ pub struct Preferences {
     pub reader_line_spacing: ReaderLineSpacing,
     #[serde(default = "default_true")]
     pub reader_content_visible: bool,
+    #[serde(default = "default_true")]
+    pub reader_sticky_visible: bool,
     #[serde(default)]
     pub current_reader_document_id: Option<String>,
     #[serde(default)]
@@ -244,6 +246,10 @@ impl Preferences {
         if self.sticky_mode == StickyMode::Desktop {
             self.sticky_mode = StickyMode::Compact;
         }
+        if self.surface_mode == SurfaceMode::Reader && self.sticky_mode == StickyMode::Mini {
+            self.sticky_mode = StickyMode::Compact;
+            self.reader_sticky_visible = true;
+        }
         self
     }
 
@@ -260,6 +266,7 @@ impl Preferences {
                 self.surface_mode = SurfaceMode::Reader;
                 self.sticky_mode = StickyMode::Compact;
                 self.placement_mode = PlacementMode::Free;
+                self.reader_sticky_visible = true;
             }
         }
         self
@@ -287,6 +294,7 @@ impl Default for Preferences {
             reader_font_size: ReaderFontSize::Standard,
             reader_line_spacing: ReaderLineSpacing::Standard,
             reader_content_visible: true,
+            reader_sticky_visible: true,
             current_reader_document_id: None,
             reader_scroll_top: 0,
             reader_surface_mode: ReaderSurfaceMode::Reader,
@@ -426,5 +434,39 @@ mod tests {
         assert_eq!(classic.surface_mode, SurfaceMode::Reader);
         assert_eq!(classic.sticky_mode, StickyMode::Compact);
         assert_eq!(classic.placement_mode, PlacementMode::Free);
+    }
+
+    #[test]
+    fn migrates_only_reader_mini_and_restores_visibility_by_startup_policy() {
+        let legacy = Preferences {
+            surface_mode: SurfaceMode::Reader,
+            sticky_mode: StickyMode::Mini,
+            reader_sticky_visible: false,
+            ..Preferences::default()
+        }
+        .normalize_legacy();
+        assert_eq!(legacy.sticky_mode, StickyMode::Compact);
+        assert!(legacy.reader_sticky_visible);
+        let desktop = Preferences {
+            sticky_mode: StickyMode::Mini,
+            ..Preferences::default()
+        }
+        .normalize_legacy();
+        assert_eq!(desktop.sticky_mode, StickyMode::Mini);
+        let hidden = Preferences {
+            startup_display_mode: StartupDisplayMode::LastState,
+            surface_mode: SurfaceMode::Reader,
+            sticky_mode: StickyMode::Expanded,
+            reader_sticky_visible: false,
+            ..Preferences::default()
+        };
+        assert!(!hidden.clone().apply_startup_policy().reader_sticky_visible);
+        let classic = Preferences {
+            startup_display_mode: StartupDisplayMode::StickyOverReader,
+            ..hidden
+        }
+        .apply_startup_policy();
+        assert!(classic.reader_sticky_visible);
+        assert_eq!(classic.sticky_mode, StickyMode::Compact);
     }
 }

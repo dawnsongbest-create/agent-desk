@@ -67,6 +67,7 @@ function App({ surface = "main" }: AppProps) {
   }, []);
 
   function save(next: Preferences) {
+    const base = preferencesRef.current;
     preferencesRef.current = next;
     setPreferences(next);
     applyTheme(next.theme);
@@ -75,7 +76,7 @@ function App({ surface = "main" }: AppProps) {
 
     saveQueue.current = saveQueue.current
       .catch(() => undefined)
-      .then(() => tauriPreferences.save(next))
+      .then(() => tauriPreferences.save(next, base))
       .then((stored) => {
         if (saveSequence !== latestSave.current) return;
         preferencesRef.current = stored;
@@ -166,6 +167,9 @@ function App({ surface = "main" }: AppProps) {
       }
       onReaderSurfaceModeChange={(readerSurfaceMode) =>
         save({ ...preferencesRef.current, readerSurfaceMode })
+      }
+      onReaderStickyVisibilityChange={(readerStickyVisible) =>
+        save({ ...preferencesRef.current, readerStickyVisible })
       }
     />
   );
