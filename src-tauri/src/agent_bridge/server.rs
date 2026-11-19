@@ -18,6 +18,7 @@ use crate::{
         agent_connection_service::{AgentConnectionService, AuthenticatedAgentConnection},
         capability_service::CapabilityService,
     },
+    codex_delivery::{CodexDelivery, CodexError, CODEX_TOKEN_PREFIX, READING_PATH},
     domain::agent_connection::AGENT_API_VERSION,
 };
 
@@ -37,6 +38,7 @@ impl RunningAgentBridge {
         connections: Arc<AgentConnectionService>,
         capabilities: Arc<CapabilityService>,
         openclaw: Arc<OpenClawAdapter>,
+        codex: Arc<CodexDelivery>,
     ) -> Result<Self, std::io::Error> {
         let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port)).await?;
         let local_addr = listener.local_addr()?;
@@ -53,8 +55,9 @@ impl RunningAgentBridge {
                         let connections = connections.clone();
                         let capabilities = capabilities.clone();
                         let openclaw = openclaw.clone();
+                        let codex = codex.clone();
                         tokio::spawn(async move {
-                            let _ = handle_connection(stream, connections, capabilities, openclaw).await;
+                            let _ = handle_connection(stream, connections, capabilities, openclaw, codex).await;
                         });
                     }
                 }
@@ -77,7 +80,6 @@ impl RunningAgentBridge {
     }
 }
 
-#[derive(Debug)]
 struct HttpRequest {
     method: String,
     path: String,
@@ -109,6 +111,7 @@ async fn handle_connection(
     connections: Arc<AgentConnectionService>,
     capabilities: Arc<CapabilityService>,
     openclaw: Arc<OpenClawAdapter>,
+    codex: Arc<CodexDelivery>,
 ) -> Result<(), std::io::Error> {
     let request = match timeout(REQUEST_TIMEOUT, read_request(&mut stream)).await {
         Ok(Ok(request)) => request,
@@ -119,6 +122,16 @@ async fn handle_connection(
     };
 
     let token = request.bearer_token().unwrap_or_default();
+    if token.starts_with(CODEX_TOKEN_PREFIX) {
+        let (status, body) = match codex
+            .dispatch(token, &request.method, &request.path, &request.body)
+            .await
+        {
+            Ok(receipt) => (200, receipt),
+            Err(error) => codex_error(error),
+        };
+        return write_response(&mut stream, status, &body).await;
+    }
     let identity = match connections.authenticate_identity(token).await {
         Ok(Some(identity)) => identity,
         Ok(None) => {
@@ -131,7 +144,7 @@ async fn handle_connection(
         }
     };
 
-    let (status, body) = route_request(&request, &identity, &capabilities, &openclaw).await;
+    let (status, body) = route_request(&request, &identity, &capabilities, &openclaw, &codex).await;
     write_response(&mut stream, status, &body).await
 }
 
@@ -140,14 +153,22 @@ async fn route_request(
     identity: &AuthenticatedAgentConnection,
     capabilities: &CapabilityService,
     openclaw: &OpenClawAdapter,
+    codex: &CodexDelivery,
 ) -> (u16, String) {
     match (request.method.as_str(), request.path.as_str()) {
         ("GET", "/api/v1/health") => (200, r#"{"version":"v1","status":"ok"}"#.to_owned()),
         ("GET", "/api/v1/capabilities") => serialize_ok(&capabilities.discover()),
+        (_, READING_PATH) => codex_error(CodexError::Forbidden),
         ("POST", "/api/v1/delivery") => {
             let Ok(input) = request.json::<OpenClawDeliveryRequest>() else {
                 return invalid_payload();
             };
+            if let Err(error) = codex
+                .reserve_legacy_key(input.idempotency_key.as_deref())
+                .await
+            {
+                return codex_error(error);
+            }
             adapter_result(identity, openclaw, openclaw.create_delivery(input).await)
         }
         ("POST", "/api/v1/proposal") => {
@@ -182,6 +203,11 @@ async fn route_request(
         ) => (405, r#"{"error":"method_not_allowed"}"#.to_owned()),
         _ => (404, r#"{"error":"not_found"}"#.to_owned()),
     }
+}
+
+fn codex_error(error: CodexError) -> (u16, String) {
+    let (status, body) = error.http();
+    (status, body.to_owned())
 }
 
 fn adapter_result<T: serde::Serialize>(
@@ -317,6 +343,7 @@ async fn write_response(
         404 => "Not Found",
         405 => "Method Not Allowed",
         409 => "Conflict",
+        413 => "Payload Too Large",
         503 => "Service Unavailable",
         _ => "Error",
     };
@@ -396,12 +423,74 @@ mod tests {
             ProposalService::new(Arc::new(proposal_repository)),
             ReadingService::new(Arc::new(reading_repository), Arc::new(delivery_repository)),
         ));
+        let codex = Arc::new(CodexDelivery::new(
+            database.0.clone(),
+            DeliveryService::new(Arc::new(SqliteDeliveryRepository::new(database.0.clone()))),
+            Arc::new(|| {}),
+        ));
         let bridge =
-            RunningAgentBridge::start(0, connections, Arc::new(CapabilityService), openclaw)
+            RunningAgentBridge::start(0, connections, Arc::new(CapabilityService), openclaw, codex)
                 .await
                 .unwrap();
         let address = bridge.local_addr();
         assert_eq!(address.ip(), std::net::Ipv4Addr::LOCALHOST);
+        let codex_secret = format!(
+            "{CODEX_TOKEN_PREFIX}{}{}",
+            uuid::Uuid::new_v4().simple(),
+            uuid::Uuid::new_v4().simple()
+        );
+        let codex_hash = {
+            use sha2::{Digest, Sha256};
+            Sha256::digest(codex_secret.as_bytes()).to_vec()
+        };
+        sqlx::query(
+            "INSERT INTO codex_connection
+            (id, token_hash, state, scope, dedupe_namespace, created_at, updated_at)
+            VALUES ('codex-reading', ?, 'active', 'send_reading', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+        )
+        .bind(codex_hash)
+        .bind(uuid::Uuid::new_v4().simple().to_string())
+        .execute(&database.0)
+        .await
+        .unwrap();
+        let reading = request(
+            address, "POST", READING_PATH, Some(&codex_secret),
+            Some(r##"{"title":"Codex HTTP fixture","content":"# 完整正文","type":"report","idempotency_key":"fixture-http"}"##),
+        ).await;
+        assert!(reading.starts_with("HTTP/1.1 200"));
+        assert_eq!(response_json(&reading)["operation"], "send_reading");
+        assert!(request(
+            address,
+            "POST",
+            READING_PATH,
+            Some(&issued.token),
+            Some("{}")
+        )
+        .await
+        .starts_with("HTTP/1.1 403"));
+        assert!(request(
+            address,
+            "POST",
+            READING_PATH,
+            Some("adk_codex_invalid"),
+            Some("{}")
+        )
+        .await
+        .starts_with("HTTP/1.1 401"));
+        for endpoint in [
+            "/api/v1/delivery",
+            "/api/v1/proposal",
+            "/api/v1/reading-plan",
+            "/api/v1/todo",
+            "/api/v1/record",
+            "/api/v1/sticky",
+        ] {
+            assert!(
+                request(address, "POST", endpoint, Some(&codex_secret), Some("{}"))
+                    .await
+                    .starts_with("HTTP/1.1 403")
+            );
+        }
 
         let missing = request(address, "GET", "/api/v1/health", None, None).await;
         let invalid = request(address, "GET", "/api/v1/capabilities", Some("wrong"), None).await;

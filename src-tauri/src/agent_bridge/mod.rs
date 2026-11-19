@@ -12,6 +12,7 @@ use crate::{
         agent_connection_service::{AgentConnectionService, IssuedAgentToken},
         capability_service::CapabilityService,
     },
+    codex_delivery::{CodexDelivery, PairingStatus},
     domain::agent_connection::{AgentConnection, AgentConnectionStatus, AGENT_API_VERSION},
     persistence::agent_connection_repository::SqliteAgentConnectionRepository,
 };
@@ -44,13 +45,18 @@ pub struct AgentBridgeState {
     connections: Arc<AgentConnectionService>,
     capabilities: Arc<CapabilityService>,
     openclaw: Arc<OpenClawAdapter>,
+    codex: Arc<CodexDelivery>,
     configured_port: u16,
     runtime: Mutex<Option<RunningAgentBridge>>,
     last_error: RwLock<Option<String>>,
 }
 
 impl AgentBridgeState {
-    pub fn new(repository: SqliteAgentConnectionRepository, openclaw: OpenClawAdapter) -> Self {
+    pub(crate) fn new(
+        repository: SqliteAgentConnectionRepository,
+        openclaw: OpenClawAdapter,
+        codex: CodexDelivery,
+    ) -> Self {
         let configured_port = std::env::var(BRIDGE_PORT_ENV)
             .ok()
             .and_then(|value| value.parse().ok())
@@ -59,6 +65,7 @@ impl AgentBridgeState {
             connections: Arc::new(AgentConnectionService::new(Arc::new(repository))),
             capabilities: Arc::new(CapabilityService),
             openclaw: Arc::new(openclaw),
+            codex: Arc::new(codex),
             configured_port,
             runtime: Mutex::new(None),
             last_error: RwLock::new(None),
@@ -85,6 +92,7 @@ impl AgentBridgeState {
                 self.connections.clone(),
                 self.capabilities.clone(),
                 self.openclaw.clone(),
+                self.codex.clone(),
             )
             .await
             .map_err(|error| format!("Local Agent Bridge could not bind to localhost: {error}"))?;
@@ -175,4 +183,31 @@ pub async fn generate_agent_token(
     state: State<'_, AgentBridgeState>,
 ) -> Result<GenerateAgentTokenResult, String> {
     state.generate_token().await
+}
+
+#[tauri::command]
+pub(crate) async fn get_codex_pairing(
+    state: State<'_, AgentBridgeState>,
+) -> Result<PairingStatus, String> {
+    let port = state.status().await?.port;
+    state.codex.status(port).await
+}
+
+#[tauri::command]
+pub(crate) async fn pair_codex(
+    state: State<'_, AgentBridgeState>,
+) -> Result<PairingStatus, String> {
+    let bridge = state.status().await?;
+    if !bridge.running {
+        return Err("请先启用本地 Bridge，再授权 Codex。".to_owned());
+    }
+    state.codex.pair(bridge.port).await
+}
+
+#[tauri::command]
+pub(crate) async fn revoke_codex(
+    state: State<'_, AgentBridgeState>,
+) -> Result<PairingStatus, String> {
+    let port = state.status().await?.port;
+    state.codex.revoke(port).await
 }

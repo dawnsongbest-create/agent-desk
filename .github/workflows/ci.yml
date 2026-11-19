@@ -43,4 +43,16 @@ jobs:
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
       - run: cargo test --manifest-path src-tauri/Cargo.toml --all-targets --all-features
+      - name: Native macOS Keychain adapter round trip
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test_keychain="$RUNNER_TEMP/agent-desk-tests.keychain-db"
+          test_password="$(uuidgen)"
+          security create-keychain -p "$test_password" "$test_keychain"
+          trap 'security delete-keychain "$test_keychain"' EXIT
+          security default-keychain -d user -s "$test_keychain"
+          security unlock-keychain -p "$test_password" "$test_keychain"
+          cargo test --manifest-path src-tauri/Cargo.toml os_credential_roundtrip -- --ignored
       - run: pnpm tauri build --no-bundle

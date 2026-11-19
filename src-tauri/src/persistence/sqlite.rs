@@ -172,7 +172,7 @@ mod tests {
                   'cards', 'note_payloads', 'task_payloads', 'card_placements',
                   'sticky_surface_profile', 'reader_documents', 'record_source_refs', 'deliveries',
                   'reading_plans', 'reading_plan_deliveries', 'reading_sessions', 'agent_proposals',
-                  'agent_connections'
+                  'agent_connections', 'codex_connection'
               )
             "#,
         )
@@ -190,9 +190,49 @@ mod tests {
                 .await
                 .expect("migration history query");
 
-        assert_eq!(table_count, 13);
-        assert_eq!(applied_versions, vec![1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(table_count, 14);
+        assert_eq!(applied_versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
         assert_eq!(foreign_keys, 1);
+    }
+
+    #[tokio::test]
+    async fn upgrades_0008_without_touching_legacy_connection_or_existing_document() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("upgrade-0008.sqlite3");
+        let prior = connect(&path).await.unwrap();
+        sqlx::raw_sql(
+            "DROP TABLE codex_connection;
+             DELETE FROM _sqlx_migrations WHERE version=9;
+             INSERT INTO agent_connections(id,name,token_hash,status,created_at,updated_at)
+               VALUES ('local-agent-bridge','legacy',NULL,'active',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
+             INSERT INTO reader_documents
+               (id,document_type,title,content_markdown,source_type,source_label,created_at,updated_at)
+               VALUES ('existing','report','Unchanged report','# 旧正文','agent','OpenClaw',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
+             INSERT INTO deliveries(id,document_id,idempotency_key,delivered_at)
+               VALUES ('existing-delivery','existing','legacy-key',CURRENT_TIMESTAMP);",
+        )
+        .execute(&prior.0)
+        .await
+        .unwrap();
+        prior.0.close().await;
+        let current = connect(&path).await.unwrap();
+        let legacy: (String, String) = sqlx::query_as("SELECT id, status FROM agent_connections")
+            .fetch_one(&current.0)
+            .await
+            .unwrap();
+        let delivery: (String, String, String) =
+            sqlx::query_as("SELECT idempotency_key, content_markdown, source_label FROM deliveries JOIN reader_documents ON document_id=reader_documents.id")
+                .fetch_one(&current.0).await.unwrap();
+        let codex: i64 = sqlx::query_scalar("SELECT count(*) FROM codex_connection")
+            .fetch_one(&current.0)
+            .await
+            .unwrap();
+        assert_eq!(legacy, ("local-agent-bridge".into(), "active".into()));
+        assert_eq!(
+            delivery,
+            ("legacy-key".into(), "# 旧正文".into(), "OpenClaw".into())
+        );
+        assert_eq!(codex, 0);
     }
 
     #[tokio::test]
@@ -265,7 +305,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
         assert_eq!(note, "保留的记录");
         assert_eq!(
             task,
@@ -335,7 +375,7 @@ mod tests {
             .fetch_one(&upgraded.0)
             .await
             .unwrap();
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
         assert_eq!(note, "0004 保留记录");
         assert_eq!(
             reader,
@@ -404,7 +444,7 @@ mod tests {
         .fetch_one(&upgraded.0)
         .await
         .unwrap();
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
         assert_eq!(
             delivery,
             (
@@ -475,7 +515,7 @@ mod tests {
         .fetch_one(&upgraded.0)
         .await
         .unwrap();
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
         assert_eq!(
             preserved,
             ("delivery-0006".to_owned(), "会话正文".to_owned(), 2)

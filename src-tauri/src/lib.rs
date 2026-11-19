@@ -1,6 +1,7 @@
 pub mod adapters;
 mod agent_bridge;
 pub mod application;
+pub mod codex_delivery;
 mod delivery;
 pub mod domain;
 pub mod persistence;
@@ -13,7 +14,7 @@ mod sticky;
 
 use std::sync::Arc;
 
-use tauri::{Manager, WindowEvent};
+use tauri::{Emitter, Manager, WindowEvent};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
 use domain::preferences::SurfaceMode;
@@ -73,10 +74,11 @@ pub fn run() {
                 persistence::agent_connection_repository::SqliteAgentConnectionRepository::new(
                     database.0.clone(),
                 );
+            let delivery_service = application::delivery_service::DeliveryService::new(Arc::new(
+                delivery_repository.clone(),
+            ));
             let openclaw_adapter = adapters::openclaw::OpenClawAdapter::new(
-                application::delivery_service::DeliveryService::new(Arc::new(
-                    delivery_repository.clone(),
-                )),
+                delivery_service.clone(),
                 application::proposal_service::ProposalService::new(Arc::new(
                     proposal_repository.clone(),
                 )),
@@ -85,8 +87,19 @@ pub fn run() {
                     Arc::new(delivery_repository.clone()),
                 ),
             );
-            let agent_bridge_state =
-                agent_bridge::AgentBridgeState::new(agent_connection_repository, openclaw_adapter);
+            let handle = app.handle().clone();
+            let codex = codex_delivery::CodexDelivery::new(
+                database.0.clone(),
+                delivery_service,
+                Arc::new(move || {
+                    let _ = handle.emit(codex_delivery::INBOX_CHANGED, ());
+                }),
+            );
+            let agent_bridge_state = agent_bridge::AgentBridgeState::new(
+                agent_connection_repository,
+                openclaw_adapter,
+                codex,
+            );
             tauri::async_runtime::block_on(agent_bridge_state.restore());
 
             app.manage(database);
@@ -178,7 +191,10 @@ pub fn run() {
             agent_bridge::get_agent_bridge_status,
             agent_bridge::start_agent_bridge,
             agent_bridge::stop_agent_bridge,
-            agent_bridge::generate_agent_token
+            agent_bridge::generate_agent_token,
+            agent_bridge::get_codex_pairing,
+            agent_bridge::pair_codex,
+            agent_bridge::revoke_codex
         ])
         .run(tauri::generate_context!())
         .expect("error while running Agent Desk");

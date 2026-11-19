@@ -1,5 +1,6 @@
 import type { AgentBridgeLoadState } from "./useAgentBridge";
 import type { AgentBridgeStatus } from "../../domain/agentConnection";
+import { CodexPairingSettings } from "./CodexPairingSettings";
 
 type AgentBridgeSettingsProps = {
   status: AgentBridgeStatus | null;
@@ -68,6 +69,7 @@ export function AgentBridgeSettings({
           </button>
         </div>
       ) : null}
+      <CodexPairingSettings bridgeRunning={status?.running ?? false} />
     </div>
   );
 }
