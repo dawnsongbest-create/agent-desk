@@ -12,6 +12,7 @@ use crate::domain::preferences::{
 
 const MIN_VISIBLE_EDGE: i32 = 64;
 pub const DESKTOP_STICKY_WINDOW_LABEL: &str = "desktop-sticky";
+const STICKY_CONTENT_REFRESH: &str = "agent-desk://sticky-content-refresh";
 const DESKTOP_MINI_WIDTH: f64 = 94.0;
 const DESKTOP_MINI_HEIGHT: f64 = 62.0;
 const DESKTOP_COMPACT_WIDTH: f64 = 320.0;
@@ -72,6 +73,7 @@ pub fn surface_main_window(app: &AppHandle) {
         let _ = window.show();
         let _ = window.set_always_on_top(true);
         let _ = window.set_focus();
+        let _ = app.emit_to("main", STICKY_CONTENT_REFRESH, ());
     }
 }
 
@@ -184,11 +186,7 @@ pub fn restore_desktop_sticky_window(
     apply_desktop_sticky_geometry(&window, preferences.sticky_mode)?;
     window.show()?;
     window.set_always_on_top(true)?;
-    let _ = app.emit_to(
-        DESKTOP_STICKY_WINDOW_LABEL,
-        "agent-desk://desktop-sticky-refresh",
-        (),
-    );
+    let _ = app.emit_to(DESKTOP_STICKY_WINDOW_LABEL, STICKY_CONTENT_REFRESH, ());
     Ok(())
 }
 
@@ -211,11 +209,7 @@ pub async fn enter_desktop_sticky(app: AppHandle) -> Result<Preferences, String>
     window
         .set_always_on_top(true)
         .map_err(|error| error.to_string())?;
-    let _ = app.emit_to(
-        DESKTOP_STICKY_WINDOW_LABEL,
-        "agent-desk://desktop-sticky-refresh",
-        (),
-    );
+    let _ = app.emit_to(DESKTOP_STICKY_WINDOW_LABEL, STICKY_CONTENT_REFRESH, ());
     if let Some(main) = app.get_webview_window("main") {
         main.hide().map_err(|error| error.to_string())?;
     }
@@ -313,6 +307,7 @@ pub async fn open_reader_workspace(app: AppHandle) -> Result<Preferences, String
     main.set_always_on_top(true)
         .map_err(|error| error.to_string())?;
     main.set_focus().map_err(|error| error.to_string())?;
+    let _ = app.emit_to("main", STICKY_CONTENT_REFRESH, ());
     Ok(preferences)
 }
 
@@ -337,11 +332,7 @@ pub async fn leave_reader_to_desktop(
     desktop
         .set_always_on_top(true)
         .map_err(|error| error.to_string())?;
-    let _ = app.emit_to(
-        DESKTOP_STICKY_WINDOW_LABEL,
-        "agent-desk://desktop-sticky-refresh",
-        (),
-    );
+    let _ = app.emit_to(DESKTOP_STICKY_WINDOW_LABEL, STICKY_CONTENT_REFRESH, ());
     if let Some(main) = app.get_webview_window("main") {
         main.hide().map_err(|error| error.to_string())?;
     }

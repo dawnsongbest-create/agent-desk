@@ -1,4 +1,13 @@
-import { createEvent, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { listen } from "@tauri-apps/api/event";
+import {
+  act,
+  createEvent,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { defaultPreferences } from "./domain/preferences";
@@ -420,4 +429,23 @@ describe("App Reader preferences", () => {
     expect(mocks.openReaderWorkspace).not.toHaveBeenCalled();
     expect(mocks.startDragging).not.toHaveBeenCalled();
   });
+
+  it.each(["desktop", "main"] as const)(
+    "refreshes sticky content after returning to %s",
+    async (surface) => {
+      mocks.loadPreferences.mockResolvedValue({
+        ...defaultPreferences,
+        surfaceMode: surface === "desktop" ? "desktop" : "reader",
+      });
+      render(<App surface={surface} />);
+      await screen.findByText("留一句愿意常常看到的话。");
+      mocks.getProfile.mockResolvedValue({ quoteText: "Saved in the other window", updatedAt: "" });
+      const event = "agent-desk://sticky-content-refresh";
+      const callback = vi.mocked(listen).mock.calls.find(([name]) => name === event)?.[1];
+      expect(callback).toBeDefined();
+      await act(async () => callback?.({ event, id: 1, payload: null }));
+      expect(await screen.findByText("Saved in the other window")).toBeVisible();
+      expect(mocks.listCards).toHaveBeenCalledTimes(2);
+    },
+  );
 });

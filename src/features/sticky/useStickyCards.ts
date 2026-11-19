@@ -1,3 +1,4 @@
+import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { StickyCardsPort } from "../../application/ports/sticky";
 import type { CreateStickyCardInput, StickyCard, StickyProfile } from "../../domain/sticky";
@@ -36,7 +37,19 @@ export function useStickyCards(port: StickyCardsPort) {
   useEffect(() => {
     mountedRef.current = true;
     void load();
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+    void listen("agent-desk://sticky-content-refresh", () => {
+      if (!cancelled) void load();
+    })
+      .then((dispose) => {
+        if (cancelled) dispose();
+        else unlisten = dispose;
+      })
+      .catch(() => undefined);
     return () => {
+      cancelled = true;
+      unlisten?.();
       mountedRef.current = false;
     };
   }, [load]);
