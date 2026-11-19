@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   setDesktopStickyMode: vi.fn(),
   setReaderStickyMode: vi.fn(),
   leaveReader: vi.fn(),
+  listReadingPlans: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn().mockResolvedValue(vi.fn()) }));
@@ -28,6 +29,10 @@ vi.mock("./infrastructure/tauri/preferences", () => ({
     save: mocks.savePreferences,
     applyWindowPreset: mocks.applyWindowPreset,
   },
+}));
+
+vi.mock("./infrastructure/tauri/reading", () => ({
+  tauriReadingPlans: { listPlans: mocks.listReadingPlans, createSession: vi.fn() },
 }));
 
 vi.mock("./infrastructure/tauri/sticky", () => ({
@@ -82,6 +87,16 @@ vi.mock("./infrastructure/tauri/desktopSticky", () => ({
 import App from "./App";
 
 describe("App Reader preferences", () => {
+  it("opens Reader for an obsolete plans view without loading plan management", async () => {
+    mocks.loadPreferences.mockResolvedValue({
+      ...defaultPreferences,
+      readerSurfaceMode: "plans",
+    });
+    render(<App />);
+    expect(await screen.findByRole("article", { name: "测试文档" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "打开阅读计划" })).not.toBeInTheDocument();
+    expect(mocks.listReadingPlans).not.toHaveBeenCalled();
+  });
   it("persists visibility using a base snapshot and restores a hidden Reader", async () => {
     const user = userEvent.setup();
     const view = render(<App />);

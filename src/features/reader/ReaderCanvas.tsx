@@ -8,12 +8,9 @@ import type {
 } from "../../domain/preferences";
 import type { ReaderDocument } from "../../domain/reader";
 import type { InboxDelivery } from "../../domain/delivery";
-import type { CreateReadingPlanInput, ReadingPlan, ReadingPlanStatus } from "../../domain/reading";
 import type { AgentProposal } from "../../domain/proposal";
 import { InboxList } from "../inbox/InboxList";
 import type { InboxLoadState } from "../inbox/useInbox";
-import { ReadingPlanPanel } from "../reading/ReadingPlanPanel";
-import type { ReadingPlansState } from "../reading/useReadingPlans";
 import type { ReaderLoadState } from "./useReaderDocument";
 import { AgentProposalCards } from "../proposal/AgentProposalCards";
 
@@ -24,16 +21,12 @@ type ReaderCanvasProps = {
   windowPreset: WindowPreset;
   document: ReaderDocument | null;
   state: ReaderLoadState;
-  surfaceMode: "reader" | "inbox" | "plans";
+  surfaceMode: "reader" | "inbox";
   readerScrollTop: number;
   inboxItems: InboxDelivery[];
   inboxState: InboxLoadState;
   inboxOpeningId: string | null;
   inboxOpenError: string | null;
-  readingPlans: ReadingPlan[];
-  readingPlansState: ReadingPlansState;
-  readingPlansError: string | null;
-  readingBusyPlanId: string | null;
   agentProposals: AgentProposal[];
   proposalBusyId: string | null;
   proposalErrorId: string | null;
@@ -46,10 +39,6 @@ type ReaderCanvasProps = {
   onCopy(text: string): Promise<void>;
   onCaptureSelection(documentId: string, text: string): Promise<boolean>;
   onCreateReadingSession(documentId: string, text: string): Promise<boolean>;
-  onRetryReadingPlans(): void;
-  onCreateReadingPlan(input: CreateReadingPlanInput): Promise<boolean>;
-  onGenerateReadingDelivery(id: string): Promise<boolean>;
-  onSetReadingPlanStatus(id: string, status: ReadingPlanStatus): Promise<void>;
   onAcceptProposal(id: string): void;
   onRejectProposal(id: string): void;
 };
@@ -105,10 +94,6 @@ export function ReaderCanvas({
   inboxState,
   inboxOpeningId,
   inboxOpenError,
-  readingPlans,
-  readingPlansState,
-  readingPlansError,
-  readingBusyPlanId,
   agentProposals,
   proposalBusyId,
   proposalErrorId,
@@ -121,10 +106,6 @@ export function ReaderCanvas({
   onCopy,
   onCaptureSelection,
   onCreateReadingSession,
-  onRetryReadingPlans,
-  onCreateReadingPlan,
-  onGenerateReadingDelivery,
-  onSetReadingPlanStatus,
   onAcceptProposal,
   onRejectProposal,
 }: ReaderCanvasProps) {
@@ -309,9 +290,7 @@ export function ReaderCanvas({
             {contentVisible ? "隐藏正文" : "显示正文"}
           </button>
         ) : (
-          <span className="inbox-shelf-label">
-            {surfaceMode === "inbox" ? "收件箱" : "阅读计划"}
-          </span>
+          <span className="inbox-shelf-label">收件箱</span>
         )}
         <span className="reader-mini-shelf-slot" data-testid="reader-mini-shelf-slot" aria-hidden />
       </div>
@@ -335,18 +314,6 @@ export function ReaderCanvas({
             openError={inboxOpenError}
             onRetry={onRetryInbox}
             onOpen={onOpenDelivery}
-          />
-        ) : null}
-        {surfaceMode === "plans" ? (
-          <ReadingPlanPanel
-            plans={readingPlans}
-            state={readingPlansState}
-            error={readingPlansError}
-            busyPlanId={readingBusyPlanId}
-            onRetry={onRetryReadingPlans}
-            onCreate={onCreateReadingPlan}
-            onGenerate={onGenerateReadingDelivery}
-            onSetStatus={onSetReadingPlanStatus}
           />
         ) : null}
         {surfaceMode === "reader" && contentVisible && state === "error" ? (

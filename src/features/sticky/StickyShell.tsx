@@ -37,7 +37,6 @@ import type {
 } from "../../domain/preferences";
 import type { ReaderDocument } from "../../domain/reader";
 import type { InboxDelivery } from "../../domain/delivery";
-import type { CreateReadingPlanInput, ReadingPlan, ReadingPlanStatus } from "../../domain/reading";
 import type { AgentProposal } from "../../domain/proposal";
 import type { AgentBridgeStatus } from "../../domain/agentConnection";
 import {
@@ -62,7 +61,6 @@ import {
 import { ReaderCanvas } from "../reader/ReaderCanvas";
 import type { InboxLoadState } from "../inbox/useInbox";
 import type { ReaderLoadState } from "../reader/useReaderDocument";
-import type { ReadingPlansState } from "../reading/useReadingPlans";
 import { playPageTurnSound } from "./pageTurnSound";
 import { tauriDesktopSticky } from "../../infrastructure/tauri/desktopSticky";
 import type { StickyLoadState } from "./useStickyCards";
@@ -71,7 +69,7 @@ import type { AgentBridgeLoadState } from "../agentBridge/useAgentBridge";
 
 type SaveState = "loading" | "idle" | "saving" | "saved" | "error";
 type StickyFace = "note" | "task";
-type ReaderSurfaceMode = "reader" | "inbox" | "plans";
+type ReaderSurfaceMode = Preferences["readerSurfaceMode"];
 
 type StickyShellProps = {
   nativeSurface?: "main" | "desktop";
@@ -83,10 +81,6 @@ type StickyShellProps = {
   inboxState: InboxLoadState;
   inboxOpeningId: string | null;
   inboxOpenError: string | null;
-  readingPlans: ReadingPlan[];
-  readingPlansState: ReadingPlansState;
-  readingPlansError: string | null;
-  readingBusyPlanId: string | null;
   agentProposals: AgentProposal[];
   proposalBusyId: string | null;
   proposalErrorId: string | null;
@@ -120,10 +114,6 @@ type StickyShellProps = {
   onCopyReaderSelection(text: string): Promise<void>;
   onCaptureReaderSelection(documentId: string, text: string): Promise<boolean>;
   onCreateReadingSession(documentId: string, text: string): Promise<boolean>;
-  onRetryReadingPlans(): void;
-  onCreateReadingPlan(input: CreateReadingPlanInput): Promise<boolean>;
-  onGenerateReadingDelivery(id: string): Promise<boolean>;
-  onSetReadingPlanStatus(id: string, status: ReadingPlanStatus): Promise<void>;
   onAcceptProposal(id: string): Promise<boolean>;
   onRejectProposal(id: string): Promise<boolean>;
   onAgentBridgeEnabledChange(enabled: boolean): Promise<void>;
@@ -1117,10 +1107,6 @@ export function StickyShell(props: StickyShellProps) {
     inboxState,
     inboxOpeningId,
     inboxOpenError,
-    readingPlans,
-    readingPlansState,
-    readingPlansError,
-    readingBusyPlanId,
     agentProposals,
     proposalBusyId,
     proposalErrorId,
@@ -1153,10 +1139,6 @@ export function StickyShell(props: StickyShellProps) {
     onCopyReaderSelection,
     onCaptureReaderSelection,
     onCreateReadingSession,
-    onRetryReadingPlans,
-    onCreateReadingPlan,
-    onGenerateReadingDelivery,
-    onSetReadingPlanStatus,
     onAcceptProposal,
     onRejectProposal,
     onAgentBridgeEnabledChange,
@@ -1180,7 +1162,7 @@ export function StickyShell(props: StickyShellProps) {
   const stickyOverlayRef = useRef<HTMLDivElement>(null);
   const desktopSurface = nativeSurface === "desktop";
   const [readerSurfaceMode, setReaderSurfaceMode] = useState<ReaderSurfaceMode>(
-    preferences.readerSurfaceMode,
+    preferences.readerSurfaceMode === "inbox" ? "inbox" : "reader",
   );
   const readerScrollTopRef = useRef(preferences.readerScrollTop);
   const readerScrollSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1370,10 +1352,6 @@ export function StickyShell(props: StickyShellProps) {
         inboxState={inboxState}
         inboxOpeningId={inboxOpeningId}
         inboxOpenError={inboxOpenError}
-        readingPlans={readingPlans}
-        readingPlansState={readingPlansState}
-        readingPlansError={readingPlansError}
-        readingBusyPlanId={readingBusyPlanId}
         agentProposals={agentProposals}
         proposalBusyId={proposalBusyId}
         proposalErrorId={proposalErrorId}
@@ -1393,14 +1371,6 @@ export function StickyShell(props: StickyShellProps) {
         onCopy={onCopyReaderSelection}
         onCaptureSelection={onCaptureReaderSelection}
         onCreateReadingSession={onCreateReadingSession}
-        onRetryReadingPlans={onRetryReadingPlans}
-        onCreateReadingPlan={onCreateReadingPlan}
-        onGenerateReadingDelivery={async (id) => {
-          const generated = await onGenerateReadingDelivery(id);
-          if (generated) changeReaderSurfaceMode("inbox");
-          return generated;
-        }}
-        onSetReadingPlanStatus={onSetReadingPlanStatus}
         onAcceptProposal={(id) => void onAcceptProposal(id)}
         onRejectProposal={(id) => void onRejectProposal(id)}
       />
@@ -1411,21 +1381,6 @@ export function StickyShell(props: StickyShellProps) {
         </div>
         <div className="board-actions">
           <span className="persistence-dot" data-state={stickyState} />
-          <button
-            className="inbox-nav-button"
-            type="button"
-            aria-label={readerSurfaceMode === "plans" ? "返回阅读" : "打开阅读计划"}
-            onClick={() => {
-              if (readerSurfaceMode === "plans") {
-                changeReaderSurfaceMode("reader");
-              } else {
-                onRetryReadingPlans();
-                changeReaderSurfaceMode("plans");
-              }
-            }}
-          >
-            {readerSurfaceMode === "plans" ? "阅读" : "计划"}
-          </button>
           <button
             className="inbox-nav-button"
             type="button"

@@ -248,6 +248,9 @@ impl Preferences {
             self.sticky_mode = StickyMode::Compact;
             self.placement_mode = PlacementMode::Free;
         }
+        if self.reader_surface_mode == ReaderSurfaceMode::Plans {
+            self.reader_surface_mode = ReaderSurfaceMode::Reader;
+        }
         if self.sticky_mode == StickyMode::Desktop {
             self.sticky_mode = StickyMode::Compact;
         }
@@ -307,6 +310,28 @@ fn retired_edge_placements_respect_startup_policy() {
         assert_eq!(classic.sticky_mode, StickyMode::Compact);
         assert_eq!(classic.placement_mode, PlacementMode::Free);
     }
+}
+
+#[cfg(test)]
+#[test]
+fn retired_plans_view_restores_reader_without_losing_document_or_scroll() {
+    let old = Preferences {
+        startup_display_mode: StartupDisplayMode::LastState,
+        surface_mode: SurfaceMode::Reader,
+        reader_surface_mode: ReaderSurfaceMode::Plans,
+        current_reader_document_id: Some("existing".into()),
+        reader_scroll_top: 180,
+        ..Preferences::default()
+    };
+    let normalized = old.clone().normalize_legacy();
+    assert_eq!(normalized.reader_surface_mode, ReaderSurfaceMode::Reader);
+    let restored = old.apply_startup_policy();
+    assert_eq!(restored.reader_surface_mode, ReaderSurfaceMode::Reader);
+    assert_eq!(
+        restored.current_reader_document_id.as_deref(),
+        Some("existing")
+    );
+    assert_eq!(restored.reader_scroll_top, 180);
 }
 
 impl Default for Preferences {

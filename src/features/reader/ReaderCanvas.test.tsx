@@ -58,15 +58,7 @@ const inboxItem: InboxDelivery = {
 
 function emptyReadingProps() {
   return {
-    readingPlans: [],
-    readingPlansState: "ready" as const,
-    readingPlansError: null,
-    readingBusyPlanId: null,
     onCreateReadingSession: vi.fn(async () => true),
-    onRetryReadingPlans: vi.fn(),
-    onCreateReadingPlan: vi.fn(async () => true),
-    onGenerateReadingDelivery: vi.fn(async () => true),
-    onSetReadingPlanStatus: vi.fn(async () => undefined),
     agentProposals: [],
     proposalBusyId: null,
     proposalErrorId: null,

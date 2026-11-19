@@ -4,7 +4,6 @@ import type { DeliveriesPort } from "../../application/ports/delivery";
 import type { ReadingPlansPort } from "../../application/ports/reading";
 import type { AgentProposalsPort } from "../../application/ports/proposal";
 import type { AgentConnectionPort } from "../../application/ports/agentConnection";
-import type { CreateReadingPlanInput, ReadingPlanStatus } from "../../domain/reading";
 import type {
   Preferences,
   ReaderFontSize,
@@ -19,7 +18,6 @@ import { StickyShell } from "./StickyShell";
 import { useStickyCards } from "./useStickyCards";
 import { useReaderDocument } from "../reader/useReaderDocument";
 import { useInbox } from "../inbox/useInbox";
-import { useReadingPlans } from "../reading/useReadingPlans";
 import { useAgentProposals } from "../proposal/useAgentProposals";
 import { useAgentBridge } from "../agentBridge/useAgentBridge";
 
@@ -86,7 +84,6 @@ export function StickyHome({
     onCurrentReaderDocumentChange,
   );
   const inbox = useInbox(deliveryPort, preferenceSaveState !== "loading");
-  const reading = useReadingPlans(readingPort, preferenceSaveState !== "loading");
   const proposals = useAgentProposals(proposalPort, reader.document?.id ?? null);
   const agentBridge = useAgentBridge(agentConnectionPort);
 
@@ -109,24 +106,12 @@ export function StickyHome({
     return true;
   }
 
-  async function createReadingPlan(input: CreateReadingPlanInput) {
-    return (await reading.create(input)) !== null;
-  }
-
-  async function generateReadingDelivery(id: string) {
-    const generated = await reading.generate(id);
-    if (!generated) return false;
-    await inbox.retry();
-    return true;
-  }
-
-  async function setReadingPlanStatus(id: string, status: ReadingPlanStatus) {
-    await reading.setStatus(id, status);
-  }
-
   async function createReadingSession(documentId: string, text: string) {
     try {
-      const created = await reading.createSession(documentId, text);
+      const created = await readingPort.createSession({
+        sourceDocumentId: documentId,
+        content: text,
+      });
       reader.acceptOpened(created.document);
       onCurrentReaderDocumentChange(created.document.id);
       onReaderContentVisibilityChange(true);
@@ -159,10 +144,6 @@ export function StickyHome({
       inboxState={inbox.state}
       inboxOpeningId={inbox.openingId}
       inboxOpenError={inbox.openError}
-      readingPlans={reading.plans}
-      readingPlansState={reading.state}
-      readingPlansError={reading.error}
-      readingBusyPlanId={reading.busyPlanId}
       agentProposals={proposals.proposals}
       proposalBusyId={proposals.busyId}
       proposalErrorId={proposals.errorId}
@@ -196,10 +177,6 @@ export function StickyHome({
       onCopyReaderSelection={reader.copyText}
       onCaptureReaderSelection={captureSelection}
       onCreateReadingSession={createReadingSession}
-      onRetryReadingPlans={reading.retry}
-      onCreateReadingPlan={createReadingPlan}
-      onGenerateReadingDelivery={generateReadingDelivery}
-      onSetReadingPlanStatus={setReadingPlanStatus}
       onAcceptProposal={acceptProposal}
       onRejectProposal={proposals.reject}
       onAgentBridgeEnabledChange={agentBridge.setEnabled}

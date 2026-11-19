@@ -20,7 +20,7 @@ export const readerFontSizes = ["small", "standard", "large"] as const;
 export type ReaderFontSize = (typeof readerFontSizes)[number];
 export const readerLineSpacings = ["compact", "standard", "relaxed"] as const;
 export type ReaderLineSpacing = (typeof readerLineSpacings)[number];
-export const readerSurfaceModes = ["reader", "inbox", "plans"] as const;
+export const readerSurfaceModes = ["reader", "inbox"] as const;
 export type ReaderSurfaceMode = (typeof readerSurfaceModes)[number];
 
 export type StickyPosition = {
