@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { defaultPreferences } from "./domain/preferences";
@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   openReaderWorkspace: vi.fn(),
   setDesktopStickyMode: vi.fn(),
   setReaderStickyMode: vi.fn(),
+  startDragging: vi.fn(),
   leaveReader: vi.fn(),
   listReadingPlans: vi.fn(),
 }));
@@ -79,7 +80,7 @@ vi.mock("./infrastructure/tauri/desktopSticky", () => ({
     setDesktopMode: mocks.setDesktopStickyMode,
     setReaderMode: mocks.setReaderStickyMode,
     leaveReader: mocks.leaveReader,
-    startDragging: vi.fn(),
+    startDragging: mocks.startDragging,
     showContextMenu: vi.fn(),
   },
 }));
@@ -97,27 +98,27 @@ describe("App Reader preferences", () => {
     expect(screen.queryByRole("button", { name: "打开阅读计划" })).not.toBeInTheDocument();
     expect(mocks.listReadingPlans).not.toHaveBeenCalled();
   });
-  it("persists visibility using a base snapshot and restores a hidden Reader", async () => {
+  it("folds Reader Compact to a pinned and persistent Mini; restores Compact", async () => {
     const user = userEvent.setup();
     const view = render(<App />);
-    await screen.findByRole("article");
-    await user.click(screen.getByRole("button", { name: "隐藏便利贴", pressed: true }));
-    await waitFor(() =>
-      expect(mocks.savePreferences).toHaveBeenLastCalledWith(
-        expect.objectContaining({ readerStickyVisible: false }),
-        expect.objectContaining({ readerStickyVisible: true }),
-      ),
-    );
-    expect(document.querySelector(".sticky-overlay-layer")).toHaveAttribute("hidden");
-    expect(document.querySelector(".mini-tab")).toBeNull();
+    const article = await screen.findByRole("article");
+    await user.click(screen.getByRole("button", { name: "缩成 Mini Tab" }));
+    const mini = await screen.findByRole("button", { name: "恢复 Compact Sticky" });
+    expect(mini.closest(".sticky-surface")).toHaveAttribute("data-pinned-to-shelf", "true");
+    expect(article).toBeVisible();
+    expect(mocks.setReaderStickyMode).toHaveBeenLastCalledWith("mini");
+    expect(mocks.setDesktopStickyMode).not.toHaveBeenCalled();
+    expect(mocks.leaveReader).not.toHaveBeenCalled();
     view.unmount();
-    mocks.loadPreferences.mockResolvedValue({ ...defaultPreferences, readerStickyVisible: false });
+    mocks.loadPreferences.mockResolvedValue({
+      ...defaultPreferences,
+      stickyMode: "mini",
+      currentReaderDocumentId: "reader-test",
+    });
     render(<App />);
-    await screen.findByRole("article");
-    expect(screen.getByRole("button", { name: "显示便利贴" })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
+    await user.click(await screen.findByRole("button", { name: "恢复 Compact Sticky" }));
+    expect(await screen.findByRole("button", { name: "展开或拖动便利贴" })).toBeVisible();
+    expect(mocks.setReaderStickyMode).toHaveBeenLastCalledWith("compact");
   });
   beforeEach(() => {
     vi.clearAllMocks();
@@ -147,6 +148,7 @@ describe("App Reader preferences", () => {
       lastError: null,
     });
     mocks.enterDesktopSticky.mockResolvedValue(defaultPreferences);
+    mocks.startDragging.mockResolvedValue(undefined);
     mocks.setDesktopStickyMode.mockImplementation(async (stickyMode) => ({
       ...defaultPreferences,
       surfaceMode: "desktop",
@@ -254,7 +256,7 @@ describe("App Reader preferences", () => {
     await screen.findByRole("region", { name: "Reader Canvas" });
     await waitFor(() => expect(mocks.openReader).toHaveBeenCalledWith("reader-test"));
     expect(screen.queryByRole("article")).not.toBeInTheDocument();
-    expect(document.querySelector(".mini-tab")).toBeNull();
+    expect(screen.getByRole("button", { name: "恢复 Compact Sticky" })).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "显示正文" }));
     expect(await screen.findByRole("article", { name: "测试文档" })).toBeVisible();
@@ -302,44 +304,76 @@ describe("App Reader preferences", () => {
     expect(mocks.savePreferences).not.toHaveBeenCalled();
   });
 
-  it("leaves hidden Reader Sticky as Desktop Compact without a Reader Mini", async () => {
-    const user = userEvent.setup();
-    mocks.loadPreferences.mockResolvedValue({
-      ...defaultPreferences,
-      stickyMode: "compact",
-      readerStickyVisible: false,
-      currentReaderDocumentId: "reader-test",
-    });
+  it.each(["mini", "compact", "expanded"] as const)(
+    "leaves Reader %s in the same shape",
+    async (stickyMode) => {
+      const user = userEvent.setup();
+      mocks.loadPreferences.mockResolvedValue({
+        ...defaultPreferences,
+        stickyMode,
+        currentReaderDocumentId: "reader-test",
+        readerScrollTop: 240,
+      });
 
-    render(<App />);
-    await screen.findByRole("region", { name: "Reader Canvas" });
-    await user.click(await screen.findByRole("button", { name: "只留便利贴" }));
+      render(<App />);
+      await screen.findByRole("article");
+      await user.click(screen.getByRole("button", { name: "只留便利贴" }));
+      await waitFor(() => expect(mocks.leaveReader).toHaveBeenCalledWith(stickyMode));
+    },
+  );
 
-    await waitFor(() => expect(mocks.leaveReader).toHaveBeenCalledWith("compact"));
-  });
+  it.each(["click", "Enter", "Space"] as const)(
+    "opens Reader from Compact header with %s only",
+    async (interaction) => {
+      const user = userEvent.setup();
+      mocks.loadPreferences.mockResolvedValue({
+        ...defaultPreferences,
+        surfaceMode: "desktop",
+        currentReaderDocumentId: "reader-test",
+      });
+      mocks.openReaderWorkspace.mockResolvedValue({
+        ...defaultPreferences,
+        surfaceMode: "reader",
+        currentReaderDocumentId: "reader-test",
+      });
 
-  it("does not render the removed Gateway page", async () => {
-    const user = userEvent.setup();
-    mocks.loadPreferences.mockResolvedValue({
-      ...defaultPreferences,
-      surfaceMode: "desktop",
-      currentReaderDocumentId: "reader-test",
-    });
-    mocks.openReaderWorkspace.mockResolvedValue({
-      ...defaultPreferences,
-      surfaceMode: "reader",
-      currentReaderDocumentId: "reader-test",
-    });
+      render(<App surface="desktop" />);
 
-    render(<App surface="desktop" />);
+      expect(await screen.findByText("TODAY")).toBeVisible();
+      expect(screen.queryByText("你的阅读工作空间")).not.toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: "Reader Canvas" })).not.toBeInTheDocument();
+      const reader = screen.getByRole("button", { name: "打开阅读器" });
+      expect(reader.closest(".compact-header")).not.toBeNull();
+      expect(reader).toHaveTextContent("阅读");
+      expect(reader).toHaveAttribute("title", "打开阅读器");
+      if (interaction === "click") await user.click(reader);
+      else {
+        reader.focus();
+        await user.keyboard(interaction === "Enter" ? "{Enter}" : " ");
+      }
 
-    expect(await screen.findByText("TODAY")).toBeVisible();
-    expect(screen.queryByText("你的阅读工作空间")).not.toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Reader Canvas" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "打开阅读器" }));
-
-    await waitFor(() => expect(mocks.openReaderWorkspace).toHaveBeenCalledOnce());
-  });
+      await waitFor(() => expect(mocks.openReaderWorkspace).toHaveBeenCalledOnce());
+      expect(mocks.setDesktopStickyMode).not.toHaveBeenCalled();
+      expect(mocks.startDragging).not.toHaveBeenCalled();
+      const compact = screen.getByRole("button", { name: "展开或拖动便利贴" });
+      for (const [eventName, x] of [
+        ["pointerDown", 90],
+        ["pointerMove", 110],
+        ["pointerUp", 110],
+      ] as const) {
+        const event = createEvent[eventName](compact);
+        Object.defineProperties(event, {
+          pointerId: { value: 1 },
+          clientX: { value: x },
+          clientY: { value: 100 },
+        });
+        fireEvent(compact, event);
+      }
+      expect(mocks.startDragging).toHaveBeenCalledOnce();
+      expect(mocks.openReaderWorkspace).toHaveBeenCalledOnce();
+      expect(mocks.setDesktopStickyMode).not.toHaveBeenCalled();
+    },
+  );
 
   it("persists the three-way startup display preference", async () => {
     const user = userEvent.setup();
@@ -357,5 +391,33 @@ describe("App Reader preferences", () => {
         expect.any(Object),
       ),
     );
+  });
+
+  it("cycles Desktop Compact, Mini and Expanded without entering Reader", async () => {
+    const user = userEvent.setup();
+    mocks.loadPreferences.mockResolvedValue({ ...defaultPreferences, surfaceMode: "desktop" });
+    render(<App surface="desktop" />);
+    const fold = await screen.findByRole("button", { name: "缩成 Mini Tab" });
+    await user.click(fold);
+    const restore = await screen.findByRole("button", { name: "恢复 Compact Sticky" });
+    expect(restore.closest(".sticky-surface")).toHaveAttribute("data-pinned-to-shelf", "false");
+    restore.focus();
+    await user.keyboard("{Enter}");
+    await user.click(await screen.findByRole("button", { name: "展开或拖动便利贴" }));
+    expect(await screen.findByRole("region", { name: "展开的便利贴" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "收起便利贴" }));
+    await user.click(await screen.findByRole("button", { name: "展开或拖动便利贴" }));
+    await user.click(await screen.findByRole("button", { name: "缩成 Mini Tab" }));
+    expect(await screen.findByRole("button", { name: "恢复 Compact Sticky" })).toBeVisible();
+    expect(mocks.setDesktopStickyMode.mock.calls.flat()).toEqual([
+      "mini",
+      "compact",
+      "expanded",
+      "compact",
+      "expanded",
+      "mini",
+    ]);
+    expect(mocks.openReaderWorkspace).not.toHaveBeenCalled();
+    expect(mocks.startDragging).not.toHaveBeenCalled();
   });
 });

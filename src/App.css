@@ -1011,16 +1011,21 @@
 }
 
 .compact-reader-button {
-  align-self: flex-start;
-  border: 1px solid var(--sticky-line-strong);
-  border-radius: 7px;
-  margin-top: 10px;
-  padding: 6px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 36px;
+  min-height: 36px;
+  border: 0;
+  border-radius: 5px;
+  padding: 0 4px;
   color: var(--sticky-ink);
-  background: var(--sticky-capture);
+  background: transparent;
   font: inherit;
-  font-size: 0.64rem;
-  font-weight: 760;
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -1150,7 +1155,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 21px 16px 8px;
+  padding: 21px 36px 8px 16px;
 }
 
 .face-switcher {
@@ -1215,10 +1220,18 @@
 }
 
 .collapse-button {
-  width: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: auto;
+  min-width: 36px;
   height: 36px;
+  padding: 0 4px;
+  border-radius: 5px;
   color: var(--sticky-muted);
-  font-size: 16px;
+  font-size: 0.68rem;
+  white-space: nowrap;
 }
 
 .face-scroll {
@@ -2294,20 +2307,10 @@ html[data-surface="desktop-sticky"] #root {
   gap: 7px;
 }
 
-.compact-header-actions button {
-  display: grid;
-  width: 36px;
-  height: 36px;
-  place-items: center;
-  border: 0;
-  border-radius: 50%;
-  padding: 0 0 2px;
-  color: var(--sticky-muted);
-  background: var(--sticky-soft);
-  font: inherit;
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
+.sticky-preview > .compact-header[data-reader-entry="true"] {
+  margin-top: -9px;
+  margin-bottom: -5px;
+  padding-right: 15px;
 }
 
 .compact-todo-viewport {
@@ -2519,32 +2522,6 @@ html[data-surface="desktop-sticky"] #root {
   cursor: pointer;
 }
 
-.mini-desktop-control {
-  position: absolute;
-  z-index: 2;
-  top: 0;
-  right: 0;
-  display: grid;
-  width: 24px;
-  height: 24px;
-  place-items: center;
-  border: 0;
-  padding: 0;
-  color: var(--sticky-muted);
-  background: transparent;
-  font: inherit;
-  font-size: 0.48rem;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0.66;
-}
-
-.mini-desktop-control > span {
-  width: 12px;
-  height: 12px;
-  background: linear-gradient(225deg, var(--sticky-fold) 0 48%, transparent 51%);
-}
-
 .desk-board[data-native-surface="desktop"] {
   min-height: 0;
   overflow: hidden;
@@ -2574,12 +2551,6 @@ html[data-surface="desktop-sticky"] #root {
 
 .expanded-fold-control {
   z-index: 8;
-}
-
-.mini-desktop-control:hover,
-.mini-desktop-control:focus-visible {
-  color: var(--sticky-ink);
-  opacity: 1;
 }
 
 @media (max-height: 470px) {
@@ -2621,10 +2592,6 @@ html[data-surface="desktop-sticky"] #root {
     transition: none;
   }
 }
-.sticky-overlay-layer[hidden] {
-  display: none;
-}
-
 .desk-board[data-native-surface="main"] .board-header > div:first-child {
   min-width: 0;
 }
@@ -2643,15 +2610,12 @@ html[data-surface="desktop-sticky"] #root {
   white-space: nowrap;
 }
 
-.reader-transition-notice {
-  position: absolute;
-  z-index: 30;
-  top: 68px;
-  left: 16px;
-  right: 16px;
-  padding: 10px;
-  background: var(--paper-bg, #f4edd6);
-  color: var(--text-primary, #493f2f);
-  border-radius: 8px;
-  font-size: 12px;
+.sticky-transition-notice {
+  flex: none;
+  margin: 0 16px 6px;
+  padding: 6px 8px;
+  background: var(--sticky-soft);
+  color: var(--sticky-ink);
+  border-radius: 5px;
+  font-size: 0.75rem;
 }

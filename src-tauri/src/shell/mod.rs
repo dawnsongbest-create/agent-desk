@@ -299,7 +299,6 @@ pub async fn open_reader_workspace(app: AppHandle) -> Result<Preferences, String
     preferences.surface_mode = SurfaceMode::Reader;
     preferences.sticky_mode = StickyMode::Compact;
     preferences.placement_mode = PlacementMode::Free;
-    preferences.reader_sticky_visible = true;
     crate::preferences::write(&app, &preferences)?;
     let _ = app.emit("agent-desk://preferences-changed", &preferences);
     if let Some(desktop) = app.get_webview_window(DESKTOP_STICKY_WINDOW_LABEL) {

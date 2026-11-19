@@ -209,7 +209,8 @@ pub struct Preferences {
     pub reader_line_spacing: ReaderLineSpacing,
     #[serde(default = "default_true")]
     pub reader_content_visible: bool,
-    #[serde(default = "default_true")]
+    // Read the retired A1.3 preference once; never write it back to Store.
+    #[serde(default = "default_true", skip_serializing)]
     pub reader_sticky_visible: bool,
     #[serde(default)]
     pub current_reader_document_id: Option<String>,
@@ -254,10 +255,10 @@ impl Preferences {
         if self.sticky_mode == StickyMode::Desktop {
             self.sticky_mode = StickyMode::Compact;
         }
-        if self.surface_mode == SurfaceMode::Reader && self.sticky_mode == StickyMode::Mini {
+        if self.surface_mode == SurfaceMode::Reader && !self.reader_sticky_visible {
             self.sticky_mode = StickyMode::Compact;
-            self.reader_sticky_visible = true;
         }
+        self.reader_sticky_visible = true;
         self
     }
 
@@ -274,7 +275,6 @@ impl Preferences {
                 self.surface_mode = SurfaceMode::Reader;
                 self.sticky_mode = StickyMode::Compact;
                 self.placement_mode = PlacementMode::Free;
-                self.reader_sticky_visible = true;
             }
         }
         self
@@ -495,36 +495,35 @@ mod tests {
     }
 
     #[test]
-    fn migrates_only_reader_mini_and_restores_visibility_by_startup_policy() {
-        let legacy = Preferences {
-            surface_mode: SurfaceMode::Reader,
-            sticky_mode: StickyMode::Mini,
-            reader_sticky_visible: false,
-            ..Preferences::default()
-        }
-        .normalize_legacy();
-        assert_eq!(legacy.sticky_mode, StickyMode::Compact);
-        assert!(legacy.reader_sticky_visible);
-        let desktop = Preferences {
-            sticky_mode: StickyMode::Mini,
-            ..Preferences::default()
-        }
-        .normalize_legacy();
-        assert_eq!(desktop.sticky_mode, StickyMode::Mini);
+    fn migrates_hidden_reader_sticky_without_erasing_a_visible_mini() {
         let hidden = Preferences {
             startup_display_mode: StartupDisplayMode::LastState,
             surface_mode: SurfaceMode::Reader,
             sticky_mode: StickyMode::Expanded,
             reader_sticky_visible: false,
             ..Preferences::default()
-        };
-        assert!(!hidden.clone().apply_startup_policy().reader_sticky_visible);
-        let classic = Preferences {
-            startup_display_mode: StartupDisplayMode::StickyOverReader,
-            ..hidden
         }
         .apply_startup_policy();
-        assert!(classic.reader_sticky_visible);
-        assert_eq!(classic.sticky_mode, StickyMode::Compact);
+        assert_eq!(hidden.surface_mode, SurfaceMode::Reader);
+        assert_eq!(hidden.sticky_mode, StickyMode::Compact);
+        assert!(serde_json::to_value(&hidden)
+            .unwrap()
+            .get("readerStickyVisible")
+            .is_none());
+
+        for surface_mode in [SurfaceMode::Reader, SurfaceMode::Desktop] {
+            let mini = Preferences {
+                startup_display_mode: StartupDisplayMode::LastState,
+                surface_mode,
+                sticky_mode: StickyMode::Mini,
+                ..Preferences::default()
+            };
+            let stored = serde_json::to_string(&mini).unwrap();
+            let restored = serde_json::from_str::<Preferences>(&stored)
+                .unwrap()
+                .apply_startup_policy();
+            assert_eq!(restored.surface_mode, surface_mode);
+            assert_eq!(restored.sticky_mode, StickyMode::Mini);
+        }
     }
 }

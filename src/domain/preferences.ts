@@ -52,7 +52,6 @@ export type Preferences = {
   readerFontSize: ReaderFontSize;
   readerLineSpacing: ReaderLineSpacing;
   readerContentVisible: boolean;
-  readerStickyVisible: boolean;
   currentReaderDocumentId: string | null;
   readerScrollTop: number;
   readerSurfaceMode: ReaderSurfaceMode;
@@ -75,7 +74,6 @@ export const defaultPreferences: Preferences = {
   readerFontSize: "standard",
   readerLineSpacing: "standard",
   readerContentVisible: true,
-  readerStickyVisible: true,
   currentReaderDocumentId: null,
   readerScrollTop: 0,
   readerSurfaceMode: "reader",

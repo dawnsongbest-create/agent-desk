@@ -107,7 +107,6 @@ type StickyShellProps = {
   onReaderContentVisibilityChange(visible: boolean): void;
   onReaderScrollTopChange(scrollTop: number): void;
   onReaderSurfaceModeChange(mode: Preferences["readerSurfaceMode"]): void;
-  onReaderStickyVisibilityChange?(visible: boolean): void;
   onRetryReader(): void;
   onRetryInbox(): void;
   onOpenDelivery(id: string): Promise<boolean>;
@@ -360,7 +359,6 @@ function QuoteEditor({
     <section className="quote-editor" aria-label="便签一句">
       <div>
         <span>便签一句</span>
-        <small>Compact Sticky 会一直显示</small>
       </div>
       {editing ? (
         <div className="quote-composer">
@@ -915,7 +913,14 @@ function StickySurface({
       aria-label={interactive ? label : undefined}
       onClick={interactive && pinned ? onActivate : undefined}
       onKeyDown={(event) => {
-        if (interactive && (event.key === "Enter" || event.key === " ")) onActivate();
+        if (
+          interactive &&
+          event.target === event.currentTarget &&
+          (event.key === "Enter" || event.key === " ")
+        ) {
+          event.preventDefault();
+          onActivate();
+        }
       }}
       onPointerDown={pointerDown}
       onPointerMove={pointerMove}
@@ -979,18 +984,47 @@ function StickyPreview({
         className="compact-corner-control"
         type="button"
         data-no-drag
-        aria-label={nativeWindow ? "缩成 Mini Tab" : "隐藏便利贴"}
+        aria-label="缩成 Mini Tab"
+        title="缩小到 Mini"
         onClick={(event) => {
           event.stopPropagation();
           onMinimize();
         }}
       />
-      <header>
+      <header className="compact-header" data-reader-entry={showReaderEntry}>
         <span>TODAY</span>
         <span className="compact-header-actions">
           <small>
             {openTasks.length ? `${Math.min(3, openTasks.length)} / ${openTasks.length}` : "quiet"}
           </small>
+          {showReaderEntry ? (
+            <button
+              className="compact-reader-button"
+              type="button"
+              data-no-drag
+              aria-label="打开阅读器"
+              title="打开阅读器"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenReader();
+              }}
+            >
+              <svg
+                viewBox="0 0 18 18"
+                width="15"
+                height="15"
+                fill="none"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  d="M9 4.5C7 3.1 4.4 3.1 2 4v9.5c2.4-.9 5-.9 7 .5m0-9.5c2-1.4 4.6-1.4 7-.5v9.5c-2.4-.9-5-.9-7 .5m0-9.5V14"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <span>阅读</span>
+            </button>
+          ) : null}
         </span>
       </header>
       {loading ? (
@@ -1019,19 +1053,6 @@ function StickyPreview({
         </div>
       )}
       <blockquote>{quote || "留一句愿意常常看到的话。"}</blockquote>
-      {showReaderEntry ? (
-        <button
-          className="compact-reader-button"
-          type="button"
-          data-no-drag
-          onClick={(event) => {
-            event.stopPropagation();
-            onOpenReader();
-          }}
-        >
-          打开阅读器
-        </button>
-      ) : null}
     </StickySurface>
   );
 }
@@ -1040,14 +1061,12 @@ function MiniStickyTab({
   openTaskCount,
   position,
   onRestore,
-  onDesktop,
   onPositionChange,
   nativeWindow,
 }: {
   openTaskCount: number;
   position: StickyPosition;
   onRestore(): void;
-  onDesktop(): void;
   onPositionChange(position: StickyPosition): void;
   nativeWindow: boolean;
 }) {
@@ -1066,26 +1085,14 @@ function MiniStickyTab({
         className="mini-restore-hitbox"
         type="button"
         aria-label="恢复 Compact Sticky"
-        onClick={onRestore}
+        onClick={(event) => {
+          if (!nativeWindow || event.detail === 0) onRestore();
+        }}
       />
       <span className="mini-fold" aria-hidden="true" />
       <span className="mini-label">TODAY</span>
       <strong>{openTaskCount}</strong>
       <span className="mini-dot" aria-hidden="true" />
-      {!nativeWindow ? (
-        <button
-          className="mini-desktop-control"
-          type="button"
-          data-no-drag
-          aria-label="隐藏阅读器，只保留 Mini Tab"
-          onClick={(event) => {
-            event.stopPropagation();
-            onDesktop();
-          }}
-        >
-          <span aria-hidden="true" />
-        </button>
-      ) : null}
     </StickySurface>
   );
 }
@@ -1132,7 +1139,6 @@ export function StickyShell(props: StickyShellProps) {
     onReaderContentVisibilityChange,
     onReaderScrollTopChange,
     onReaderSurfaceModeChange,
-    onReaderStickyVisibilityChange,
     onRetryReader,
     onRetryInbox,
     onOpenDelivery,
@@ -1157,10 +1163,8 @@ export function StickyShell(props: StickyShellProps) {
     onDismissError,
   } = props;
   const [expanded, setExpanded] = useState(preferences.stickyMode === "expanded");
-  const [readerStickyVisible, setReaderStickyVisible] = useState(preferences.readerStickyVisible);
   const [transitionNotice, setTransitionNotice] = useState<string | null>(null);
   const stickyOverlayRef = useRef<HTMLDivElement>(null);
-  const desktopSurface = nativeSurface === "desktop";
   const [readerSurfaceMode, setReaderSurfaceMode] = useState<ReaderSurfaceMode>(
     preferences.readerSurfaceMode === "inbox" ? "inbox" : "reader",
   );
@@ -1194,34 +1198,44 @@ export function StickyShell(props: StickyShellProps) {
   }, [preferences.stickyMode]);
 
   useEffect(() => {
-    setReaderStickyVisible(preferences.readerStickyVisible);
-  }, [preferences.readerStickyVisible]);
+    setReaderSurfaceMode(preferences.readerSurfaceMode === "inbox" ? "inbox" : "reader");
+  }, [preferences.readerSurfaceMode]);
 
-  function setReaderVisibility(visible: boolean) {
+  function canChangeStickySurface() {
+    const surface = stickyOverlayRef.current;
+    const quote = surface?.querySelector<HTMLTextAreaElement>(".quote-composer textarea");
+    const captureInputs = surface?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+      ".face-capture-composer textarea, .face-capture-composer input, .record-create-sheet textarea",
+    );
+    const pendingCapture = Array.from(captureInputs ?? []).some((field) => field.value.length > 0);
+    if (
+      expanded &&
+      (recordDirty || busy || (quote && quote.value !== profile.quoteText) || pendingCapture)
+    ) {
+      setTransitionNotice("请先保存或取消正在编辑的内容。");
+      return false;
+    }
     setTransitionNotice(null);
-    setReaderStickyVisible(visible);
-    onReaderStickyVisibilityChange?.(visible);
+    return true;
   }
 
   function foldSticky() {
-    if (desktopSurface) {
-      setExpanded(false);
-      changeStickyMode("mini");
-    } else {
-      setReaderVisibility(false);
-    }
+    if (!canChangeStickySurface()) return;
+    setSelectedRecord(null);
+    setExpanded(false);
+    changeStickyMode("mini");
   }
 
   function leaveReader() {
-    const unfinishedComposer = stickyOverlayRef.current?.querySelector(
-      ".quote-composer, .face-capture-composer, .record-create-sheet",
-    );
-    if (recordDirty || unfinishedComposer || busy) {
-      setTransitionNotice("请先显示便利贴，保存或取消正在编辑的内容，再只留便利贴。");
-      return;
+    if (!canChangeStickySurface()) return;
+    if (readerScrollSaveTimer.current) {
+      clearTimeout(readerScrollSaveTimer.current);
+      readerScrollSaveTimer.current = null;
+      onReaderScrollTopChange(Math.max(0, Math.round(readerScrollTopRef.current)));
     }
-    setTransitionNotice(null);
-    onLeaveReaderWorkspace(!readerStickyVisible ? "compact" : expanded ? "expanded" : "compact");
+    onLeaveReaderWorkspace(
+      expanded ? "expanded" : preferences.stickyMode === "mini" ? "mini" : "compact",
+    );
   }
 
   useEffect(() => {
@@ -1297,7 +1311,7 @@ export function StickyShell(props: StickyShellProps) {
   }, []);
 
   function switchFace(nextFace: StickyFace) {
-    if (nextFace === face) return;
+    if (nextFace === face || !canChangeStickySurface()) return;
     setSelectedRecord(null);
     setRecordDirty(false);
     setTurnDirection(nextFace === "task" ? "forward" : "backward");
@@ -1423,18 +1437,6 @@ export function StickyShell(props: StickyShellProps) {
             onCopyAgentToken={() => void onCopyAgentToken()}
             onRetryAgentBridge={() => void onRetryAgentBridge()}
           />
-          {!desktopSurface ? (
-            <button
-              className="board-icon-button reader-sticky-toggle"
-              type="button"
-              title={readerStickyVisible ? "隐藏便利贴" : "显示便利贴"}
-              aria-label={readerStickyVisible ? "隐藏便利贴" : "显示便利贴"}
-              aria-pressed={readerStickyVisible}
-              onClick={() => setReaderVisibility(!readerStickyVisible)}
-            >
-              <span aria-hidden="true">▣</span>
-            </button>
-          ) : null}
           <button
             className="board-icon-button sticky-only-button"
             type="button"
@@ -1446,17 +1448,7 @@ export function StickyShell(props: StickyShellProps) {
           </button>
         </div>
       </header>
-      {transitionNotice ? (
-        <p className="reader-transition-notice" role="alert">
-          {transitionNotice}
-        </p>
-      ) : null}
-      <div
-        ref={stickyOverlayRef}
-        className="sticky-overlay-layer"
-        data-reader-layer="2"
-        hidden={!desktopSurface && !readerStickyVisible}
-      >
+      <div ref={stickyOverlayRef} className="sticky-overlay-layer" data-reader-layer="2">
         {expanded ? (
           <section className="expanded-sticky" aria-label="展开的便利贴">
             {nativeSurface === "desktop" ? (
@@ -1474,7 +1466,8 @@ export function StickyShell(props: StickyShellProps) {
             <button
               className="compact-corner-control expanded-fold-control"
               type="button"
-              aria-label={desktopSurface ? "缩成 Mini Tab" : "隐藏便利贴"}
+              aria-label="缩成 Mini Tab"
+              title="缩小到 Mini"
               onClick={(event) => {
                 event.stopPropagation();
                 foldSticky();
@@ -1508,19 +1501,39 @@ export function StickyShell(props: StickyShellProps) {
                 <button
                   className="collapse-button"
                   type="button"
-                  disabled={busy || (selectedRecord !== null && recordDirty)}
                   aria-label="收起便利贴"
+                  title="收起为便签"
                   onClick={() => {
+                    if (!canChangeStickySurface()) return;
                     setSelectedRecord(null);
                     setRecordDirty(false);
                     setExpanded(false);
                     changeStickyMode("compact");
                   }}
                 >
-                  ↙
+                  <svg
+                    viewBox="0 0 16 16"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    stroke="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M2 2l4 4M6 2v4H2m12 8-4-4m0 4v-4h4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  <span>收起</span>
                 </button>
               </div>
             </header>
+            {transitionNotice ? (
+              <p className="sticky-transition-notice" role="alert">
+                {transitionNotice}
+              </p>
+            ) : null}
             <div className="face-scroll" data-editor={selectedRecord ? "record" : "none"}>
               <div
                 key={`${face}-${turnSerial}`}
@@ -1560,6 +1573,7 @@ export function StickyShell(props: StickyShellProps) {
                         records={records}
                         disabled={busy}
                         onOpen={(record) => {
+                          if (!canChangeStickySurface()) return;
                           setRecordDirty(false);
                           setSelectedRecord(record);
                         }}
@@ -1621,12 +1635,11 @@ export function StickyShell(props: StickyShellProps) {
               </div>
             ) : null}
           </section>
-        ) : desktopSurface && preferences.stickyMode === "mini" ? (
+        ) : preferences.stickyMode === "mini" ? (
           <MiniStickyTab
             openTaskCount={openTaskCount}
             position={preferences.stickyPosition}
             onRestore={() => changeStickyMode("compact")}
-            onDesktop={() => onLeaveReaderWorkspace("mini")}
             onPositionChange={onStickyPositionChange}
             nativeWindow={nativeSurface === "desktop"}
           />

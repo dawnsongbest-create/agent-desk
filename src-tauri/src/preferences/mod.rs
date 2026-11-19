@@ -144,16 +144,15 @@ fn merge_preferences(
 }
 
 #[cfg(test)]
-mod visibility_tests {
+mod display_merge_tests {
     use super::*;
 
     #[test]
-    fn stale_scroll_save_preserves_visibility_and_native_display_state() {
+    fn stale_scroll_save_preserves_reader_mini() {
         let base = Preferences::default();
         let current = Preferences {
-            reader_sticky_visible: false,
             surface_mode: SurfaceMode::Reader,
-            sticky_mode: StickyMode::Expanded,
+            sticky_mode: StickyMode::Mini,
             ..base.clone()
         };
         let next = Preferences {
@@ -161,10 +160,9 @@ mod visibility_tests {
             ..base.clone()
         };
         let merged = merge_preferences(current, next, base).unwrap();
-        assert!(!merged.reader_sticky_visible);
         assert_eq!(merged.reader_scroll_top, 240);
         assert_eq!(merged.surface_mode, SurfaceMode::Reader);
-        assert_eq!(merged.sticky_mode, StickyMode::Expanded);
+        assert_eq!(merged.sticky_mode, StickyMode::Mini);
     }
 }
 

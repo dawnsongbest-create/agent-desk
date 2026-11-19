@@ -160,6 +160,7 @@ function renderHome(
   readerDocuments: ReaderDocumentsPort = readerPort,
   deliveries: DeliveriesPort = deliveryPort,
   proposals: AgentProposalsPort = proposalPort,
+  leaveReader = vi.fn(),
 ) {
   return render(
     <StickyHome
@@ -179,7 +180,7 @@ function renderHome(
       onStickyModeChange={modeChange}
       onStartupDisplayModeChange={vi.fn()}
       onOpenReaderWorkspace={vi.fn()}
-      onLeaveReaderWorkspace={vi.fn()}
+      onLeaveReaderWorkspace={leaveReader}
       onReaderFontSizeChange={readerFontSizeChange}
       onReaderLineSpacingChange={readerLineSpacingChange}
       onReaderContentVisibilityChange={vi.fn()}
@@ -269,7 +270,7 @@ async function expand(user: ReturnType<typeof userEvent.setup>) {
 
 describe("StickyHome M1-B4", () => {
   it.each(["compact", "expanded"] as const)(
-    "hides and restores Reader %s without changing document, scroll or data",
+    "folds Reader %s without changing document, scroll or data",
     async (stickyMode) => {
       const user = userEvent.setup();
       const port = new MemoryStickyPort();
@@ -285,62 +286,70 @@ describe("StickyHome M1-B4", () => {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       viewport.scrollTop = 240;
       fireEvent.scroll(viewport);
-      const fold = document.querySelector<HTMLButtonElement>(".compact-corner-control")!;
-      await user.click(fold);
-      expect(document.querySelector(".sticky-overlay-layer")).toHaveAttribute("hidden");
-      expect(document.querySelector(".mini-tab")).toBeNull();
+      await user.click(screen.getByRole("button", { name: "缩成 Mini Tab" }));
+      expect(document.querySelector(".sticky-overlay-layer")).not.toHaveAttribute("hidden");
       expect(article).toBeVisible();
       expect(viewport.scrollTop).toBe(240);
-      await user.click(screen.getByRole("button", { name: "显示便利贴" }));
-      expect(document.querySelector(".sticky-overlay-layer")).not.toHaveAttribute("hidden");
-      expect(
-        document.querySelector(stickyMode === "expanded" ? ".expanded-sticky" : ".sticky-preview"),
-      ).toBeVisible();
-      expect(modeChange).not.toHaveBeenCalled();
+      expect(modeChange).toHaveBeenCalledExactlyOnceWith("mini");
       expect(port.create).not.toHaveBeenCalled();
     },
   );
 
-  it("retains a dirty Record through hiding and blocks a destructive surface transition", async () => {
-    const user = userEvent.setup();
-    const port = new MemoryStickyPort([makeCard("draft", "note", "原记录", 0)]);
-    renderHome(port, vi.fn(), { ...defaultPreferences, stickyMode: "expanded" });
-    await user.click(await screen.findByRole("button", { name: /原记录/ }));
-    const editor = screen.getByRole("textbox", { name: "记录正文" });
-    fireEvent.change(editor, { target: { value: "未保存草稿" } });
-    await user.click(document.querySelector<HTMLButtonElement>(".expanded-fold-control")!);
-    await user.click(screen.getByRole("button", { name: "只留便利贴" }));
-    expect(screen.getByRole("alert")).toHaveTextContent("保存或取消");
-    await user.click(screen.getByRole("button", { name: "显示便利贴" }));
-    expect(screen.getByRole("textbox", { name: "记录正文" })).toBe(editor);
-    expect(editor).toHaveValue("未保存草稿");
-    expect(port.updateText).not.toHaveBeenCalled();
-    expect(port.create).not.toHaveBeenCalled();
-  });
-
-  it.each(["quote", "todo", "record"])(
-    "preserves the unsaved %s composer through hiding",
+  it.each(["existing record", "quote", "todo", "new record", "todo date only"])(
+    "blocks draft-losing transitions for %s without saving",
     async (kind) => {
       const user = userEvent.setup();
-      const port = new MemoryStickyPort();
-      renderHome(port, vi.fn(), { ...defaultPreferences, stickyMode: "expanded" });
+      const port = new MemoryStickyPort([makeCard("draft", "note", "原记录", 0)]);
+      const modeChange = vi.fn();
+      const leaveReader = vi.fn();
+      renderHome(
+        port,
+        vi.fn(),
+        { ...defaultPreferences, stickyMode: "expanded" },
+        modeChange,
+        vi.fn(),
+        vi.fn(),
+        readerPort,
+        deliveryPort,
+        proposalPort,
+        leaveReader,
+      );
       await screen.findByRole("article");
+      if (kind === "existing record")
+        await user.click(screen.getByRole("button", { name: /原记录/ }));
       if (kind === "quote")
         await user.click(screen.getByRole("button", { name: "写下你的便签一句" }));
-      if (kind === "todo") {
+      if (kind.startsWith("todo")) {
         await user.click(screen.getByRole("tab", { name: /待办/ }));
         await user.click(screen.getByRole("button", { name: /添加一个待办/ }));
       }
-      if (kind === "record") await user.click(screen.getByRole("button", { name: /新建记录/ }));
-      const editor = screen.getByRole("textbox", {
-        name: kind === "quote" ? "编辑便签一句" : kind === "todo" ? "新待办" : "新建长记录",
-      });
-      fireEvent.change(editor, { target: { value: "不应丢失的草稿" } });
-      await user.click(document.querySelector<HTMLButtonElement>(".expanded-fold-control")!);
-      await user.click(screen.getByRole("button", { name: "显示便利贴" }));
-      expect(editor).toBeVisible();
-      expect(editor).toHaveValue("不应丢失的草稿");
+      if (kind === "new record") await user.click(screen.getByRole("button", { name: /新建记录/ }));
+      const editor =
+        kind === "todo date only"
+          ? screen.getByLabelText("日期")
+          : screen.getByRole("textbox", {
+              name:
+                kind === "quote"
+                  ? "编辑便签一句"
+                  : kind === "todo"
+                    ? "新待办"
+                    : kind === "existing record"
+                      ? "记录正文"
+                      : "新建长记录",
+            });
+      const draft = kind === "todo date only" ? "2026-11-20" : "不应丢失的草稿";
+      fireEvent.change(editor, { target: { value: draft } });
+
+      for (const name of ["收起便利贴", "缩成 Mini Tab", "只留便利贴"]) {
+        await user.click(screen.getByRole("button", { name }));
+        expect(screen.getByRole("alert")).toHaveTextContent("请先保存或取消正在编辑的内容");
+        expect(editor).toBeVisible();
+        expect(editor).toHaveValue(draft);
+      }
+      expect(modeChange).not.toHaveBeenCalled();
+      expect(leaveReader).not.toHaveBeenCalled();
       expect(port.create).not.toHaveBeenCalled();
+      expect(port.updateText).not.toHaveBeenCalled();
       expect(port.updateQuote).not.toHaveBeenCalled();
     },
   );
@@ -587,7 +596,9 @@ describe("StickyHome M1-B4", () => {
     });
     expect(screen.getByRole("tab", { name: /待办/ })).toBeDisabled();
     expect(screen.getByRole("button", { name: /新记录/ })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "收起便利贴" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "收起便利贴" }));
+    expect(screen.getByRole("region", { name: "展开的便利贴" })).toBeVisible();
+    expect(screen.getByRole("alert")).toHaveTextContent("请先保存或取消");
     await user.click(screen.getByRole("button", { name: "保存" }));
     await waitFor(() => expect(screen.getByText("已保存")).toBeInTheDocument());
 
@@ -728,56 +739,7 @@ describe("StickyHome M1-B4", () => {
     expect(screen.queryByRole("region", { name: "展开的便利贴" })).not.toBeInTheDocument();
   });
 
-  it("hides Reader Compact and keeps Desktop Mini restore behavior", async () => {
-    const user = userEvent.setup();
-    const modeChange = vi.fn();
-    const leaveReader = vi.fn();
-    const positionChange = vi.fn();
-    const port = new MemoryStickyPort([makeCard("todo", "task", "一件事", 0)]);
-    const view = renderHome(port, positionChange, defaultPreferences, modeChange);
-    await screen.findByRole("article");
-    await user.click(screen.getAllByRole("button", { name: "隐藏便利贴" })[0]);
-    expect(modeChange).not.toHaveBeenCalled();
-    expect(positionChange).not.toHaveBeenCalled();
-    view.rerender(
-      <StickyHome
-        nativeSurface="desktop"
-        port={port}
-        readerPort={readerPort}
-        deliveryPort={deliveryPort}
-        readingPort={readingPort}
-        proposalPort={proposalPort}
-        agentConnectionPort={agentConnectionPort}
-        preferences={{ ...defaultPreferences, stickyMode: "mini" }}
-        preferenceSaveState="idle"
-        now={new Date("2026-08-12T12:00:00")}
-        onThemeChange={vi.fn()}
-        onAlwaysOnTopChange={vi.fn()}
-        onWindowPresetChange={vi.fn()}
-        onStickyPositionChange={vi.fn()}
-        onStickyModeChange={modeChange}
-        onStartupDisplayModeChange={vi.fn()}
-        onOpenReaderWorkspace={vi.fn()}
-        onLeaveReaderWorkspace={leaveReader}
-        onReaderFontSizeChange={vi.fn()}
-        onReaderLineSpacingChange={vi.fn()}
-        onReaderContentVisibilityChange={vi.fn()}
-        onCurrentReaderDocumentChange={vi.fn()}
-        onReaderScrollTopChange={vi.fn()}
-        onReaderSurfaceModeChange={vi.fn()}
-      />,
-    );
-    const miniButton = screen.getByRole("button", { name: "恢复 Compact Sticky" });
-    const mini = miniButton.closest(".sticky-surface")!;
-    expect(mini).toHaveTextContent("TODAY1");
-    expect(mini).toHaveAttribute("data-pinned-to-shelf", "false");
-    expect(screen.queryByRole("button", { name: "隐藏阅读器，只保留 Mini Tab" })).toBeNull();
-    expect(leaveReader).not.toHaveBeenCalled();
-    await user.click(miniButton);
-    expect(modeChange).toHaveBeenLastCalledWith("compact");
-  });
-
-  it("never renders legacy Reader Mini and preserves its saved position", async () => {
+  it("pins Reader Mini without moving the saved Compact position", async () => {
     const modeChange = vi.fn();
     const positionChange = vi.fn();
     renderHome(
@@ -787,7 +749,11 @@ describe("StickyHome M1-B4", () => {
       modeChange,
     );
     await screen.findByRole("article");
-    expect(document.querySelector(".mini-tab")).toBeNull();
+    const restore = screen.getByRole("button", { name: "恢复 Compact Sticky" });
+    expect(restore.closest(".sticky-surface")).toHaveAttribute("data-pinned-to-shelf", "true");
+    expect(
+      screen.queryByRole("button", { name: "隐藏阅读器，只保留 Mini Tab" }),
+    ).not.toBeInTheDocument();
     expect(positionChange).not.toHaveBeenCalled();
     expect(modeChange).not.toHaveBeenCalled();
   });
@@ -798,7 +764,8 @@ describe("StickyHome M1-B4", () => {
     await user.click(screen.getByRole("button", { name: "外观与窗口设置" }));
     for (const label of ["Sticky", "iPhone 5", "Pocket", "Book"])
       expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "隐藏便利贴" }).length).toBe(2);
+    expect(screen.getByRole("button", { name: "缩成 Mini Tab" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "隐藏便利贴" })).not.toBeInTheDocument();
   });
 
   it("keeps Reader below the Compact overlay and forwards boundary wheel movement", async () => {

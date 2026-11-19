@@ -168,9 +168,6 @@ function App({ surface = "main" }: AppProps) {
       onReaderSurfaceModeChange={(readerSurfaceMode) =>
         save({ ...preferencesRef.current, readerSurfaceMode })
       }
-      onReaderStickyVisibilityChange={(readerStickyVisible) =>
-        save({ ...preferencesRef.current, readerStickyVisible })
-      }
     />
   );
 }
