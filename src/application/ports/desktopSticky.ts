@@ -8,7 +8,5 @@ export interface DesktopStickyWindowPort {
   setReaderMode(mode: StickyMode): Promise<Preferences>;
   leaveReader(mode: StickyMode): Promise<Preferences>;
   startDragging(): Promise<void>;
-  dockIfNearRightEdge(): Promise<void>;
   showContextMenu(): Promise<void>;
-  setEdgeDockExpanded(expanded: boolean): Promise<void>;
 }

@@ -7,23 +7,17 @@ use tauri::{
 use tauri_plugin_window_state::{AppHandleExt, StateFlags, WindowExt};
 
 use crate::domain::preferences::{
-    DesktopStickyKind, DesktopStickyPosition, EdgeDockPosition, PlacementMode, Preferences,
-    StickyMode, SurfaceMode,
+    DesktopStickyKind, DesktopStickyPosition, PlacementMode, Preferences, StickyMode, SurfaceMode,
 };
 
 const MIN_VISIBLE_EDGE: i32 = 64;
 pub const DESKTOP_STICKY_WINDOW_LABEL: &str = "desktop-sticky";
-pub const EDGE_DOCK_WINDOW_LABEL: &str = "edge-dock";
 const DESKTOP_MINI_WIDTH: f64 = 94.0;
 const DESKTOP_MINI_HEIGHT: f64 = 62.0;
 const DESKTOP_COMPACT_WIDTH: f64 = 320.0;
 const DESKTOP_COMPACT_HEIGHT: f64 = 420.0;
 const DESKTOP_EXPANDED_WIDTH: f64 = 420.0;
 const DESKTOP_EXPANDED_HEIGHT: f64 = 594.0;
-const EDGE_DOCK_COLLAPSED_WIDTH: f64 = 34.0;
-const EDGE_DOCK_EXPANDED_WIDTH: f64 = 176.0;
-const EDGE_DOCK_HEIGHT: f64 = 112.0;
-const EDGE_DOCK_SAFE_ZONE: i64 = 36;
 const DESKTOP_MENU_OPEN: &str = "desktop-sticky-open";
 const DESKTOP_MENU_TODO: &str = "desktop-sticky-kind-todo";
 const DESKTOP_MENU_RECORD: &str = "desktop-sticky-kind-record";
@@ -60,12 +54,6 @@ impl Rect {
 
         PhysicalPosition::new(x as i32, y as i32)
     }
-
-    fn is_near_right_edge_of(self, monitor: Rect) -> bool {
-        let right = i64::from(self.x) + i64::from(self.width);
-        let monitor_right = i64::from(monitor.x) + i64::from(monitor.width);
-        (monitor_right - right).abs() <= EDGE_DOCK_SAFE_ZONE
-    }
 }
 
 pub fn surface_main_window(app: &AppHandle) {
@@ -77,9 +65,6 @@ pub fn surface_main_window(app: &AppHandle) {
     );
     if let Some(desktop) = app.get_webview_window(DESKTOP_STICKY_WINDOW_LABEL) {
         let _ = desktop.hide();
-    }
-    if let Some(dock) = app.get_webview_window(EDGE_DOCK_WINDOW_LABEL) {
-        let _ = dock.hide();
     }
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.unminimize();
@@ -138,7 +123,51 @@ fn desktop_window(app: &AppHandle, preferences: &Preferences) -> tauri::Result<W
     .focused(false)
     .build()?;
 
-    if let Some(position) = &preferences.desktop_sticky_position {
+    if let Some(legacy) = &preferences.edge_dock_position {
+        let monitors = window.available_monitors()?;
+        let bounds = |monitor: &Monitor| {
+            let area = monitor.work_area();
+            Rect {
+                x: area.position.x,
+                y: area.position.y,
+                width: area.size.width,
+                height: area.size.height,
+            }
+        };
+        let geometry = |monitor: &Monitor, x, y| {
+            let (width, height) = desktop_sticky_size(preferences.sticky_mode);
+            Rect {
+                x,
+                y,
+                width: (width * monitor.scale_factor()).ceil() as u32,
+                height: (height * monitor.scale_factor()).ceil() as u32,
+            }
+        };
+        let ordinary = preferences
+            .desktop_sticky_position
+            .as_ref()
+            .and_then(|position| {
+                monitors.iter().find_map(|monitor| {
+                    let safe =
+                        geometry(monitor, position.x, position.y).clamped_origin(bounds(monitor));
+                    (safe.x == position.x && safe.y == position.y).then_some(safe)
+                })
+            });
+        let migrated = monitors
+            .iter()
+            .find(|monitor| {
+                legacy
+                    .screen
+                    .as_ref()
+                    .is_some_and(|name| monitor.name() == Some(name))
+            })
+            .map(|monitor| geometry(monitor, i32::MAX, legacy.y).clamped_origin(bounds(monitor)));
+        if let Some(position) = ordinary.or(migrated) {
+            window.set_position(position)?;
+        } else {
+            window.center()?;
+        }
+    } else if let Some(position) = &preferences.desktop_sticky_position {
         window.set_position(PhysicalPosition::new(position.x, position.y))?;
     } else {
         window.center()?;
@@ -177,9 +206,6 @@ pub async fn enter_desktop_sticky(app: AppHandle) -> Result<Preferences, String>
         mode,
         PlacementMode::Free,
     )?;
-    if let Some(dock) = app.get_webview_window(EDGE_DOCK_WINDOW_LABEL) {
-        dock.hide().map_err(|error| error.to_string())?;
-    }
     apply_desktop_sticky_geometry(&window, mode).map_err(|error| error.to_string())?;
     window.show().map_err(|error| error.to_string())?;
     window
@@ -267,133 +293,6 @@ pub fn set_reader_sticky_mode(
     Ok(preferences)
 }
 
-fn edge_dock_target_monitor(
-    window: &WebviewWindow,
-    screen: Option<&str>,
-) -> tauri::Result<Option<Monitor>> {
-    let monitors = window.available_monitors()?;
-    if let Some(screen) = screen {
-        if let Some(monitor) = monitors
-            .iter()
-            .find(|monitor| monitor.name().is_some_and(|name| name == screen))
-        {
-            return Ok(Some(monitor.clone()));
-        }
-    }
-    Ok(window
-        .current_monitor()?
-        .or(window.primary_monitor()?)
-        .or_else(|| monitors.into_iter().next()))
-}
-
-fn place_edge_dock(
-    window: &WebviewWindow,
-    y: Option<i32>,
-    screen: Option<&str>,
-    expanded: bool,
-) -> tauri::Result<()> {
-    let width = if expanded {
-        EDGE_DOCK_EXPANDED_WIDTH
-    } else {
-        EDGE_DOCK_COLLAPSED_WIDTH
-    };
-    window.set_size(Size::Logical(LogicalSize::new(width, EDGE_DOCK_HEIGHT)))?;
-    let Some(monitor) = edge_dock_target_monitor(window, screen)? else {
-        return Ok(());
-    };
-    let monitor_position = monitor.position();
-    let monitor_size = monitor.size();
-    let scale_factor = window.scale_factor()?;
-    let window_width = (width * scale_factor).round() as i64;
-    let window_height = (EDGE_DOCK_HEIGHT * scale_factor).round() as i64;
-    let x = i64::from(monitor_position.x) + i64::from(monitor_size.width) - window_width;
-    let max_y = i64::from(monitor_position.y) + i64::from(monitor_size.height) - window_height;
-    let fallback_y = i64::from(monitor_position.y) + (i64::from(monitor_size.height) / 3);
-    let y = i64::from(y.unwrap_or(fallback_y as i32)).clamp(
-        i64::from(monitor_position.y),
-        max_y.max(i64::from(monitor_position.y)),
-    );
-    window.set_position(PhysicalPosition::new(x as i32, y as i32))
-}
-
-fn edge_dock_window(app: &AppHandle, preferences: &Preferences) -> tauri::Result<WebviewWindow> {
-    if let Some(window) = app.get_webview_window(EDGE_DOCK_WINDOW_LABEL) {
-        return Ok(window);
-    }
-    let window = WebviewWindowBuilder::new(
-        app,
-        EDGE_DOCK_WINDOW_LABEL,
-        WebviewUrl::App("index.html?surface=edge-dock".into()),
-    )
-    .title("Agent Desk Edge Dock")
-    .inner_size(EDGE_DOCK_COLLAPSED_WIDTH, EDGE_DOCK_HEIGHT)
-    .resizable(false)
-    .maximizable(false)
-    .minimizable(false)
-    .decorations(false)
-    .always_on_top(true)
-    .skip_taskbar(true)
-    .shadow(false)
-    .transparent(true)
-    .visible(false)
-    .focused(false)
-    .build()?;
-    let position = preferences.edge_dock_position.as_ref();
-    place_edge_dock(
-        &window,
-        position.map(|position| position.y),
-        position.and_then(|position| position.screen.as_deref()),
-        false,
-    )?;
-    Ok(window)
-}
-
-pub fn restore_edge_dock_window(app: &AppHandle, preferences: &Preferences) -> tauri::Result<()> {
-    let window = edge_dock_window(app, preferences)?;
-    let position = preferences.edge_dock_position.as_ref();
-    place_edge_dock(
-        &window,
-        position.map(|position| position.y),
-        position.and_then(|position| position.screen.as_deref()),
-        false,
-    )?;
-    window.show()?;
-    window.set_always_on_top(true)
-}
-
-fn enter_edge_dock_from_desktop(
-    app: &AppHandle,
-    y: i32,
-    screen: Option<String>,
-) -> Result<(), String> {
-    let current = crate::preferences::read(app)?;
-    if current.surface_mode != SurfaceMode::Desktop {
-        return Ok(());
-    }
-    crate::preferences::set_surface_and_placement(
-        app,
-        SurfaceMode::Desktop,
-        PlacementMode::RightEdgeCollapsed,
-    )?;
-    crate::preferences::save_edge_dock_position(
-        app,
-        EdgeDockPosition {
-            y,
-            screen: screen.clone(),
-        },
-    )?;
-    let preferences = crate::preferences::read(app)?;
-    let dock = edge_dock_window(app, &preferences).map_err(|error| error.to_string())?;
-    place_edge_dock(&dock, Some(y), screen.as_deref(), false).map_err(|error| error.to_string())?;
-    dock.show().map_err(|error| error.to_string())?;
-    dock.set_always_on_top(true)
-        .map_err(|error| error.to_string())?;
-    if let Some(desktop) = app.get_webview_window(DESKTOP_STICKY_WINDOW_LABEL) {
-        desktop.hide().map_err(|error| error.to_string())?;
-    }
-    Ok(())
-}
-
 #[tauri::command]
 pub async fn open_reader_workspace(app: AppHandle) -> Result<Preferences, String> {
     let mut preferences = crate::preferences::read(&app)?;
@@ -405,9 +304,6 @@ pub async fn open_reader_workspace(app: AppHandle) -> Result<Preferences, String
     let _ = app.emit("agent-desk://preferences-changed", &preferences);
     if let Some(desktop) = app.get_webview_window(DESKTOP_STICKY_WINDOW_LABEL) {
         desktop.hide().map_err(|error| error.to_string())?;
-    }
-    if let Some(dock) = app.get_webview_window(EDGE_DOCK_WINDOW_LABEL) {
-        dock.hide().map_err(|error| error.to_string())?;
     }
     let main = app
         .get_webview_window("main")
@@ -454,68 +350,11 @@ pub async fn leave_reader_to_desktop(
 }
 
 #[tauri::command]
-pub fn set_edge_dock_expanded(window: WebviewWindow, expanded: bool) -> Result<(), String> {
-    if window.label() != EDGE_DOCK_WINDOW_LABEL {
-        return Err("Edge Dock expansion is only available to the Edge Dock window".to_string());
-    }
-    let position = window.outer_position().map_err(|error| error.to_string())?;
-    let screen = window
-        .current_monitor()
-        .map_err(|error| error.to_string())?
-        .and_then(|monitor| monitor.name().cloned());
-    crate::preferences::set_surface_and_placement(
-        window.app_handle(),
-        SurfaceMode::Desktop,
-        if expanded {
-            PlacementMode::RightEdgeRevealed
-        } else {
-            PlacementMode::RightEdgeCollapsed
-        },
-    )?;
-    place_edge_dock(&window, Some(position.y), screen.as_deref(), expanded)
-        .map_err(|error| error.to_string())?;
-    window
-        .set_always_on_top(true)
-        .map_err(|error| error.to_string())
-}
-
-#[tauri::command]
 pub fn start_desktop_sticky_drag(window: WebviewWindow) -> Result<(), String> {
     if window.label() != DESKTOP_STICKY_WINDOW_LABEL {
         return Err("desktop drag is only available to the Desktop Sticky window".to_string());
     }
     window.start_dragging().map_err(|error| error.to_string())
-}
-
-#[tauri::command]
-pub async fn dock_desktop_sticky_if_near_right_edge(window: WebviewWindow) -> Result<(), String> {
-    if window.label() != DESKTOP_STICKY_WINDOW_LABEL {
-        return Err("desktop docking is only available to the Desktop Sticky window".to_string());
-    }
-    let position = window.outer_position().map_err(|error| error.to_string())?;
-    let size = window.outer_size().map_err(|error| error.to_string())?;
-    let Some(monitor) = window
-        .current_monitor()
-        .map_err(|error| error.to_string())?
-    else {
-        return Ok(());
-    };
-    let geometry = Rect {
-        x: position.x,
-        y: position.y,
-        width: size.width,
-        height: size.height,
-    };
-    let monitor_geometry = Rect {
-        x: monitor.position().x,
-        y: monitor.position().y,
-        width: monitor.size().width,
-        height: monitor.size().height,
-    };
-    if geometry.is_near_right_edge_of(monitor_geometry) {
-        enter_edge_dock_from_desktop(window.app_handle(), position.y, monitor.name().cloned())?;
-    }
-    Ok(())
 }
 
 #[tauri::command]
@@ -754,29 +593,5 @@ mod tests {
             window.clamped_origin(monitor),
             PhysicalPosition::new(1600, 660)
         );
-    }
-
-    #[test]
-    fn detects_only_the_right_edge_safe_zone_for_native_docking() {
-        let monitor = Rect {
-            x: 0,
-            y: 0,
-            width: 1920,
-            height: 1080,
-        };
-        assert!(Rect {
-            x: 1792,
-            y: 200,
-            width: 94,
-            height: 62,
-        }
-        .is_near_right_edge_of(monitor));
-        assert!(!Rect {
-            x: 1600,
-            y: 200,
-            width: 94,
-            height: 62,
-        }
-        .is_near_right_edge_of(monitor));
     }
 }

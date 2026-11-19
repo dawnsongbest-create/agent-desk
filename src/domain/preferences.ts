@@ -10,7 +10,7 @@ export const startupDisplayModes = ["desktop_sticky", "last_state", "sticky_over
 export type StartupDisplayMode = (typeof startupDisplayModes)[number];
 export const surfaceModes = ["desktop", "reader"] as const;
 export type SurfaceMode = (typeof surfaceModes)[number];
-export const placementModes = ["free", "right_edge_collapsed", "right_edge_revealed"] as const;
+export const placementModes = ["free"] as const;
 export type PlacementMode = (typeof placementModes)[number];
 export const desktopStickyKinds = ["todo", "record", "quote"] as const;
 export type DesktopStickyKind = (typeof desktopStickyKinds)[number];
@@ -35,11 +35,6 @@ export type DesktopStickyPosition = {
   screen: string | null;
 };
 
-export type EdgeDockPosition = {
-  y: number;
-  screen: string | null;
-};
-
 export type Preferences = {
   schemaVersion: 1;
   theme: ThemeMode;
@@ -53,7 +48,6 @@ export type Preferences = {
   placementMode: PlacementMode;
   desktopStickyKind: DesktopStickyKind;
   desktopStickyPosition: DesktopStickyPosition | null;
-  edgeDockPosition: EdgeDockPosition | null;
   readerSkin: ReaderSkin;
   readerFontSize: ReaderFontSize;
   readerLineSpacing: ReaderLineSpacing;
@@ -77,7 +71,6 @@ export const defaultPreferences: Preferences = {
   placementMode: "free",
   desktopStickyKind: "todo",
   desktopStickyPosition: null,
-  edgeDockPosition: null,
   readerSkin: "grid",
   readerFontSize: "standard",
   readerLineSpacing: "standard",

@@ -2,8 +2,8 @@ use tauri::{AppHandle, Emitter, LogicalSize, Manager, Size};
 use tauri_plugin_store::StoreExt;
 
 use crate::domain::preferences::{
-    DesktopStickyKind, DesktopStickyPosition, EdgeDockPosition, PlacementMode, Preferences,
-    StickyMode, SurfaceMode, WindowPreset,
+    DesktopStickyKind, DesktopStickyPosition, PlacementMode, Preferences, StickyMode, SurfaceMode,
+    WindowPreset,
 };
 use std::path::PathBuf;
 
@@ -40,19 +40,6 @@ pub(crate) fn write(app: &AppHandle, preferences: &Preferences) -> Result<(), St
 
 fn publish(app: &AppHandle, preferences: &Preferences) {
     let _ = app.emit("agent-desk://preferences-changed", preferences);
-}
-
-pub(crate) fn set_surface_and_placement(
-    app: &AppHandle,
-    surface_mode: SurfaceMode,
-    placement_mode: PlacementMode,
-) -> Result<Preferences, String> {
-    let mut preferences = read(app)?;
-    preferences.surface_mode = surface_mode;
-    preferences.placement_mode = placement_mode;
-    write(app, &preferences)?;
-    publish(app, &preferences);
-    Ok(preferences)
 }
 
 pub(crate) fn set_display_state(
@@ -92,18 +79,7 @@ pub(crate) fn save_desktop_sticky_position(
         return Ok(());
     }
     preferences.desktop_sticky_position = Some(position);
-    write(app, &preferences)
-}
-
-pub(crate) fn save_edge_dock_position(
-    app: &AppHandle,
-    position: EdgeDockPosition,
-) -> Result<(), String> {
-    let mut preferences = read(app)?;
-    if preferences.placement_mode == PlacementMode::Free {
-        return Ok(());
-    }
-    preferences.edge_dock_position = Some(position);
+    preferences.edge_dock_position = None;
     write(app, &preferences)
 }
 

@@ -75,9 +75,7 @@ vi.mock("./infrastructure/tauri/desktopSticky", () => ({
     setReaderMode: mocks.setReaderStickyMode,
     leaveReader: mocks.leaveReader,
     startDragging: vi.fn(),
-    dockIfNearRightEdge: vi.fn(),
     showContextMenu: vi.fn(),
-    setEdgeDockExpanded: vi.fn(),
   },
 }));
 

@@ -83,6 +83,5 @@ describe("Desktop Sticky preference defaults", () => {
     expect(defaultPreferences.placementMode).toBe("free");
     expect(defaultPreferences.desktopStickyKind).toBe("todo");
     expect(defaultPreferences.desktopStickyPosition).toBeNull();
-    expect(defaultPreferences.edgeDockPosition).toBeNull();
   });
 });

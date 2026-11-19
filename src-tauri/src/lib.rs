@@ -16,7 +16,7 @@ use std::sync::Arc;
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
-use domain::preferences::{PlacementMode, SurfaceMode};
+use domain::preferences::SurfaceMode;
 
 const AUDIT_DATA_DIR_ENV: &str = "AGENT_DESK_AUDIT_DATA_DIR";
 
@@ -102,15 +102,11 @@ pub fn run() {
             let preferences =
                 preferences::initialize(app.handle()).map_err(std::io::Error::other)?;
             shell::setup_tray(app)?;
-            match (preferences.surface_mode, preferences.placement_mode) {
-                (SurfaceMode::Desktop, PlacementMode::RightEdgeCollapsed)
-                | (SurfaceMode::Desktop, PlacementMode::RightEdgeRevealed) => {
-                    shell::restore_edge_dock_window(app.handle(), &preferences)?;
-                }
-                (SurfaceMode::Desktop, PlacementMode::Free) => {
+            match preferences.surface_mode {
+                SurfaceMode::Desktop => {
                     shell::restore_desktop_sticky_window(app.handle(), &preferences)?;
                 }
-                (SurfaceMode::Reader, _) => {
+                SurfaceMode::Reader => {
                     shell::restore_main_window(app.handle())?;
                 }
             }
@@ -137,11 +133,6 @@ pub fn run() {
                     }
                     _ => {}
                 }
-            } else if window.label() == shell::EDGE_DOCK_WINDOW_LABEL {
-                if let WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    let _ = window.hide();
-                }
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -155,9 +146,7 @@ pub fn run() {
             shell::open_agent_desk_from_desktop,
             shell::open_reader_workspace,
             shell::start_desktop_sticky_drag,
-            shell::dock_desktop_sticky_if_near_right_edge,
             shell::show_desktop_sticky_menu,
-            shell::set_edge_dock_expanded,
             sticky::list_sticky_cards,
             sticky::create_sticky_card,
             sticky::update_sticky_text,

@@ -199,7 +199,7 @@ pub struct Preferences {
     pub desktop_sticky_kind: DesktopStickyKind,
     #[serde(default)]
     pub desktop_sticky_position: Option<DesktopStickyPosition>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub edge_dock_position: Option<EdgeDockPosition>,
     #[serde(default)]
     pub reader_skin: ReaderSkin,
@@ -234,7 +234,7 @@ impl Preferences {
                 WorkspaceDisplayMode::EdgeDock => {
                     self.surface_mode = SurfaceMode::Desktop;
                     self.placement_mode = PlacementMode::RightEdgeCollapsed;
-                    self.sticky_mode = StickyMode::Mini;
+                    self.sticky_mode = StickyMode::Compact;
                 }
                 WorkspaceDisplayMode::CompactTab => {
                     self.surface_mode = SurfaceMode::Desktop;
@@ -242,6 +242,11 @@ impl Preferences {
                     self.sticky_mode = StickyMode::Compact;
                 }
             }
+        }
+        if self.placement_mode != PlacementMode::Free {
+            self.surface_mode = SurfaceMode::Desktop;
+            self.sticky_mode = StickyMode::Compact;
+            self.placement_mode = PlacementMode::Free;
         }
         if self.sticky_mode == StickyMode::Desktop {
             self.sticky_mode = StickyMode::Compact;
@@ -270,6 +275,37 @@ impl Preferences {
             }
         }
         self
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn retired_edge_placements_respect_startup_policy() {
+    for placement in ["right_edge_collapsed", "right_edge_revealed"] {
+        let preferences: Preferences = serde_json::from_value(serde_json::json!({
+            "schemaVersion": 1,
+            "theme": "dark",
+            "alwaysOnTop": true,
+            "windowBehavior": "hide_to_tray",
+            "startupDisplayMode": "last_state",
+            "stickyMode": "mini",
+            "placementMode": placement,
+            "readerScrollTop": 240
+        }))
+        .unwrap();
+        let restored = preferences.clone().apply_startup_policy();
+        assert_eq!(restored.surface_mode, SurfaceMode::Desktop);
+        assert_eq!(restored.sticky_mode, StickyMode::Compact);
+        assert_eq!(restored.placement_mode, PlacementMode::Free);
+        assert_eq!(restored.reader_scroll_top, 240);
+        let classic = Preferences {
+            startup_display_mode: StartupDisplayMode::StickyOverReader,
+            ..preferences
+        }
+        .apply_startup_policy();
+        assert_eq!(classic.surface_mode, SurfaceMode::Reader);
+        assert_eq!(classic.sticky_mode, StickyMode::Compact);
+        assert_eq!(classic.placement_mode, PlacementMode::Free);
     }
 }
 
@@ -323,7 +359,7 @@ mod tests {
         assert!(value.get("workspaceDisplayMode").is_none());
         assert_eq!(value["desktopStickyKind"], "todo");
         assert_eq!(value["desktopStickyPosition"], serde_json::Value::Null);
-        assert_eq!(value["edgeDockPosition"], serde_json::Value::Null);
+        assert!(value.get("edgeDockPosition").is_none());
         assert_eq!(value["readerSkin"], "grid");
         assert_eq!(value["readerFontSize"], "standard");
         assert_eq!(value["readerLineSpacing"], "standard");
@@ -382,16 +418,13 @@ mod tests {
         .expect("deserialize desktop preferences")
         .normalize_legacy();
 
-        assert_eq!(preferences.sticky_mode, StickyMode::Mini);
+        assert_eq!(preferences.sticky_mode, StickyMode::Compact);
         assert_eq!(
             preferences.startup_display_mode,
             StartupDisplayMode::LastState
         );
         assert_eq!(preferences.surface_mode, SurfaceMode::Desktop);
-        assert_eq!(
-            preferences.placement_mode,
-            PlacementMode::RightEdgeCollapsed
-        );
+        assert_eq!(preferences.placement_mode, PlacementMode::Free);
         assert_eq!(preferences.desktop_sticky_kind, DesktopStickyKind::Record);
         assert_eq!(
             preferences.desktop_sticky_position,
@@ -425,9 +458,9 @@ mod tests {
 
         preferences.startup_display_mode = StartupDisplayMode::LastState;
         let restored = preferences.clone().apply_startup_policy();
-        assert_eq!(restored.surface_mode, SurfaceMode::Reader);
-        assert_eq!(restored.sticky_mode, StickyMode::Expanded);
-        assert_eq!(restored.placement_mode, PlacementMode::RightEdgeCollapsed);
+        assert_eq!(restored.surface_mode, SurfaceMode::Desktop);
+        assert_eq!(restored.sticky_mode, StickyMode::Compact);
+        assert_eq!(restored.placement_mode, PlacementMode::Free);
 
         preferences.startup_display_mode = StartupDisplayMode::StickyOverReader;
         let classic = preferences.apply_startup_policy();

@@ -854,10 +854,7 @@ function StickySurface({
     if (!current.moved) return;
     if (nativeWindow) {
       drag.current = null;
-      void tauriDesktopSticky
-        .startDragging()
-        .then(() => tauriDesktopSticky.dockIfNearRightEdge())
-        .catch(() => undefined);
+      void tauriDesktopSticky.startDragging().catch(() => undefined);
       return;
     }
     const board = surface.parentElement?.getBoundingClientRect();
@@ -1513,10 +1510,7 @@ export function StickyShell(props: StickyShellProps) {
                 type="button"
                 aria-label="拖动桌面便利贴"
                 onPointerDown={() => {
-                  void tauriDesktopSticky
-                    .startDragging()
-                    .then(() => tauriDesktopSticky.dockIfNearRightEdge())
-                    .catch(() => undefined);
+                  void tauriDesktopSticky.startDragging().catch(() => undefined);
                 }}
               />
             ) : (
