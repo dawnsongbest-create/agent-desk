@@ -1,3 +1,7 @@
+#[cfg(target_os = "windows")]
+mod clipboard;
+pub(crate) mod dumate;
+mod mcp_http;
 mod server;
 
 use std::sync::Arc;
@@ -16,6 +20,7 @@ use crate::{
     domain::agent_connection::{AgentConnection, AgentConnectionStatus, AGENT_API_VERSION},
     persistence::agent_connection_repository::SqliteAgentConnectionRepository,
 };
+use dumate::{DuMate, DuMateStatus, Scopes};
 use server::RunningAgentBridge;
 
 const DEFAULT_BRIDGE_PORT: u16 = 47321;
@@ -46,6 +51,7 @@ pub struct AgentBridgeState {
     capabilities: Arc<CapabilityService>,
     openclaw: Arc<OpenClawAdapter>,
     codex: Arc<CodexDelivery>,
+    dumate: Arc<DuMate>,
     configured_port: u16,
     runtime: Mutex<Option<RunningAgentBridge>>,
     last_error: RwLock<Option<String>>,
@@ -56,6 +62,7 @@ impl AgentBridgeState {
         repository: SqliteAgentConnectionRepository,
         openclaw: OpenClawAdapter,
         codex: CodexDelivery,
+        dumate: DuMate,
     ) -> Self {
         let configured_port = std::env::var(BRIDGE_PORT_ENV)
             .ok()
@@ -66,6 +73,7 @@ impl AgentBridgeState {
             capabilities: Arc::new(CapabilityService),
             openclaw: Arc::new(openclaw),
             codex: Arc::new(codex),
+            dumate: Arc::new(dumate),
             configured_port,
             runtime: Mutex::new(None),
             last_error: RwLock::new(None),
@@ -93,6 +101,7 @@ impl AgentBridgeState {
                 self.capabilities.clone(),
                 self.openclaw.clone(),
                 self.codex.clone(),
+                self.dumate.clone(),
             )
             .await
             .map_err(|error| format!("Local Agent Bridge could not bind to localhost: {error}"))?;
@@ -108,7 +117,8 @@ impl AgentBridgeState {
     }
 
     async fn stop(&self) -> Result<AgentBridgeStatus, String> {
-        if let Some(bridge) = self.runtime.lock().await.take() {
+        let mut runtime = self.runtime.lock().await;
+        if let Some(bridge) = runtime.take() {
             bridge.stop().await;
         }
         self.connections
@@ -116,6 +126,7 @@ impl AgentBridgeState {
             .await
             .map_err(|error| error.to_string())?;
         *self.last_error.write().await = None;
+        drop(runtime);
         self.status().await
     }
 
@@ -155,6 +166,58 @@ impl AgentBridgeState {
             last_error: self.last_error.read().await.clone(),
         })
     }
+}
+
+#[tauri::command]
+pub(crate) async fn get_dumate_status(
+    state: State<'_, AgentBridgeState>,
+) -> Result<DuMateStatus, String> {
+    let runtime = state.runtime.lock().await;
+    let port = runtime
+        .as_ref()
+        .map_or(state.configured_port, |bridge| bridge.local_addr().port());
+    state.dumate.status(port, runtime.is_some()).await
+}
+
+#[tauri::command]
+pub(crate) async fn configure_dumate(
+    state: State<'_, AgentBridgeState>,
+    reading: bool,
+    todo: bool,
+    rotate: bool,
+) -> Result<DuMateStatus, String> {
+    let runtime = state.runtime.lock().await;
+    let port = runtime
+        .as_ref()
+        .map_or(state.configured_port, |bridge| bridge.local_addr().port());
+    state
+        .dumate
+        .configure(port, runtime.is_some(), Scopes { reading, todo }, rotate)
+        .await
+}
+
+#[tauri::command]
+pub(crate) async fn copy_dumate_authorization(
+    window: tauri::WebviewWindow,
+    state: State<'_, AgentBridgeState>,
+) -> Result<Option<String>, String> {
+    if window.label() != "main" {
+        return Err("请从主窗口设置复制凭据。".into());
+    }
+    let runtime = state.runtime.lock().await;
+    if runtime.is_none() {
+        return Err("请先启用本地 Bridge。".into());
+    }
+    let header = state.dumate.authorization_header().await?;
+    #[cfg(target_os = "windows")]
+    {
+        clipboard::copy_authorization(&window, &header)?;
+        Ok(None)
+    }
+    // Fallback for the WKWebView: only this explicit action can receive
+    // the header, never the status IPC. It is not rendered or cached.
+    #[cfg(not(target_os = "windows"))]
+    Ok(Some(header))
 }
 
 #[tauri::command]

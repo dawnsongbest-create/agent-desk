@@ -157,6 +157,183 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    async fn upgrade_0010_keeps_each_batch_field_tasks_positions_and_receipts() {
+        use crate::{
+            application::ports::{
+                proposal_repository::ProposalRepository, sticky_repository::StickyRepository,
+            },
+            domain::sticky::{NewStickyCard, StickyCardKind},
+            persistence::{
+                proposal_repository::SqliteProposalRepository,
+                sticky_repository::SqliteStickyRepository,
+            },
+        };
+
+        type BatchSnapshot = (
+            String,
+            String,
+            String,
+            String,
+            String,
+            String,
+            String,
+            Option<String>,
+        );
+        const BATCHES: &str = "SELECT id, dedupe_namespace, request_digest, items_json, status,
+            created_at, updated_at, accepted_todo_ids_json FROM todo_suggestion_batches ORDER BY id";
+        const COD: &str = "0123456789abcdef0123456789abcdef";
+        for old_state in [Some("active"), Some("revoked"), None] {
+            let tmp = tempfile::tempdir().unwrap();
+            let path = tmp.path().join("isolated-0010.sqlite3");
+            let options = sqlx::sqlite::SqliteConnectOptions::new()
+                .filename(&path)
+                .create_if_missing(true)
+                .foreign_keys(true);
+            let old = SqlitePoolOptions::new()
+                .connect_with(options)
+                .await
+                .unwrap();
+            sqlx::migrate::Migrator {
+                migrations: std::borrow::Cow::Owned(
+                    MIGRATOR
+                        .iter()
+                        .filter(|m| m.version <= 10)
+                        .cloned()
+                        .collect(),
+                ),
+                ..sqlx::migrate::Migrator::DEFAULT
+            }
+            .run(&old)
+            .await
+            .unwrap();
+            let sticky = SqliteStickyRepository::new(old.clone());
+            sticky
+                .create(&NewStickyCard {
+                    kind: StickyCardKind::Task,
+                    text: "Before batch".into(),
+                    due_date: None,
+                })
+                .await
+                .unwrap();
+            let accepted = sticky
+                .create(&NewStickyCard {
+                    kind: StickyCardKind::Task,
+                    text: "Synthetic accepted Todo".into(),
+                    due_date: None,
+                })
+                .await
+                .unwrap();
+            if let Some(state) = old_state {
+                sqlx::query(
+                    "INSERT INTO codex_todo_suggestion_grant VALUES
+                    ('codex-todo-suggestions', ?, ?, 'suggest_todos', ?, 'then', 'then')",
+                )
+                .bind((state == "active").then(|| vec![7_u8; 32]))
+                .bind(state)
+                .bind(COD)
+                .execute(&old)
+                .await
+                .unwrap();
+                for (i, status) in ["pending", "accepted", "rejected"].into_iter().enumerate() {
+                    let receipt = (status == "accepted")
+                        .then(|| serde_json::json!([accepted.id]).to_string());
+                    sqlx::query(
+                        "INSERT INTO todo_suggestion_batches VALUES
+                        (?, ?, ?, ?, ?, '2026-01-01T01:01:01Z', '2026-01-03T03:03:03Z', ?)",
+                    )
+                    .bind(status)
+                    .bind(COD)
+                    .bind(i.to_string().repeat(64))
+                    .bind(r#"[{ "text": "Synthetic accepted Todo", "priority": "medium" }]"#)
+                    .bind(status)
+                    .bind(receipt)
+                    .execute(&old)
+                    .await
+                    .unwrap();
+                }
+            }
+            let batches_before: Vec<BatchSnapshot> =
+                sqlx::query_as(BATCHES).fetch_all(&old).await.unwrap();
+            let tasks_before = sticky.list().await.unwrap();
+            drop(sticky);
+            old.close().await;
+
+            let db = connect(&path).await.unwrap().0;
+            assert!(sqlx::query("PRAGMA foreign_key_check")
+                .fetch_all(&db)
+                .await
+                .unwrap()
+                .is_empty());
+            let empty_grants: i64 =
+                sqlx::query_scalar("SELECT count(*) FROM local_mcp_connections")
+                    .fetch_one(&db)
+                    .await
+                    .unwrap();
+            assert_eq!(empty_grants, 0);
+            assert_eq!(
+                batches_before,
+                sqlx::query_as::<_, BatchSnapshot>(BATCHES)
+                    .fetch_all(&db)
+                    .await
+                    .unwrap()
+            );
+            let sticky = SqliteStickyRepository::new(db.clone());
+            assert_eq!(tasks_before, sticky.list().await.unwrap());
+            let grants: Vec<(String, String, bool)> = sqlx::query_as(
+                "SELECT state, dedupe_namespace, token_hash IS NOT NULL FROM codex_todo_suggestion_grant"
+            ).fetch_all(&db).await.unwrap();
+            assert_eq!(
+                grants,
+                old_state
+                    .map(|s| (s.into(), COD.into(), s == "active"))
+                    .into_iter()
+                    .collect::<Vec<_>>()
+            );
+            if old_state.is_some() {
+                let repo = SqliteProposalRepository::new(db.clone());
+                assert_eq!(
+                    repo.accept_todo_batch("accepted").await.unwrap().todo_ids,
+                    [accepted.id]
+                );
+                assert_eq!(tasks_before, sticky.list().await.unwrap());
+            }
+            // First pair on an empty upgrade, or the very same upsert used during
+            // Codex reauthorization, must retain provenance atomically.
+            sqlx::query(
+                "INSERT INTO codex_todo_suggestion_grant VALUES
+                ('codex-todo-suggestions', zeroblob(32), 'active', 'suggest_todos', ?, 'new', 'new')
+                ON CONFLICT(id) DO UPDATE SET token_hash=excluded.token_hash, state='active'",
+            )
+            .bind(if old_state.is_some() {
+                "fedcba9876543210fedcba9876543210"
+            } else {
+                COD
+            })
+            .execute(&db)
+            .await
+            .unwrap();
+            let source: (String, String) =
+                sqlx::query_as("SELECT dedupe_namespace, provider FROM todo_suggestion_sources")
+                    .fetch_one(&db)
+                    .await
+                    .unwrap();
+            assert_eq!(source, (COD.into(), "codex".into()));
+            assert!(
+                sqlx::query("UPDATE codex_todo_suggestion_grant SET dedupe_namespace=?")
+                    .bind("fedcba9876543210fedcba9876543210")
+                    .execute(&db)
+                    .await
+                    .is_err()
+            );
+            assert!(sqlx::query("PRAGMA foreign_key_check")
+                .fetch_all(&db)
+                .await
+                .unwrap()
+                .is_empty());
+        }
+    }
+
+    #[tokio::test]
     async fn applies_foundation_and_sticky_migrations_and_enables_foreign_keys() {
         let temp = tempfile::tempdir().expect("temp directory");
         let database = connect(&temp.path().join("agent-desk.sqlite3"))
@@ -173,7 +350,7 @@ mod tests {
                   'sticky_surface_profile', 'reader_documents', 'record_source_refs', 'deliveries',
                   'reading_plans', 'reading_plan_deliveries', 'reading_sessions', 'agent_proposals',
                   'agent_connections', 'codex_connection', 'codex_todo_suggestion_grant',
-                  'todo_suggestion_batches'
+                  'todo_suggestion_batches', 'todo_suggestion_sources', 'local_mcp_connections'
               )
             "#,
         )
@@ -191,8 +368,8 @@ mod tests {
                 .await
                 .expect("migration history query");
 
-        assert_eq!(table_count, 16);
-        assert_eq!(applied_versions, (1..=10).collect::<Vec<_>>());
+        assert_eq!(table_count, 18);
+        assert_eq!(applied_versions, (1..=11).collect::<Vec<_>>());
         assert_eq!(foreign_keys, 1);
     }
 
@@ -376,7 +553,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(versions, (1..=10).collect::<Vec<_>>());
+        assert_eq!(versions, (1..=11).collect::<Vec<_>>());
         assert_eq!(note, "保留的记录");
         assert_eq!(
             task,
@@ -446,7 +623,7 @@ mod tests {
             .fetch_one(&upgraded.0)
             .await
             .unwrap();
-        assert_eq!(versions, (1..=10).collect::<Vec<_>>());
+        assert_eq!(versions, (1..=11).collect::<Vec<_>>());
         assert_eq!(note, "0004 保留记录");
         assert_eq!(
             reader,
@@ -515,7 +692,7 @@ mod tests {
         .fetch_one(&upgraded.0)
         .await
         .unwrap();
-        assert_eq!(versions, (1..=10).collect::<Vec<_>>());
+        assert_eq!(versions, (1..=11).collect::<Vec<_>>());
         assert_eq!(
             delivery,
             (
@@ -586,7 +763,7 @@ mod tests {
         .fetch_one(&upgraded.0)
         .await
         .unwrap();
-        assert_eq!(versions, (1..=10).collect::<Vec<_>>());
+        assert_eq!(versions, (1..=11).collect::<Vec<_>>());
         assert_eq!(
             preserved,
             ("delivery-0006".to_owned(), "会话正文".to_owned(), 2)

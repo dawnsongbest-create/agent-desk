@@ -203,12 +203,14 @@ it("reviews multiple batches independently, preserves a Todo draft, and locates 
   const batches: TodoSuggestionBatch[] = [
     {
       id: "reject",
+      source: "codex",
       status: "pending",
       createdAt: "",
       items: [{ text: "暂不采用的候选", priority: "low" }],
     },
     {
       id: "accept",
+      source: "dumate",
       status: "pending",
       createdAt: "",
       items: [
@@ -264,6 +266,7 @@ it("reviews multiple batches independently, preserves a Todo draft, and locates 
   await user.click(screen.getByRole("button", { name: "拒绝" }));
   expect(reject).toHaveBeenCalledExactlyOnceWith("reject");
   await user.click(await screen.findByRole("button", { name: "待确认建议 · 1" }));
+  expect(screen.getByText(/百度搭子 建议/)).toBeVisible();
   expect(screen.getByText(longText)).toBeVisible();
   expect(screen.getByText("影响交付")).toBeVisible();
   expect(sticky.cards.map((card) => card.id)).toEqual(["old"]);

@@ -187,7 +187,7 @@ fn rpc_error(id: Value, code: i32, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
 }
 
-fn tool() -> Value {
+pub(crate) fn tool() -> Value {
     json!({
         "name": "send_reading",
         "title": "Send reading to Agent Desk",
@@ -208,7 +208,7 @@ fn tool() -> Value {
     })
 }
 
-fn todo_tool() -> Value {
+pub(crate) fn todo_tool() -> Value {
     json!({
         "name": "suggest_todos",
         "title": "Send Todo suggestions for review in Agent Desk",

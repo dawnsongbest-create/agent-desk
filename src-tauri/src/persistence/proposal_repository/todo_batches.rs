@@ -6,7 +6,9 @@ use crate::{
     application::sticky_service::StickyService,
     domain::{
         proposal::{
-            todo_batch::{AcceptedTodoBatch, TodoSuggestionBatch, TodoSuggestionItem},
+            todo_batch::{
+                AcceptedTodoBatch, TodoSuggestionBatch, TodoSuggestionItem, TodoSuggestionSource,
+            },
             AgentProposalStatus,
         },
         sticky::StickyCardKind,
@@ -16,6 +18,7 @@ use crate::{
 #[derive(FromRow)]
 struct BatchRow {
     id: String,
+    source: String,
     items_json: String,
     status: String,
     created_at: String,
@@ -36,6 +39,11 @@ impl BatchRow {
         };
         Ok(TodoSuggestionBatch {
             id: self.id.clone(),
+            source: match self.source.as_str() {
+                "codex" => TodoSuggestionSource::Codex,
+                "dumate" => TodoSuggestionSource::Dumate,
+                _ => return Err(invalid_batch()),
+            },
             items: serde_json::from_str(&self.items_json).map_err(|_| invalid_batch())?,
             status,
             created_at: self.created_at.clone(),
@@ -75,8 +83,9 @@ impl SqliteProposalRepository {
         .execute(&mut *tx)
         .await?;
         let row: BatchRow = sqlx::query_as(
-            "SELECT * FROM todo_suggestion_batches
-            WHERE dedupe_namespace=? AND request_digest=?",
+            "SELECT b.*, s.provider AS source FROM todo_suggestion_batches b
+            JOIN todo_suggestion_sources s USING (dedupe_namespace)
+            WHERE b.dedupe_namespace=? AND b.request_digest=?",
         )
         .bind(namespace)
         .bind(request_digest)
@@ -94,8 +103,9 @@ impl SqliteProposalRepository {
         &self,
     ) -> Result<Vec<TodoSuggestionBatch>, ProposalRepositoryError> {
         sqlx::query_as::<_, BatchRow>(
-            "SELECT * FROM todo_suggestion_batches WHERE status='pending'
-            ORDER BY created_at ASC, id ASC",
+            "SELECT b.*, s.provider AS source FROM todo_suggestion_batches b
+            JOIN todo_suggestion_sources s USING (dedupe_namespace)
+            WHERE b.status='pending' ORDER BY b.created_at ASC, b.id ASC",
         )
         .fetch_all(&self.pool)
         .await?
@@ -110,11 +120,14 @@ impl SqliteProposalRepository {
     ) -> Result<AcceptedTodoBatch, ProposalRepositoryError> {
         // Take the write lock before reading status or allocating positions.
         let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
-        let row: BatchRow = sqlx::query_as("SELECT * FROM todo_suggestion_batches WHERE id=?")
-            .bind(id)
-            .fetch_optional(&mut *tx)
-            .await?
-            .ok_or(ProposalRepositoryError::NotFound)?;
+        let row: BatchRow = sqlx::query_as(
+            "SELECT b.*, s.provider AS source FROM todo_suggestion_batches b
+            JOIN todo_suggestion_sources s USING (dedupe_namespace) WHERE b.id=?",
+        )
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or(ProposalRepositoryError::NotFound)?;
         let batch = row.batch()?;
         match batch.status {
             AgentProposalStatus::Accepted => return row.receipt(),
@@ -146,8 +159,9 @@ impl SqliteProposalRepository {
         if let Err(error) = tx.commit().await {
             // Read the durable receipt, never perform a second insertion here.
             let resolved = sqlx::query_as::<_, BatchRow>(
-                "SELECT * FROM todo_suggestion_batches
-                WHERE id=? AND status='accepted'",
+                "SELECT b.*, s.provider AS source FROM todo_suggestion_batches b
+                JOIN todo_suggestion_sources s USING (dedupe_namespace)
+                WHERE b.id=? AND b.status='accepted'",
             )
             .bind(id)
             .fetch_optional(&self.pool)

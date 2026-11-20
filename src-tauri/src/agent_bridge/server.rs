@@ -1,13 +1,29 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{
+    net::SocketAddr,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use serde::de::DeserializeOwned;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{AsyncReadExt, AsyncWriteExt, BufReader},
     net::{TcpListener, TcpStream},
     sync::oneshot,
     task::JoinHandle,
     time::timeout,
 };
+
+use super::{
+    dumate::{DuMate, TOKEN_PREFIX as DUMATE_PREFIX},
+    mcp_http,
+};
+
+#[cfg(test)]
+#[path = "dumate_http_tests.rs"]
+mod dumate_http_tests;
 
 use crate::{
     adapters::openclaw::{
@@ -31,6 +47,8 @@ pub struct RunningAgentBridge {
     local_addr: SocketAddr,
     shutdown: oneshot::Sender<()>,
     task: JoinHandle<()>,
+    accepting: Arc<AtomicBool>,
+    dumate: Arc<DuMate>,
 }
 
 impl RunningAgentBridge {
@@ -40,10 +58,14 @@ impl RunningAgentBridge {
         capabilities: Arc<CapabilityService>,
         openclaw: Arc<OpenClawAdapter>,
         codex: Arc<CodexDelivery>,
+        dumate: Arc<DuMate>,
     ) -> Result<Self, std::io::Error> {
         let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port)).await?;
         let local_addr = listener.local_addr()?;
         let (shutdown, mut shutdown_receiver) = oneshot::channel();
+        let accepting = Arc::new(AtomicBool::new(true));
+        let listener_admission = accepting.clone();
+        let listener_dumate = dumate.clone();
         let task = tokio::spawn(async move {
             loop {
                 tokio::select! {
@@ -57,8 +79,10 @@ impl RunningAgentBridge {
                         let capabilities = capabilities.clone();
                         let openclaw = openclaw.clone();
                         let codex = codex.clone();
+                        let dumate = listener_dumate.clone();
+                        let accepting = listener_admission.clone();
                         tokio::spawn(async move {
-                            let _ = handle_connection(stream, connections, capabilities, openclaw, codex).await;
+                            let _ = handle_connection(stream, connections, capabilities, openclaw, codex, dumate, accepting).await;
                         });
                     }
                 }
@@ -68,6 +92,8 @@ impl RunningAgentBridge {
             local_addr,
             shutdown,
             task,
+            accepting,
+            dumate,
         })
     }
 
@@ -76,8 +102,10 @@ impl RunningAgentBridge {
     }
 
     pub async fn stop(self) {
+        self.accepting.store(false, Ordering::Release);
         let _ = self.shutdown.send(());
         let _ = self.task.await;
+        drop(self.dumate.gate.lock().await);
     }
 }
 
@@ -113,12 +141,18 @@ async fn handle_connection(
     capabilities: Arc<CapabilityService>,
     openclaw: Arc<OpenClawAdapter>,
     codex: Arc<CodexDelivery>,
+    dumate: Arc<DuMate>,
+    accepting: Arc<AtomicBool>,
 ) -> Result<(), std::io::Error> {
     let request = match timeout(REQUEST_TIMEOUT, read_request(&mut stream)).await {
         Ok(Ok(RequestRead::Complete(request))) => request,
-        Ok(Ok(RequestRead::OversizeTodo { remaining })) => {
-            let (status, body) = CodexError::TooLarge.http();
-            write_response(&mut stream, status, body).await?;
+        Ok(Ok(RequestRead::Rejected {
+            status,
+            remaining,
+            mcp,
+        })) => {
+            let (_, body) = mcp_http::http_error(status);
+            write_http_response(&mut stream, status, &body, mcp).await?;
             // The response has been sent and the write half closed. Drain a
             // bounded amount so macOS doesn't reset a socket with unread data.
             // Never parse or retain the over-limit body, or wait on a slow peer.
@@ -137,7 +171,26 @@ async fn handle_connection(
         }
     };
 
+    if request.path == mcp_http::PATH {
+        let (status, body) = if dumate.preview_available {
+            mcp_http::respond(
+                &dumate,
+                &accepting,
+                &request.method,
+                &request.headers,
+                &request.body,
+            )
+            .await
+        } else {
+            (404, r#"{"error":"not_found"}"#.to_owned())
+        };
+        return write_http_response(&mut stream, status, &body, true).await;
+    }
     let token = request.bearer_token().unwrap_or_default();
+    if token.starts_with(DUMATE_PREFIX) {
+        write_response(&mut stream, 401, r#"{"error":"unauthorized"}"#).await?;
+        return Ok(());
+    }
     if token.starts_with(CODEX_TOKEN_PREFIX) {
         let (status, body) = match codex
             .dispatch(token, &request.method, &request.path, &request.body)
@@ -160,7 +213,15 @@ async fn handle_connection(
         }
     };
 
-    let (status, body) = route_request(&request, &identity, &capabilities, &openclaw, &codex).await;
+    let (status, body) = route_request(
+        &request,
+        &identity,
+        &capabilities,
+        &openclaw,
+        &codex,
+        &dumate,
+    )
+    .await;
     write_response(&mut stream, status, &body).await
 }
 
@@ -170,6 +231,7 @@ async fn route_request(
     capabilities: &CapabilityService,
     openclaw: &OpenClawAdapter,
     codex: &CodexDelivery,
+    dumate: &DuMate,
 ) -> (u16, String) {
     match (request.method.as_str(), request.path.as_str()) {
         ("GET", "/api/v1/health") => (200, r#"{"version":"v1","status":"ok"}"#.to_owned()),
@@ -185,6 +247,24 @@ async fn route_request(
             {
                 return codex_error(error);
             }
+            // Serialize lookup of the reserved DuMate namespace with first
+            // pairing. Ordinary legacy sends never acquire the DuMate lock.
+            let _reserved_key_guard = if input
+                .idempotency_key
+                .as_deref()
+                .is_some_and(|key| key.trim_start().starts_with("dumate-reading:"))
+            {
+                let guard = dumate.gate.lock().await;
+                if let Err(error) = dumate
+                    .reserve_legacy_key(input.idempotency_key.as_deref())
+                    .await
+                {
+                    return codex_error(error);
+                }
+                Some(guard)
+            } else {
+                None
+            };
             adapter_result(identity, openclaw, openclaw.create_delivery(input).await)
         }
         ("POST", "/api/v1/proposal") => {
@@ -261,7 +341,11 @@ fn invalid_payload() -> (u16, String) {
 
 enum RequestRead {
     Complete(HttpRequest),
-    OversizeTodo { remaining: usize },
+    Rejected {
+        status: u16,
+        remaining: usize,
+        mcp: bool,
+    },
 }
 
 async fn read_request(stream: &mut TcpStream) -> Result<RequestRead, std::io::Error> {
@@ -303,11 +387,75 @@ async fn read_request(stream: &mut TcpStream) -> Result<RequestRead, std::io::Er
     }
 
     let mut headers = Vec::new();
+    let mcp = path == mcp_http::PATH;
     for line in lines {
         let (name, value) = line
             .split_once(':')
             .ok_or_else(|| invalid_data("request header is invalid"))?;
+        if mcp
+            && (name.is_empty()
+                || !name
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&byte))
+                || value
+                    .bytes()
+                    .any(|byte| byte.is_ascii_control() && byte != b'\t'))
+        {
+            return Ok(RequestRead::Rejected {
+                status: 400,
+                remaining: 0,
+                mcp,
+            });
+        }
         headers.push((name.trim().to_owned(), value.trim().to_owned()));
+    }
+    let body_start = header_end + 4;
+    if mcp {
+        if let Err(status) = mcp_http::validate_headers(&headers, stream.local_addr()?) {
+            return Ok(RequestRead::Rejected {
+                status,
+                remaining: 0,
+                mcp,
+            });
+        }
+        if let Some(transfer) = mcp_http::header(&headers, "transfer-encoding") {
+            if !transfer.eq_ignore_ascii_case("chunked")
+                || mcp_http::header(&headers, "content-length").is_some()
+                || method != "POST"
+            {
+                return Ok(RequestRead::Rejected {
+                    status: 400,
+                    remaining: 0,
+                    mcp,
+                });
+            }
+            let read = std::io::Cursor::new(&bytes[body_start..]).chain(&mut *stream);
+            let body = match read_mcp_chunks(BufReader::new(read)).await? {
+                Some(body) => body,
+                None => {
+                    return Ok(RequestRead::Rejected {
+                        status: 413,
+                        remaining: MAX_BODY_BYTES,
+                        mcp,
+                    })
+                }
+            };
+            return Ok(RequestRead::Complete(HttpRequest {
+                method,
+                path,
+                headers,
+                body,
+            }));
+        }
+        if mcp_http::header(&headers, "content-length")
+            .is_some_and(|len| len.is_empty() || !len.bytes().all(|byte| byte.is_ascii_digit()))
+        {
+            return Ok(RequestRead::Rejected {
+                status: 400,
+                remaining: 0,
+                mcp,
+            });
+        }
     }
     if headers
         .iter()
@@ -322,14 +470,23 @@ async fn read_request(stream: &mut TcpStream) -> Result<RequestRead, std::io::Er
         .transpose()
         .map_err(|_| invalid_data("content length is invalid"))?
         .unwrap_or(0);
-    let body_start = header_end + 4;
-    if path == crate::codex_delivery::TODO_PATH
-        && content_length > crate::domain::proposal::todo_batch::MAX_TODO_BODY
+    if (mcp && content_length > mcp_http::MAX_BODY)
+        || (path == crate::codex_delivery::TODO_PATH
+            && content_length > crate::domain::proposal::todo_batch::MAX_TODO_BODY)
     {
-        return Ok(RequestRead::OversizeTodo {
+        return Ok(RequestRead::Rejected {
+            status: 413,
             remaining: content_length
                 .saturating_sub(bytes.len() - body_start)
                 .min(MAX_BODY_BYTES),
+            mcp,
+        });
+    }
+    if mcp && method != "POST" && content_length > 0 {
+        return Ok(RequestRead::Rejected {
+            status: 400,
+            remaining: content_length,
+            mcp,
         });
     }
     if content_length > MAX_BODY_BYTES {
@@ -352,6 +509,42 @@ async fn read_request(stream: &mut TcpStream) -> Result<RequestRead, std::io::Er
     }))
 }
 
+async fn read_mcp_chunks(
+    mut reader: impl tokio::io::AsyncRead + Unpin,
+) -> Result<Option<Vec<u8>>, std::io::Error> {
+    let mut body = Vec::new();
+    // Bound framing overhead as well as decoded bytes. No trailer fields or
+    // framing extensions are needed for this origin-only JSON endpoint.
+    for _ in 0..4096 {
+        let mut length = String::with_capacity(16);
+        loop {
+            let next = reader.read_u8().await?;
+            if next == b'\r' && reader.read_u8().await? == b'\n' {
+                break;
+            }
+            if length.len() == 16 || !next.is_ascii_hexdigit() {
+                return Err(invalid_data("invalid MCP chunk size"));
+            }
+            length.push(char::from(next));
+        }
+        let length = usize::from_str_radix(&length, 16)
+            .map_err(|_| invalid_data("invalid MCP chunk size"))?;
+        if length > mcp_http::MAX_BODY - body.len() {
+            return Ok(None);
+        }
+        let start = body.len();
+        body.resize(start + length, 0);
+        reader.read_exact(&mut body[start..]).await?;
+        if reader.read_u8().await? != b'\r' || reader.read_u8().await? != b'\n' {
+            return Err(invalid_data("invalid MCP chunk ending"));
+        }
+        if length == 0 {
+            return Ok(Some(body));
+        }
+    }
+    Err(invalid_data("too many MCP chunks"))
+}
+
 fn find_header_end(bytes: &[u8]) -> Option<usize> {
     bytes.windows(4).position(|window| window == b"\r\n\r\n")
 }
@@ -365,20 +558,42 @@ async fn write_response(
     status: u16,
     body: &str,
 ) -> Result<(), std::io::Error> {
+    write_http_response(stream, status, body, false).await
+}
+
+async fn write_http_response(
+    stream: &mut TcpStream,
+    status: u16,
+    body: &str,
+    mcp: bool,
+) -> Result<(), std::io::Error> {
     let reason = match status {
         200 => "OK",
+        202 => "Accepted",
         400 => "Bad Request",
         401 => "Unauthorized",
         403 => "Forbidden",
         404 => "Not Found",
         405 => "Method Not Allowed",
+        406 => "Not Acceptable",
         409 => "Conflict",
         413 => "Payload Too Large",
+        415 => "Unsupported Media Type",
         503 => "Service Unavailable",
         _ => "Error",
     };
+    let extra = match (mcp, status) {
+        (true, 405) => "Allow: POST\r\n",
+        (true, 401) => "WWW-Authenticate: Bearer\r\n",
+        _ => "",
+    };
+    let content_type = if status == 202 {
+        ""
+    } else {
+        "Content-Type: application/json; charset=utf-8\r\n"
+    };
     let response = format!(
-        "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n{body}",
+        "HTTP/1.1 {status} {reason}\r\n{extra}{content_type}Content-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n{body}",
         body.len()
     );
     stream.write_all(response.as_bytes()).await?;
@@ -453,6 +668,13 @@ mod tests {
             ProposalService::new(Arc::new(proposal_repository.clone())),
             ReadingService::new(Arc::new(reading_repository), Arc::new(delivery_repository)),
         ));
+        let dumate = Arc::new(DuMate::new(
+            database.0.clone(),
+            DeliveryService::new(Arc::new(SqliteDeliveryRepository::new(database.0.clone()))),
+            ProposalService::new(Arc::new(proposal_repository.clone())),
+            Arc::new(|| {}),
+            Arc::new(|| {}),
+        ));
         let codex = Arc::new(CodexDelivery::new(
             database.0.clone(),
             DeliveryService::new(Arc::new(SqliteDeliveryRepository::new(database.0.clone()))),
@@ -460,10 +682,16 @@ mod tests {
             Arc::new(|| {}),
             Arc::new(|| {}),
         ));
-        let bridge =
-            RunningAgentBridge::start(0, connections, Arc::new(CapabilityService), openclaw, codex)
-                .await
-                .unwrap();
+        let bridge = RunningAgentBridge::start(
+            0,
+            connections,
+            Arc::new(CapabilityService),
+            openclaw,
+            codex,
+            dumate,
+        )
+        .await
+        .unwrap();
         let address = bridge.local_addr();
         assert_eq!(address.ip(), std::net::Ipv4Addr::LOCALHOST);
         let codex_secret = format!(
