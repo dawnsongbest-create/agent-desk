@@ -16,6 +16,7 @@ use crate::{
         agent_connection_service::{AgentConnectionService, IssuedAgentToken},
         capability_service::CapabilityService,
     },
+    chatgpt::{self, ChatGpt},
     codex_delivery::{CodexDelivery, PairingStatus, TodoGrantStatus},
     domain::agent_connection::{AgentConnection, AgentConnectionStatus, AGENT_API_VERSION},
     persistence::agent_connection_repository::SqliteAgentConnectionRepository,
@@ -52,6 +53,7 @@ pub struct AgentBridgeState {
     openclaw: Arc<OpenClawAdapter>,
     codex: Arc<CodexDelivery>,
     dumate: Arc<DuMate>,
+    chatgpt: Arc<ChatGpt>,
     configured_port: u16,
     runtime: Mutex<Option<RunningAgentBridge>>,
     last_error: RwLock<Option<String>>,
@@ -63,6 +65,7 @@ impl AgentBridgeState {
         openclaw: OpenClawAdapter,
         codex: CodexDelivery,
         dumate: DuMate,
+        chatgpt: ChatGpt,
     ) -> Self {
         let configured_port = std::env::var(BRIDGE_PORT_ENV)
             .ok()
@@ -74,6 +77,7 @@ impl AgentBridgeState {
             openclaw: Arc::new(openclaw),
             codex: Arc::new(codex),
             dumate: Arc::new(dumate),
+            chatgpt: Arc::new(chatgpt),
             configured_port,
             runtime: Mutex::new(None),
             last_error: RwLock::new(None),
@@ -87,29 +91,44 @@ impl AgentBridgeState {
                     *self.last_error.write().await = Some(error);
                 }
             }
+            Ok(_) if self.chatgpt.active().await.unwrap_or(false) => match self.bind(false).await {
+                Ok(bridge) => *self.runtime.lock().await = Some(bridge),
+                Err(error) => *self.last_error.write().await = Some(error),
+            },
             Ok(_) => {}
             Err(error) => *self.last_error.write().await = Some(error.to_string()),
         }
     }
 
+    async fn bind(&self, legacy: bool) -> Result<RunningAgentBridge, String> {
+        RunningAgentBridge::start(
+            self.configured_port,
+            self.connections.clone(),
+            self.capabilities.clone(),
+            self.openclaw.clone(),
+            self.codex.clone(),
+            self.dumate.clone(),
+            Some((self.chatgpt.clone(), legacy)),
+        )
+        .await
+        .map_err(|error| format!("Local Agent Bridge could not bind to localhost: {error}"))
+    }
+
     async fn start(&self) -> Result<AgentBridgeStatus, String> {
         let mut runtime = self.runtime.lock().await;
         if runtime.is_none() {
-            let bridge = RunningAgentBridge::start(
-                self.configured_port,
-                self.connections.clone(),
-                self.capabilities.clone(),
-                self.openclaw.clone(),
-                self.codex.clone(),
-                self.dumate.clone(),
-            )
-            .await
-            .map_err(|error| format!("Local Agent Bridge could not bind to localhost: {error}"))?;
-            if let Err(error) = self.connections.ensure(AgentConnectionStatus::Active).await {
-                bridge.stop().await;
-                return Err(error.to_string());
+            *runtime = Some(self.bind(false).await?);
+        }
+        if let Err(error) = self.connections.ensure(AgentConnectionStatus::Active).await {
+            if !self.chatgpt.active().await.unwrap_or(false) {
+                if let Some(bridge) = runtime.take() {
+                    bridge.stop().await;
+                }
             }
-            *runtime = Some(bridge);
+            return Err(error.to_string());
+        }
+        if let Some(bridge) = runtime.as_ref() {
+            bridge.enable_legacy();
         }
         *self.last_error.write().await = None;
         drop(runtime);
@@ -118,7 +137,11 @@ impl AgentBridgeState {
 
     async fn stop(&self) -> Result<AgentBridgeStatus, String> {
         let mut runtime = self.runtime.lock().await;
-        if let Some(bridge) = runtime.take() {
+        if self.chatgpt.active().await.unwrap_or(false) {
+            if let Some(bridge) = runtime.as_ref() {
+                bridge.disable_legacy().await;
+            }
+        } else if let Some(bridge) = runtime.take() {
             bridge.stop().await;
         }
         self.connections
@@ -151,7 +174,7 @@ impl AgentBridgeState {
         let runtime = self.runtime.lock().await;
         let (running, port) = runtime
             .as_ref()
-            .map(|bridge| (true, bridge.local_addr().port()))
+            .map(|bridge| (bridge.legacy_running(), bridge.local_addr().port()))
             .unwrap_or((false, self.configured_port));
         Ok(AgentBridgeStatus {
             version: AGENT_API_VERSION,
@@ -169,6 +192,67 @@ impl AgentBridgeState {
 }
 
 #[tauri::command]
+pub(crate) async fn get_chatgpt_status(
+    state: State<'_, AgentBridgeState>,
+) -> Result<chatgpt::Status, String> {
+    let runtime = state.runtime.lock().await;
+    state.chatgpt.status(runtime.is_some()).await
+}
+
+#[tauri::command]
+pub(crate) async fn configure_chatgpt(
+    window: tauri::WebviewWindow,
+    state: State<'_, AgentBridgeState>,
+    reading: bool,
+    todo: bool,
+    rotate: bool,
+) -> Result<chatgpt::Status, String> {
+    if window.label() != "main" {
+        return Err("请在主窗口设置中管理 ChatGPT。".into());
+    }
+    let scopes = chatgpt::Scopes { reading, todo };
+    let mut runtime = state.runtime.lock().await;
+    if scopes.any() && runtime.is_none() {
+        *runtime = Some(state.bind(false).await?);
+    }
+    let result = state.chatgpt.configure(scopes, rotate).await;
+    if runtime
+        .as_ref()
+        .is_some_and(|bridge| !bridge.legacy_running())
+        && matches!(state.chatgpt.active().await, Ok(false))
+    {
+        if let Some(bridge) = runtime.take() {
+            bridge.stop().await;
+        }
+    }
+    result?;
+    state.chatgpt.status(runtime.is_some()).await
+}
+
+#[tauri::command]
+pub(crate) async fn export_chatgpt_package(
+    window: tauri::WebviewWindow,
+    app: tauri::AppHandle,
+    state: State<'_, AgentBridgeState>,
+) -> Result<bool, String> {
+    if window.label() != "main" {
+        return Err("请在主窗口设置中导出安装包。".into());
+    }
+    let port = {
+        let runtime = state.runtime.lock().await;
+        if !matches!(state.chatgpt.active().await, Ok(true)) {
+            return Err("请先为 ChatGPT 开启至少一项权限。".into());
+        }
+        runtime
+            .as_ref()
+            .ok_or("本地连接未启动。")?
+            .local_addr()
+            .port()
+    };
+    chatgpt::export_package(app, port, chatgpt::profile()).await
+}
+
+#[tauri::command]
 pub(crate) async fn get_dumate_status(
     state: State<'_, AgentBridgeState>,
 ) -> Result<DuMateStatus, String> {
@@ -176,7 +260,15 @@ pub(crate) async fn get_dumate_status(
     let port = runtime
         .as_ref()
         .map_or(state.configured_port, |bridge| bridge.local_addr().port());
-    state.dumate.status(port, runtime.is_some()).await
+    state
+        .dumate
+        .status(
+            port,
+            runtime
+                .as_ref()
+                .is_some_and(RunningAgentBridge::legacy_running),
+        )
+        .await
 }
 
 #[tauri::command]
@@ -192,7 +284,14 @@ pub(crate) async fn configure_dumate(
         .map_or(state.configured_port, |bridge| bridge.local_addr().port());
     state
         .dumate
-        .configure(port, runtime.is_some(), Scopes { reading, todo }, rotate)
+        .configure(
+            port,
+            runtime
+                .as_ref()
+                .is_some_and(RunningAgentBridge::legacy_running),
+            Scopes { reading, todo },
+            rotate,
+        )
         .await
 }
 
@@ -205,7 +304,10 @@ pub(crate) async fn copy_dumate_authorization(
         return Err("请从主窗口设置复制凭据。".into());
     }
     let runtime = state.runtime.lock().await;
-    if runtime.is_none() {
+    if !runtime
+        .as_ref()
+        .is_some_and(RunningAgentBridge::legacy_running)
+    {
         return Err("请先启用本地 Bridge。".into());
     }
     let header = state.dumate.authorization_header().await?;

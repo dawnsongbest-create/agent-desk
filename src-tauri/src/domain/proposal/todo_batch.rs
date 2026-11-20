@@ -48,6 +48,7 @@ pub fn valid_request_key(key: &str) -> bool {
 pub enum TodoSuggestionSource {
     Codex,
     Dumate,
+    Chatgpt,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]

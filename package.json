@@ -18,7 +18,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "pnpm format && pnpm typecheck && pnpm lint && pnpm test",
-    "tauri": "tauri"
+    "tauri": "node scripts/tauri.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

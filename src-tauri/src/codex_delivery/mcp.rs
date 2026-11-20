@@ -15,6 +15,7 @@ use uuid::Uuid;
 
 use crate::{
     application::{ports::credentials::CredentialPort, proposal_service::ProposalService},
+    chatgpt::{self, Challenge, Scope, ServerProof},
     domain::proposal::todo_batch::{
         valid_request_key, TodoSuggestionRequest, MAX_REASON_CHARS, MAX_REQUEST_KEY_CHARS,
         MAX_TODO_BODY, MAX_TODO_ITEMS,
@@ -35,6 +36,18 @@ const PROTOCOLS: &[&str] = &["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-
 
 pub(super) fn run(args: &[String]) -> i32 {
     let [port] = args else { return 2 };
+    run_stdio(port, None)
+}
+
+pub(super) fn run_chatgpt(args: &[String]) -> i32 {
+    let [port, profile] = args else { return 2 };
+    if !chatgpt::valid_profile(profile) {
+        return 2;
+    }
+    run_stdio(port, Some(profile))
+}
+
+fn run_stdio(port: &str, chatgpt_profile: Option<&str>) -> i32 {
     let Ok(port) = port.parse::<u16>() else {
         return 2;
     };
@@ -68,6 +81,13 @@ pub(super) fn run(args: &[String]) -> i32 {
         }
         let response = match serde_json::from_slice::<Value>(&buffer) {
             Ok(message) => protocol.handle(&message, |name, args| match name {
+                _ if chatgpt_profile.is_some() => chatgpt_call(
+                    &runtime,
+                    port,
+                    chatgpt_profile.unwrap_or_default(),
+                    name,
+                    args,
+                ),
                 "send_reading" => send(&runtime, port, args),
                 _ => suggest(&runtime, port, args),
             }),
@@ -83,6 +103,150 @@ pub(super) fn run(args: &[String]) -> i32 {
                 return 1;
             }
         }
+    }
+}
+
+fn chatgpt_reading_body(args: Value) -> Result<(String, Vec<u8>), &'static str> {
+    let mut request: ReadingRequest =
+        serde_json::from_value(args).map_err(|_| "invalid_payload")?;
+    request.validate().map_err(|error| {
+        if error == super::CodexError::TooLarge {
+            "payload_too_large"
+        } else {
+            "invalid_payload"
+        }
+    })?;
+    let key = request
+        .idempotency_key
+        .take()
+        .unwrap_or_else(|| Uuid::new_v4().simple().to_string())
+        .trim()
+        .to_owned();
+    request.idempotency_key = Some(key.clone());
+    let body = serde_json::to_vec(&request).map_err(|_| "invalid_payload")?;
+    if body.len() > MAX_CODEX_BODY {
+        return Err("payload_too_large");
+    }
+    Ok((key, body))
+}
+
+fn chatgpt_call(runtime: &Runtime, port: u16, profile: &str, name: &str, args: Value) -> Value {
+    let (scope, prepared) = if name == "send_reading" {
+        (Scope::SendReading, chatgpt_reading_body(args))
+    } else {
+        (Scope::SuggestTodos, prepare_todo_body(args))
+    };
+    let (key, body) = match prepared {
+        Ok(input) => input,
+        Err("payload_too_large") => {
+            return tool_error(
+                "payload_too_large",
+                "内容超过大小限制；未截断或发送。",
+                None,
+            )
+        }
+        Err(_) => return tool_error("invalid_payload", "请检查标题、正文或待办建议参数。", None),
+    };
+    let Ok(Some(secret)) = OsCredentialStore.read(&chatgpt::reference(profile, scope)) else {
+        return tool_error(
+            "credential_unavailable",
+            "请在 Agent Desk → 设置 → ChatGPT 开启这项权限。",
+            Some(&key),
+        );
+    };
+    let hash = chatgpt::digest(&secret);
+    drop(secret);
+    let outcome = runtime.block_on(async {
+        let call = || chatgpt_post(port, profile, scope, &hash, &body, &key);
+        match call().await {
+            Err(CallFailure::Uncertain) => call().await.map_err(|_| CallFailure::Uncertain),
+            result => result,
+        }
+    });
+    match outcome {
+        Ok(receipt) => {
+            let message = match (scope, receipt["created"].as_bool()) {
+                (_, Some(false)) => "已返回原回执，未重复保存。",
+                (Scope::SendReading, _) => "已发送到 Agent Desk 收件箱。",
+                (Scope::SuggestTodos, _) => "已提交待确认建议；未创建正式待办。",
+            };
+            json!({"content":[{"type":"text","text":message}], "structuredContent":receipt})
+        }
+        Err(CallFailure::Unavailable) => tool_error(
+            "bridge_unavailable",
+            "无法连接 Agent Desk。请打开应用，再检查 ChatGPT 连接。",
+            Some(&key),
+        ),
+        Err(CallFailure::Rejected(401)) => tool_error(
+            "unauthorized",
+            "无法验证 Agent Desk 本地连接。请在设置中检查授权并重新下载安装包。",
+            Some(&key),
+        ),
+        Err(CallFailure::Rejected(403)) => tool_error(
+            "forbidden",
+            "ChatGPT 没有这项权限，请检查 Agent Desk 设置。",
+            Some(&key),
+        ),
+        Err(CallFailure::Rejected(409)) => tool_error(
+            "idempotency_conflict",
+            "此请求 ID 已用于不同内容；未覆盖原结果。",
+            Some(&key),
+        ),
+        Err(CallFailure::Rejected(413)) => tool_error(
+            "payload_too_large",
+            "内容超过大小限制；未截断或保存。",
+            Some(&key),
+        ),
+        Err(CallFailure::Rejected(_)) => tool_error(
+            "invalid_payload",
+            "Agent Desk 拒绝了请求；未保存。",
+            Some(&key),
+        ),
+        Err(CallFailure::Uncertain) => tool_error(
+            "delivery_uncertain",
+            "结果不确定，请检查收件箱或待确认建议。如需重试请使用同一 request_id。",
+            Some(&key),
+        ),
+    }
+}
+
+async fn chatgpt_post(
+    port: u16,
+    profile: &str,
+    scope: Scope,
+    hash: &[u8],
+    body: &[u8],
+    key: &str,
+) -> Result<Value, CallFailure> {
+    let challenge = Challenge {
+        profile: profile.to_owned(),
+        port,
+        scope,
+        nonce: chatgpt::nonce(),
+    };
+    let input = serde_json::to_vec(&challenge).map_err(|_| CallFailure::Rejected(400))?;
+    let response = post(port, chatgpt::CHALLENGE_PATH, "challenge", &input)
+        .await
+        .map_err(unsent_failure)?;
+    let proof: ServerProof =
+        serde_json::from_str(parse_http_body(&response).map_err(unsent_failure)?)
+            .map_err(|_| CallFailure::Rejected(401))?;
+    if !chatgpt::matches_server(hash, &challenge, &proof) {
+        return Err(CallFailure::Rejected(401));
+    }
+    let authorization = chatgpt::request_proof(hash, &challenge, body);
+    let response = post(port, scope.path(), &authorization, body).await?;
+    let receipt = match scope {
+        Scope::SendReading => serde_json::to_value(parse_receipt(&response, key)?),
+        Scope::SuggestTodos => serde_json::to_value(parse_todo_receipt(&response, key)?),
+    };
+    receipt.map_err(|_| CallFailure::Uncertain)
+}
+
+fn unsent_failure(failure: CallFailure) -> CallFailure {
+    match failure {
+        CallFailure::Uncertain => CallFailure::Unavailable,
+        failure => failure,
     }
 }
 

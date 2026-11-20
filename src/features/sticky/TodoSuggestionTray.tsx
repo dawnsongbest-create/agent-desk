@@ -8,7 +8,7 @@ import {
 import { formatLocalDueDate } from "../../domain/sticky";
 
 const priorityLabels = { high: "高", medium: "中", low: "低" } as const;
-const sourceLabels = { codex: "Codex", dumate: "百度搭子" } as const;
+const sourceLabels = { codex: "Codex", dumate: "百度搭子", chatgpt: "ChatGPT" } as const;
 
 export function TodoSuggestionTray({
   port,

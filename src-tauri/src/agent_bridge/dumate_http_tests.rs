@@ -135,6 +135,7 @@ impl Fixture {
             self.openclaw.clone(),
             self.codex.clone(),
             self.dumate.clone(),
+            None,
         )
         .await
         .unwrap()
@@ -219,6 +220,353 @@ fn assert_status(response: &str, code: u16) {
         response.starts_with(&format!("HTTP/1.1 {code} ")),
         "{response}"
     );
+}
+
+#[derive(Default)]
+struct ScopedCredentials(Mutex<std::collections::HashMap<String, String>>);
+
+impl CredentialPort for ScopedCredentials {
+    fn store(&self, reference: &str, secret: &str) -> Result<(), CredentialError> {
+        self.0
+            .lock()
+            .unwrap()
+            .insert(reference.into(), secret.into());
+        Ok(())
+    }
+    fn read(&self, reference: &str) -> Result<Option<String>, CredentialError> {
+        Ok(self.0.lock().unwrap().get(reference).cloned())
+    }
+    fn delete(&self, reference: &str) -> Result<(), CredentialError> {
+        self.0.lock().unwrap().remove(reference);
+        Ok(())
+    }
+}
+
+async fn chat_post(address: SocketAddr, path: &str, bearer: &str, input: &str) -> String {
+    request(address, "POST", path, bearer, "", input).await
+}
+
+async fn chat_challenge(
+    address: SocketAddr,
+    scope: chatgpt::Scope,
+) -> (chatgpt::Challenge, String) {
+    let challenge = chatgpt::Challenge {
+        profile: "desktop-v1".into(),
+        port: address.port(),
+        scope,
+        nonce: chatgpt::nonce(),
+    };
+    let result = chat_post(
+        address,
+        chatgpt::CHALLENGE_PATH,
+        "challenge",
+        &serde_json::to_string(&challenge).unwrap(),
+    )
+    .await;
+    (challenge, result)
+}
+
+#[tokio::test]
+async fn chatgpt_independent_http_scopes_and_replay_survive_rotation_and_restart() {
+    use chatgpt::{Scope, Scopes as ChatScopes, ServerProof};
+    let f = Fixture::new(|| T0).await;
+    let creds = Arc::new(ScopedCredentials::default());
+    let chatgpt = Arc::new(
+        ChatGpt::new(
+            f.pool.clone(),
+            f.deliveries.clone(),
+            f.proposals.clone(),
+            Arc::new(|| {}),
+            Arc::new(|| {}),
+        )
+        .with_test_credentials(creds.clone()),
+    );
+    let start = || {
+        RunningAgentBridge::start(
+            0,
+            f.connections.clone(),
+            Arc::new(CapabilityService),
+            f.openclaw.clone(),
+            f.codex.clone(),
+            f.dumate.clone(),
+            Some((chatgpt.clone(), false)),
+        )
+    };
+    let bridge = start().await.unwrap();
+    let address = bridge.local_addr();
+    assert_status(&chat_challenge(address, Scope::SendReading).await.1, 403);
+    assert_status(
+        &request(address, "GET", "/api/v1/health", &f.openclaw_token, "", "").await,
+        403,
+    );
+    chatgpt
+        .configure(
+            ChatScopes {
+                reading: true,
+                todo: false,
+            },
+            false,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(chatgpt.status(true).await.unwrap()).unwrap()["phase"],
+        "awaiting_first_call"
+    );
+    assert_status(&chat_challenge(address, Scope::SuggestTodos).await.1, 403);
+    assert_status(
+        &request(
+            address,
+            "POST",
+            chatgpt::CHALLENGE_PATH,
+            "",
+            "Origin: https://untrusted.invalid\r\n",
+            "{}",
+        )
+        .await,
+        403,
+    );
+    assert_status(
+        &request(
+            address,
+            "POST",
+            chatgpt::CHALLENGE_PATH,
+            "",
+            "Host: invalid\r\n",
+            "{}",
+        )
+        .await,
+        400,
+    );
+    let reading_key = || {
+        chatgpt::digest(
+            &creds
+                .read(&chatgpt::reference("desktop-v1", Scope::SendReading))
+                .unwrap()
+                .unwrap(),
+        )
+    };
+    let read_hash = reading_key();
+    let (challenge, proof) = chat_challenge(address, Scope::SendReading).await;
+    let proof: ServerProof = serde_json::from_value(body(&proof)).unwrap();
+    assert!(chatgpt::matches_server(&read_hash, &challenge, &proof));
+    assert!(!chatgpt::matches_server(&[0; 32], &challenge, &proof));
+    let input = reading("scope-shared", "# Markdown fixture").to_string();
+    let auth = chatgpt::request_proof(&read_hash, &challenge, input.as_bytes());
+    assert_status(
+        &chat_post(address, Scope::SendReading.path(), &auth, "{}").await,
+        401,
+    );
+    let receipt = body(&chat_post(address, Scope::SendReading.path(), &auth, &input).await);
+    assert_eq!(receipt["created"], true);
+    assert_status(
+        &chat_post(address, Scope::SendReading.path(), &auth, &input).await,
+        401,
+    );
+    assert_eq!(
+        serde_json::to_value(chatgpt.status(true).await.unwrap()).unwrap()["phase"],
+        "partial"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, String>("SELECT source_label FROM reader_documents")
+            .fetch_one(&f.pool)
+            .await
+            .unwrap(),
+        "ChatGPT"
+    );
+    chatgpt
+        .configure(
+            ChatScopes {
+                reading: true,
+                todo: true,
+            },
+            false,
+        )
+        .await
+        .unwrap();
+    assert_eq!(reading_key(), read_hash);
+    let (ticket, _) = chat_challenge(address, Scope::SendReading).await;
+    let old_auth = chatgpt::request_proof(&read_hash, &ticket, input.as_bytes());
+    chatgpt
+        .configure(
+            ChatScopes {
+                reading: false,
+                todo: true,
+            },
+            false,
+        )
+        .await
+        .unwrap();
+    assert_status(
+        &chat_post(address, Scope::SendReading.path(), &old_auth, &input).await,
+        403,
+    );
+    let (ticket, _) = chat_challenge(address, Scope::SuggestTodos).await;
+    let todo_input = todo("scope-shared").to_string();
+    let wrong_scope = chatgpt::request_proof(&read_hash, &ticket, todo_input.as_bytes());
+    assert_status(
+        &chat_post(
+            address,
+            Scope::SuggestTodos.path(),
+            &wrong_scope,
+            &todo_input,
+        )
+        .await,
+        401,
+    );
+    let todo_hash = chatgpt::digest(
+        &creds
+            .read(&chatgpt::reference("desktop-v1", Scope::SuggestTodos))
+            .unwrap()
+            .unwrap(),
+    );
+    let auth = chatgpt::request_proof(&todo_hash, &ticket, todo_input.as_bytes());
+    let batch = body(&chat_post(address, Scope::SuggestTodos.path(), &auth, &todo_input).await);
+    assert_eq!(batch["status"], "pending");
+    assert_eq!(count_tasks(&f.pool).await, 0);
+    let persisted = f.proposals.list_pending_todo_batches().await.unwrap();
+    assert_eq!(persisted[0].source, TodoSuggestionSource::Chatgpt);
+    assert_eq!(persisted[0].items[0].text, "合成高优先级");
+    bridge.stop().await;
+    assert!(TcpStream::connect(address).await.is_err());
+    chatgpt
+        .configure(
+            ChatScopes {
+                reading: true,
+                todo: true,
+            },
+            true,
+        )
+        .await
+        .unwrap();
+    assert_ne!(reading_key(), read_hash);
+    let restarted = start().await.unwrap();
+    let address = restarted.local_addr();
+    let (ticket, _) = chat_challenge(address, Scope::SendReading).await;
+    let auth = chatgpt::request_proof(&reading_key(), &ticket, input.as_bytes());
+    let replay = body(&chat_post(address, Scope::SendReading.path(), &auth, &input).await);
+    assert_eq!(replay["delivery_id"], receipt["delivery_id"]);
+    assert_eq!(replay["created"], false);
+    let (ticket, _) = chat_challenge(address, Scope::SendReading).await;
+    let changed = reading("scope-shared", "changed fixture").to_string();
+    let auth = chatgpt::request_proof(&reading_key(), &ticket, changed.as_bytes());
+    assert_status(
+        &chat_post(address, Scope::SendReading.path(), &auth, &changed).await,
+        409,
+    );
+    chatgpt
+        .configure(
+            ChatScopes {
+                reading: false,
+                todo: false,
+            },
+            false,
+        )
+        .await
+        .unwrap();
+    assert_status(&chat_challenge(address, Scope::SuggestTodos).await.1, 403);
+    restarted.enable_legacy();
+    assert_status(
+        &request(address, "GET", "/api/v1/health", &f.openclaw_token, "", "").await,
+        200,
+    );
+    restarted.stop().await;
+}
+
+#[tokio::test]
+#[ignore = "requires a Windows Truth Release and writable OS credential store"]
+#[cfg(target_os = "windows")]
+async fn chatgpt_native_connector_with_isolated_os_credential_roundtrip() {
+    use crate::codex_delivery::credentials::OsCredentialStore;
+    struct Cleanup(String);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            for scope in [chatgpt::Scope::SendReading, chatgpt::Scope::SuggestTodos] {
+                let _ = OsCredentialStore.delete(&chatgpt::reference(&self.0, scope));
+            }
+        }
+    }
+    let exe_path =
+        std::env::var_os("AGENT_DESK_M5_C_TRUTH_EXECUTABLE").expect("supply Truth Release");
+    let f = Fixture::new(|| T0).await;
+    let profile = format!("audit-{}{}", chatgpt::nonce(), chatgpt::nonce());
+    let _cleanup = Cleanup(profile.clone());
+    let chatgpt = Arc::new(
+        ChatGpt::new(
+            f.pool.clone(),
+            f.deliveries.clone(),
+            f.proposals.clone(),
+            Arc::new(|| {}),
+            Arc::new(|| {}),
+        )
+        .with_test_profile(profile.clone()),
+    );
+    chatgpt
+        .configure(
+            chatgpt::Scopes {
+                reading: true,
+                todo: true,
+            },
+            false,
+        )
+        .await
+        .unwrap();
+    let bridge = RunningAgentBridge::start(
+        0,
+        f.connections.clone(),
+        Arc::new(CapabilityService),
+        f.openclaw.clone(),
+        f.codex.clone(),
+        f.dumate.clone(),
+        Some((chatgpt.clone(), false)),
+    )
+    .await
+    .unwrap();
+    let port = bridge.local_addr().port().to_string();
+    let output = tokio::task::spawn_blocking(move || {
+        use std::{io::Write, process::{Command, Stdio}};
+        let mut child = Command::new(exe_path)
+            .args(["--chatgpt-mcp", &port, &profile])
+            .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+        let mut input = child.stdin.take().unwrap();
+        for message in [
+            rpc(0, "initialize", json!({"protocolVersion":"2025-11-25","clientInfo":{"name":"local independent test","version":"1"},"capabilities":{}})),
+            json!({"jsonrpc":"2.0","method":"notifications/initialized"}),
+            rpc(1, "tools/list", json!({})),
+            call("send_reading", reading("native-fixture", "# 完整合成 Markdown")),
+            call("suggest_todos", todo("native-fixture")),
+        ] {
+            writeln!(input, "{message}").unwrap();
+        }
+        drop(input);
+        child.wait_with_output().unwrap()
+    }).await.unwrap();
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    let lines: Vec<Value> = std::str::from_utf8(&output.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(lines.len(), 4);
+    assert_eq!(lines[0]["result"]["protocolVersion"], "2025-11-25");
+    assert_eq!(lines[1]["result"]["tools"].as_array().unwrap().len(), 2);
+    assert_eq!(lines[2]["result"]["structuredContent"]["created"], true);
+    assert_eq!(lines[3]["result"]["structuredContent"]["status"], "pending");
+    assert_eq!(count_tasks(&f.pool).await, 0);
+    let authorized = serde_json::to_value(chatgpt.status(true).await.unwrap()).unwrap();
+    assert_eq!(authorized["phase"], "connected");
+    chatgpt
+        .configure(
+            chatgpt::Scopes {
+                reading: false,
+                todo: false,
+            },
+            false,
+        )
+        .await
+        .unwrap();
+    bridge.stop().await;
 }
 
 #[tokio::test]

@@ -73,7 +73,10 @@ export function CodexPairingSettings({ bridgeRunning }: { bridgeRunning: boolean
   }
 
   return (
-    <div className="agent-bridge-settings" aria-label="Codex 连接与权限">
+    <section className="agent-bridge-settings" aria-label="Codex 连接与权限">
+      <strong>
+        <span aria-hidden="true">◇ </span>Codex
+      </strong>
       <p role="status">
         Codex：{status ? phaseLabels[status.phase] : "状态待检查"}
         {!bridgeRunning ? " · Bridge 已停止" : ""}
@@ -163,6 +166,6 @@ export function CodexPairingSettings({ bridgeRunning }: { bridgeRunning: boolean
           </div>
         </div>
       ) : null}
-    </div>
+    </section>
   );
 }

@@ -8,5 +8,10 @@ fn main() {
             &args[1..],
         ));
     }
+    if args.first().is_some_and(|arg| arg == "--chatgpt-mcp") {
+        std::process::exit(agent_desk_lib::codex_delivery::start_chatgpt_connector(
+            &args[1..],
+        ));
+    }
     agent_desk_lib::run();
 }

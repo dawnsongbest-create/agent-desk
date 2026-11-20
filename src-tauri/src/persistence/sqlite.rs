@@ -334,6 +334,92 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn upgrade_0011_preserves_dumate_and_codex_batches_and_namespaces() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("isolated-0011.sqlite3");
+        let old = SqlitePoolOptions::new()
+            .connect_with(
+                sqlx::sqlite::SqliteConnectOptions::new()
+                    .filename(&path)
+                    .create_if_missing(true)
+                    .foreign_keys(true),
+            )
+            .await
+            .unwrap();
+        sqlx::migrate::Migrator {
+            migrations: std::borrow::Cow::Owned(
+                MIGRATOR
+                    .iter()
+                    .filter(|m| m.version <= 11)
+                    .cloned()
+                    .collect(),
+            ),
+            ..sqlx::migrate::Migrator::DEFAULT
+        }
+        .run(&old)
+        .await
+        .unwrap();
+        let codex = "c".repeat(32);
+        let dumate = "d".repeat(32);
+        sqlx::query(
+            "INSERT INTO codex_todo_suggestion_grant VALUES
+          ('codex-todo-suggestions', NULL, 'revoked', 'suggest_todos', ?, 'then', 'then')",
+        )
+        .bind(&codex)
+        .execute(&old)
+        .await
+        .unwrap();
+        sqlx::query("INSERT INTO todo_suggestion_sources VALUES (?, 'dumate')")
+            .bind(&dumate)
+            .execute(&old)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO local_mcp_connections VALUES
+            ('dumate', ?, 1, 1, zeroblob(32), 100, 1900, 1)",
+        )
+        .bind("e".repeat(32))
+        .execute(&old)
+        .await
+        .unwrap();
+        for (source, namespace) in [("codex", codex), ("dumate", dumate)] {
+            for (i, status) in ["pending", "accepted", "rejected"].into_iter().enumerate() {
+                sqlx::query("INSERT INTO todo_suggestion_batches VALUES (?, ?, ?, ?, ?, 'created', 'updated', ?)")
+                    .bind(format!("{source}-{status}")).bind(&namespace).bind(i.to_string().repeat(64))
+                    .bind(r#"[{"text":"fixture","priority":"low"}]"#).bind(status)
+                    .bind((status == "accepted").then_some(r#"["accepted-todo-fixture"]"#))
+                    .execute(&old).await.unwrap();
+            }
+        }
+        const SNAPSHOT: &str = "SELECT json_group_array(json_array(id,dedupe_namespace,request_digest,items_json,status,created_at,updated_at,accepted_todo_ids_json))
+            FROM (SELECT * FROM todo_suggestion_batches ORDER BY id)";
+        let before: String = sqlx::query_scalar(SNAPSHOT).fetch_one(&old).await.unwrap();
+        old.close().await;
+        let db = connect(&path).await.unwrap().0;
+        let after: String = sqlx::query_scalar(SNAPSHOT).fetch_one(&db).await.unwrap();
+        assert_eq!(before, after);
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT generation FROM local_mcp_connections")
+                .fetch_one(&db)
+                .await
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT count(*) FROM chatgpt_desktop_grants")
+                .fetch_one(&db)
+                .await
+                .unwrap(),
+            0
+        );
+        assert!(sqlx::query("PRAGMA foreign_key_check")
+            .fetch_all(&db)
+            .await
+            .unwrap()
+            .is_empty());
+    }
+
+    #[tokio::test]
     async fn applies_foundation_and_sticky_migrations_and_enables_foreign_keys() {
         let temp = tempfile::tempdir().expect("temp directory");
         let database = connect(&temp.path().join("agent-desk.sqlite3"))
@@ -350,7 +436,8 @@ mod tests {
                   'sticky_surface_profile', 'reader_documents', 'record_source_refs', 'deliveries',
                   'reading_plans', 'reading_plan_deliveries', 'reading_sessions', 'agent_proposals',
                   'agent_connections', 'codex_connection', 'codex_todo_suggestion_grant',
-                  'todo_suggestion_batches', 'todo_suggestion_sources', 'local_mcp_connections'
+                  'todo_suggestion_batches', 'todo_suggestion_sources', 'local_mcp_connections',
+                  'chatgpt_desktop_grants'
               )
             "#,
         )
@@ -368,8 +455,8 @@ mod tests {
                 .await
                 .expect("migration history query");
 
-        assert_eq!(table_count, 18);
-        assert_eq!(applied_versions, (1..=11).collect::<Vec<_>>());
+        assert_eq!(table_count, 19);
+        assert_eq!(applied_versions, (1..=12).collect::<Vec<_>>());
         assert_eq!(foreign_keys, 1);
     }
 
@@ -553,7 +640,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(versions, (1..=11).collect::<Vec<_>>());
+        assert_eq!(versions, (1..=12).collect::<Vec<_>>());
         assert_eq!(note, "保留的记录");
         assert_eq!(
             task,
@@ -623,7 +710,7 @@ mod tests {
             .fetch_one(&upgraded.0)
             .await
             .unwrap();
-        assert_eq!(versions, (1..=11).collect::<Vec<_>>());
+        assert_eq!(versions, (1..=12).collect::<Vec<_>>());
         assert_eq!(note, "0004 保留记录");
         assert_eq!(
             reader,
@@ -692,7 +779,7 @@ mod tests {
         .fetch_one(&upgraded.0)
         .await
         .unwrap();
-        assert_eq!(versions, (1..=11).collect::<Vec<_>>());
+        assert_eq!(versions, (1..=12).collect::<Vec<_>>());
         assert_eq!(
             delivery,
             (
@@ -763,7 +850,7 @@ mod tests {
         .fetch_one(&upgraded.0)
         .await
         .unwrap();
-        assert_eq!(versions, (1..=11).collect::<Vec<_>>());
+        assert_eq!(versions, (1..=12).collect::<Vec<_>>());
         assert_eq!(
             preserved,
             ("delivery-0006".to_owned(), "会话正文".to_owned(), 2)

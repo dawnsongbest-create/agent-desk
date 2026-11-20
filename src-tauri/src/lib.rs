@@ -1,6 +1,7 @@
 pub mod adapters;
 mod agent_bridge;
 pub mod application;
+mod chatgpt;
 pub mod codex_delivery;
 mod delivery;
 pub mod domain;
@@ -103,6 +104,13 @@ pub fn run() {
                 inbox_changed.clone(),
                 todo_changed.clone(),
             );
+            let chatgpt = chatgpt::ChatGpt::new(
+                database.0.clone(),
+                delivery_service.clone(),
+                proposal_service.clone(),
+                inbox_changed.clone(),
+                todo_changed.clone(),
+            );
             let codex = codex_delivery::CodexDelivery::new(
                 database.0.clone(),
                 delivery_service,
@@ -115,6 +123,7 @@ pub fn run() {
                 openclaw_adapter,
                 codex,
                 dumate,
+                chatgpt,
             );
             tauri::async_runtime::block_on(agent_bridge_state.restore());
 
@@ -219,7 +228,10 @@ pub fn run() {
             agent_bridge::revoke_codex_todo,
             agent_bridge::get_dumate_status,
             agent_bridge::configure_dumate,
-            agent_bridge::copy_dumate_authorization
+            agent_bridge::copy_dumate_authorization,
+            agent_bridge::get_chatgpt_status,
+            agent_bridge::configure_chatgpt,
+            agent_bridge::export_chatgpt_package
         ])
         .run(tauri::generate_context!())
         .expect("error while running Agent Desk");
