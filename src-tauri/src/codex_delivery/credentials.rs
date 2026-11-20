@@ -2,9 +2,9 @@ use sha2::{Digest, Sha256};
 
 use crate::application::ports::credentials::{CredentialError, CredentialPort};
 
-pub(super) struct OsCredentialStore;
+pub(crate) struct OsCredentialStore;
 
-pub(super) fn credential_reference() -> String {
+pub(crate) fn credential_reference() -> String {
     match crate::audit_data_dir() {
         // Smoke credentials cannot accidentally read or replace the installed
         // user's production credential entry.

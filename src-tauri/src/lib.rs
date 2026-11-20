@@ -90,21 +90,31 @@ pub fn run() {
             );
             let handle = app.handle().clone();
             let todo_handle = handle.clone();
+            let inbox_changed = Arc::new(move || {
+                let _ = handle.emit(codex_delivery::INBOX_CHANGED, ());
+            });
+            let todo_changed = Arc::new(move || {
+                let _ = todo_handle.emit(codex_delivery::TODO_SUGGESTIONS_CHANGED, ());
+            });
+            let dumate = agent_bridge::dumate::DuMate::new(
+                database.0.clone(),
+                delivery_service.clone(),
+                proposal_service.clone(),
+                inbox_changed.clone(),
+                todo_changed.clone(),
+            );
             let codex = codex_delivery::CodexDelivery::new(
                 database.0.clone(),
                 delivery_service,
                 proposal_service,
-                Arc::new(move || {
-                    let _ = handle.emit(codex_delivery::INBOX_CHANGED, ());
-                }),
-                Arc::new(move || {
-                    let _ = todo_handle.emit(codex_delivery::TODO_SUGGESTIONS_CHANGED, ());
-                }),
+                inbox_changed,
+                todo_changed,
             );
             let agent_bridge_state = agent_bridge::AgentBridgeState::new(
                 agent_connection_repository,
                 openclaw_adapter,
                 codex,
+                dumate,
             );
             tauri::async_runtime::block_on(agent_bridge_state.restore());
 
@@ -206,7 +216,10 @@ pub fn run() {
             agent_bridge::revoke_codex,
             agent_bridge::get_codex_todo_grant,
             agent_bridge::pair_codex_todo,
-            agent_bridge::revoke_codex_todo
+            agent_bridge::revoke_codex_todo,
+            agent_bridge::get_dumate_status,
+            agent_bridge::configure_dumate,
+            agent_bridge::copy_dumate_authorization
         ])
         .run(tauri::generate_context!())
         .expect("error while running Agent Desk");

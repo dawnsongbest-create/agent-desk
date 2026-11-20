@@ -8,6 +8,7 @@ import {
 import { formatLocalDueDate } from "../../domain/sticky";
 
 const priorityLabels = { high: "高", medium: "中", low: "低" } as const;
+const sourceLabels = { codex: "Codex", dumate: "百度搭子" } as const;
 
 export function TodoSuggestionTray({
   port,
@@ -135,14 +136,17 @@ export function TodoSuggestionTray({
                     disabled={busy}
                     onClick={() => setActiveId(batch.id)}
                   >
-                    {batch.items.length} 项 · {batch.items[0]?.text.slice(0, 36)}
+                    {sourceLabels[batch.source]} · {batch.items.length} 项 ·{" "}
+                    {batch.items[0]?.text.slice(0, 36)}
                   </button>
                 </li>
               ))}
             </ul>
           ) : (
             <>
-              <p>Codex 建议 · {active.items.length} 项 · 确认后才加入待办</p>
+              <p>
+                {sourceLabels[active.source]} 建议 · {active.items.length} 项 · 确认后才加入待办
+              </p>
               <ol className="todo-suggestion-items">
                 {active.items.map((item, index) => (
                   <li key={index}>

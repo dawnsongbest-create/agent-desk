@@ -1,5 +1,5 @@
-mod credentials;
-mod mcp;
+pub(crate) mod credentials;
+pub(crate) mod mcp;
 mod todo_grant;
 
 pub(crate) use todo_grant::{todo_suggestions_enabled, TodoGrantStatus};
@@ -78,11 +78,11 @@ pub(crate) struct ReadingRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     subtitle: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    idempotency_key: Option<String>,
+    pub(crate) idempotency_key: Option<String>,
 }
 
 impl ReadingRequest {
-    fn validate(&self) -> Result<(), CodexError> {
+    pub(crate) fn validate(&self) -> Result<(), CodexError> {
         let title = self.title.trim();
         if title.is_empty()
             || title.chars().count() > 500
@@ -105,6 +105,19 @@ impl ReadingRequest {
             return Err(CodexError::InvalidPayload);
         }
         Ok(())
+    }
+
+    pub(crate) fn into_delivery(self, key: String, source: &str) -> CreateDeliveryInput {
+        CreateDeliveryInput {
+            idempotency_key: key,
+            document_type: self.kind.into(),
+            title: self.title,
+            subtitle: self.subtitle,
+            content_markdown: self.content,
+            source_type: ReaderSourceType::Agent,
+            source_label: Some(source.to_owned()),
+            delivered_at: None,
+        }
     }
 }
 
@@ -422,19 +435,13 @@ impl CodexDelivery {
             .as_deref()
             .ok_or(CodexError::InvalidPayload)?
             .trim();
+        let key = key.to_owned();
         let key_digest = format!("{:x}", Sha256::digest(key.as_bytes()));
         let stored = self
             .deliveries
-            .ingest(CreateDeliveryInput {
-                idempotency_key: format!("codex-reading:{namespace}:{key_digest}"),
-                document_type: request.kind.into(),
-                title: request.title,
-                subtitle: request.subtitle,
-                content_markdown: request.content,
-                source_type: ReaderSourceType::Agent,
-                source_label: Some("Codex".to_owned()),
-                delivered_at: None,
-            })
+            .ingest(
+                request.into_delivery(format!("codex-reading:{namespace}:{key_digest}"), "Codex"),
+            )
             .await
             .map_err(|error| match error {
                 DeliveryServiceError::Validation(_) => CodexError::InvalidPayload,
@@ -456,7 +463,7 @@ impl CodexDelivery {
         serde_json::to_string(&ReadingReceipt {
             version: "v1".into(),
             operation: "send_reading".into(),
-            request_id: key.to_owned(),
+            request_id: key,
             delivery_id: stored.item.delivery.id,
             document_id: stored.item.document.id,
             created: stored.created,

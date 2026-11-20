@@ -43,10 +43,18 @@ pub fn valid_request_key(key: &str) -> bool {
             .all(|ch| ch.is_ascii_alphanumeric() || b"-_:.~".contains(&ch))
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TodoSuggestionSource {
+    Codex,
+    Dumate,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TodoSuggestionBatch {
     pub id: String,
+    pub source: TodoSuggestionSource,
     pub items: Vec<TodoSuggestionItem>,
     pub status: AgentProposalStatus,
     pub created_at: String,

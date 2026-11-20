@@ -1,6 +1,7 @@
 import type { AgentBridgeLoadState } from "./useAgentBridge";
 import type { AgentBridgeStatus } from "../../domain/agentConnection";
 import { CodexPairingSettings } from "./CodexPairingSettings";
+import { DuMatePairingSettings } from "./DuMatePairingSettings";
 
 type AgentBridgeSettingsProps = {
   status: AgentBridgeStatus | null;
@@ -70,6 +71,7 @@ export function AgentBridgeSettings({
         </div>
       ) : null}
       <CodexPairingSettings bridgeRunning={status?.running ?? false} />
+      <DuMatePairingSettings bridgeRunning={status?.running ?? false} />
     </div>
   );
 }
