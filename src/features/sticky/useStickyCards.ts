@@ -1,6 +1,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { StickyCardsPort } from "../../application/ports/sticky";
+import { TODO_CARDS_CHANGED } from "../../application/ports/todoSuggestions";
 import type { CreateStickyCardInput, StickyCard, StickyProfile } from "../../domain/sticky";
 
 export type StickyLoadState = "loading" | "ready" | "saving" | "error";
@@ -12,8 +13,12 @@ export function useStickyCards(port: StickyCardsPort) {
   const [profile, setProfile] = useState<StickyProfile>({ quoteText: "", updatedAt: "" });
   const cardsRef = useRef<StickyCard[]>([]);
   const mountedRef = useRef(true);
+  const cardsRevision = useRef(0);
+  const processedRefresh = useRef(0);
+  const [refreshRequest, setRefreshRequest] = useState(0);
 
   const publish = useCallback((next: StickyCard[]) => {
+    cardsRevision.current += 1;
     cardsRef.current = next;
     if (mountedRef.current) setCards(next);
   }, []);
@@ -34,25 +39,59 @@ export function useStickyCards(port: StickyCardsPort) {
     }
   }, [port, publish]);
 
+  const refreshTodoCards = useCallback(() => setRefreshRequest((current) => current + 1), []);
+
   useEffect(() => {
     mountedRef.current = true;
     void load();
     let cancelled = false;
-    let unlisten: (() => void) | undefined;
-    void listen("agent-desk://sticky-content-refresh", () => {
-      if (!cancelled) void load();
-    })
-      .then((dispose) => {
-        if (cancelled) dispose();
-        else unlisten = dispose;
+    const disposals: (() => void)[] = [];
+    function subscribe(event: string, refresh: () => void) {
+      void listen(event, () => {
+        if (!cancelled) refresh();
       })
-      .catch(() => undefined);
+        .then((dispose) => {
+          if (cancelled) dispose();
+          else disposals.push(dispose);
+        })
+        .catch(() => undefined);
+    }
+    subscribe("agent-desk://sticky-content-refresh", () => void load());
+    subscribe(TODO_CARDS_CHANGED, refreshTodoCards);
     return () => {
       cancelled = true;
-      unlisten?.();
+      for (const dispose of disposals) dispose();
       mountedRef.current = false;
     };
-  }, [load]);
+  }, [load, refreshTodoCards]);
+
+  useEffect(() => {
+    if (refreshRequest === processedRefresh.current || state === "saving" || state === "loading") {
+      return;
+    }
+    let cancelled = false;
+    const revision = cardsRevision.current;
+    // Refresh cards only; don't touch Quote, busy state, or active editors.
+    void port.list().then(
+      (next) => {
+        if (cancelled) return;
+        if (revision !== cardsRevision.current) {
+          refreshTodoCards();
+          return;
+        }
+        processedRefresh.current = refreshRequest;
+        publish(next);
+      },
+      () => {
+        if (cancelled) return;
+        processedRefresh.current = refreshRequest;
+        setError("无法刷新待办列表，请重试。");
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [port, publish, refreshRequest, refreshTodoCards, state]);
 
   const recover = useCallback(
     async (fallback: StickyCard[]) => {
@@ -252,6 +291,7 @@ export function useStickyCards(port: StickyCardsPort) {
     updateQuote,
     exportRecord,
     acceptCreated,
+    refreshTodoCards,
     retry: load,
     dismissError: () => setError(null),
   };

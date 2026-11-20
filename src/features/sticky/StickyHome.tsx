@@ -3,6 +3,7 @@ import type { ReaderDocumentsPort } from "../../application/ports/reader";
 import type { DeliveriesPort } from "../../application/ports/delivery";
 import type { ReadingPlansPort } from "../../application/ports/reading";
 import type { AgentProposalsPort } from "../../application/ports/proposal";
+import type { TodoSuggestionsPort } from "../../application/ports/todoSuggestions";
 import type { AgentConnectionPort } from "../../application/ports/agentConnection";
 import type {
   Preferences,
@@ -28,6 +29,7 @@ type StickyHomeProps = {
   deliveryPort: DeliveriesPort;
   readingPort: ReadingPlansPort;
   proposalPort: AgentProposalsPort;
+  todoSuggestionsPort?: TodoSuggestionsPort;
   agentConnectionPort: AgentConnectionPort;
   preferences: Preferences;
   preferenceSaveState: "loading" | "idle" | "saving" | "saved" | "error";
@@ -55,6 +57,7 @@ export function StickyHome({
   deliveryPort,
   readingPort,
   proposalPort,
+  todoSuggestionsPort,
   agentConnectionPort,
   preferences,
   preferenceSaveState,
@@ -145,6 +148,8 @@ export function StickyHome({
       agentProposals={proposals.proposals}
       proposalBusyId={proposals.busyId}
       proposalErrorId={proposals.errorId}
+      todoSuggestionsPort={todoSuggestionsPort}
+      onTodoBatchAccepted={sticky.refreshTodoCards}
       agentBridgeStatus={agentBridge.status}
       agentBridgeState={agentBridge.state}
       issuedAgentToken={agentBridge.issuedToken}

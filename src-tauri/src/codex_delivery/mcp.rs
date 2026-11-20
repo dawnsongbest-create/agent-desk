@@ -13,11 +13,18 @@ use tokio::{
 };
 use uuid::Uuid;
 
-use crate::application::ports::credentials::CredentialPort;
+use crate::{
+    application::{ports::credentials::CredentialPort, proposal_service::ProposalService},
+    domain::proposal::todo_batch::{
+        valid_request_key, TodoSuggestionRequest, MAX_REASON_CHARS, MAX_REQUEST_KEY_CHARS,
+        MAX_TODO_BODY, MAX_TODO_ITEMS,
+    },
+};
 
 use super::{
-    credentials::{credential_reference, OsCredentialStore},
-    ReadingReceipt, ReadingRequest, CODEX_TOKEN_PREFIX, MAX_CODEX_BODY, READING_PATH,
+    credentials::{credential_reference, todo_credential_reference, OsCredentialStore},
+    ReadingReceipt, ReadingRequest, TodoReceipt, CODEX_TOKEN_PREFIX, MAX_CODEX_BODY, READING_PATH,
+    TODO_PATH, TODO_TOKEN_PREFIX,
 };
 
 // The transport limit is separate so a modestly oversize tool input can
@@ -60,7 +67,10 @@ pub(super) fn run(args: &[String]) -> i32 {
             Ok(true) => {}
         }
         let response = match serde_json::from_slice::<Value>(&buffer) {
-            Ok(message) => protocol.handle(&message, |args| send(&runtime, port, args)),
+            Ok(message) => protocol.handle(&message, |name, args| match name {
+                "send_reading" => send(&runtime, port, args),
+                _ => suggest(&runtime, port, args),
+            }),
             Err(_) => Some(rpc_error(Value::Null, -32700, "Parse error")),
         };
         if let Some(response) = response {
@@ -105,7 +115,11 @@ struct Protocol {
 }
 
 impl Protocol {
-    fn handle(&mut self, message: &Value, send: impl FnOnce(Value) -> Value) -> Option<Value> {
+    fn handle(
+        &mut self,
+        message: &Value,
+        send: impl FnOnce(&str, Value) -> Value,
+    ) -> Option<Value> {
         let id = message.get("id").cloned();
         let method = message.get("method").and_then(Value::as_str);
         if message.get("jsonrpc").and_then(Value::as_str) != Some("2.0") || method.is_none() {
@@ -147,16 +161,21 @@ impl Protocol {
                     "protocolVersion": selected,
                     "capabilities": { "tools": { "listChanged": false } },
                     "serverInfo": { "name": "agent-desk", "version": env!("CARGO_PKG_VERSION") },
-                    "instructions": "Send a report to Agent Desk Inbox only when asked. Only state success after a committed receipt. For uncertain delivery check Inbox or retry using the returned request ID; never guess a new ID for that same attempt."
+                    "instructions": "Send reading or suggest Todos only when asked. Todo suggestions require user confirmation in Agent Desk; they are not tasks yet. Only report success after a committed receipt. If uncertain, check Agent Desk or retry with the returned request ID; never guess a new ID for that same attempt."
                 })
             }
             _ if !self.ready => return Some(rpc_error(id, -32002, "MCP initialization required")),
-            "tools/list" => json!({ "tools": [tool()] }),
+            "tools/list" => json!({ "tools": [tool(), todo_tool()] }),
             "tools/call" => {
-                if params.get("name").and_then(Value::as_str) != Some("send_reading") {
+                let Some(name @ ("send_reading" | "suggest_todos")) =
+                    params.get("name").and_then(Value::as_str)
+                else {
                     return Some(rpc_error(id, -32602, "Unknown tool"));
-                }
-                send(params.get("arguments").cloned().unwrap_or(Value::Null))
+                };
+                send(
+                    name,
+                    params.get("arguments").cloned().unwrap_or(Value::Null),
+                )
             }
             _ => return Some(rpc_error(id, -32601, "Method not found")),
         };
@@ -184,6 +203,31 @@ fn tool() -> Value {
                 "type": { "type": "string", "enum": ["article", "report", "brief"] },
                 "subtitle": { "type": "string", "maxLength": 500 },
                 "idempotency_key": { "type": "string", "maxLength": 500 }
+            }
+        }
+    })
+}
+
+fn todo_tool() -> Value {
+    json!({
+        "name": "suggest_todos",
+        "title": "Send Todo suggestions for review in Agent Desk",
+        "description": "Submit one batch of 1–20 proposed tasks only when asked. The user must confirm in Agent Desk. This cannot create, edit, delete, complete or read existing tasks. Reuse an ID only to retry the same send.",
+        "annotations": { "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false },
+        "inputSchema": {
+            "type": "object", "additionalProperties": false, "required": ["items"],
+            "properties": {
+                "items": { "type": "array", "minItems": 1, "maxItems": MAX_TODO_ITEMS,
+                    "items": { "type": "object", "additionalProperties": false, "required": ["text", "priority"],
+                        "properties": {
+                            "text": { "type": "string", "minLength": 1, "maxLength": 4000 },
+                            "priority": { "type": "string", "enum": ["high", "medium", "low"] },
+                            "due_date": { "type": "string", "format": "date" },
+                            "reason": { "type": "string", "maxLength": MAX_REASON_CHARS }
+                        }
+                    }
+                },
+                "idempotency_key": { "type": "string", "minLength": 1, "maxLength": MAX_REQUEST_KEY_CHARS, "pattern": "^[A-Za-z0-9_.:~-]+$" }
             }
         }
     })
@@ -251,15 +295,9 @@ fn send(runtime: &Runtime, port: u16, args: Value) -> Value {
     }
     // Reuse the exact same key/body across the one bounded, in-process retry.
     // No persistent queue: on lost process state, never auto-send as a new request.
-    let outcome = runtime.block_on(async {
-        match call_once(port, &token, &body, &key).await {
-            Err(CallFailure::Uncertain) => match call_once(port, &token, &body, &key).await {
-                Ok(receipt) => Ok(receipt),
-                Err(_) => Err(CallFailure::Uncertain),
-            },
-            outcome => outcome,
-        }
-    });
+    let outcome = runtime.block_on(retry_post(port, READING_PATH, &token, &body, |response| {
+        parse_receipt(response, &key)
+    }));
     match outcome {
         Ok(receipt) => json!({
             "content": [{ "type": "text", "text": if receipt.created { "已提交到 Agent Desk Inbox。" } else { "该请求已提交过，未重复创建。" } }],
@@ -276,9 +314,76 @@ fn send(runtime: &Runtime, port: u16, args: Value) -> Value {
 }
 
 fn valid_token(token: &str) -> bool {
+    valid_scope_token(token, CODEX_TOKEN_PREFIX)
+}
+
+fn valid_scope_token(token: &str, prefix: &str) -> bool {
     token
-        .strip_prefix(CODEX_TOKEN_PREFIX)
+        .strip_prefix(prefix)
         .is_some_and(|rest| rest.len() == 64 && rest.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
+fn prepare_todo_body(args: Value) -> Result<(String, Vec<u8>), &'static str> {
+    let mut request: TodoSuggestionRequest =
+        serde_json::from_value(args).map_err(|_| "invalid_payload")?;
+    let key = request
+        .idempotency_key
+        .get_or_insert_with(|| Uuid::new_v4().simple().to_string());
+    if !valid_request_key(key) {
+        return Err("invalid_payload");
+    }
+    let key = key.clone();
+    let body = serde_json::to_vec(&request).map_err(|_| "invalid_payload")?;
+    if body.len() > MAX_TODO_BODY {
+        return Err("payload_too_large");
+    }
+    ProposalService::prepare_todo_items(request.items).map_err(|_| "invalid_payload")?;
+    Ok((key, body))
+}
+
+fn suggest(runtime: &Runtime, port: u16, args: Value) -> Value {
+    let (key, body) = match prepare_todo_body(args) {
+        Ok(prepared) => prepared,
+        Err("payload_too_large") => {
+            return tool_error(
+                "payload_too_large",
+                "待办建议超过 64 KiB，未截断或发送。",
+                None,
+            )
+        }
+        Err(_) => {
+            return tool_error(
+                "invalid_payload",
+                "请提供 1–20 项有效待办，并检查正文、重要性、日期、理由和请求 ID。",
+                None,
+            )
+        }
+    };
+    let reference = todo_credential_reference(&credential_reference());
+    let authorization =
+        "请在 Agent Desk 的本地 Agent Bridge 设置里选择「允许提交待确认的待办建议」。";
+    let Ok(Some(token)) = OsCredentialStore.read(&reference) else {
+        return tool_error("credential_unavailable", authorization, Some(&key));
+    };
+    if !valid_scope_token(&token, TODO_TOKEN_PREFIX) {
+        return tool_error("credential_unavailable", authorization, Some(&key));
+    }
+    let outcome = runtime.block_on(retry_post(port, TODO_PATH, &token, &body, |response| {
+        parse_todo_receipt(response, &key)
+    }));
+    match outcome {
+        Ok(receipt) => json!({
+            "content": [{ "type": "text", "text": if receipt.created { "待办建议已提交，等待用户在 Agent Desk 便利贴确认；没有创建待办。" } else { "该请求已提交过，未重复创建建议；请查看返回的批次状态。" } }],
+            "structuredContent": receipt
+        }),
+        Err(CallFailure::Unavailable) => tool_error("bridge_unavailable", "无法连接 Agent Desk Bridge。请确认已启用 Bridge；本次未发送。", Some(&key)),
+        Err(CallFailure::Rejected(401)) => tool_error("unauthorized", authorization, Some(&key)),
+        Err(CallFailure::Rejected(403)) => tool_error("forbidden", "待办建议权限未开启，或该能力已禁用。请检查 Agent Desk 设置。", Some(&key)),
+        Err(CallFailure::Rejected(409)) => tool_error("idempotency_conflict", "同一请求 ID 已用于不同建议；未覆盖原批次。", Some(&key)),
+        Err(CallFailure::Rejected(413)) => tool_error("payload_too_large", "待办建议超过 64 KiB，未截断或保存。", Some(&key)),
+        Err(CallFailure::Rejected(_)) => tool_error("invalid_payload", "Agent Desk 拒绝了待办建议参数；未保存。", Some(&key)),
+        Err(CallFailure::Uncertain) => tool_error("delivery_uncertain", "结果不确定，请先检查便利贴的待确认建议。重试同一次发送时请复用 request_id；如原 ID 丢失，不要自动生成新 ID 重试。", Some(&key)),
+    }
 }
 
 #[derive(Debug)]
@@ -288,20 +393,29 @@ enum CallFailure {
     Uncertain,
 }
 
-async fn call_once(
+async fn retry_post<T>(
     port: u16,
+    path: &str,
     token: &str,
     body: &[u8],
-    key: &str,
-) -> Result<ReadingReceipt, CallFailure> {
+    parse: impl Fn(&[u8]) -> Result<T, CallFailure>,
+) -> Result<T, CallFailure> {
+    let call = || async { parse(&post(port, path, token, body).await?) };
+    match call().await {
+        Err(CallFailure::Uncertain) => call().await.map_err(|_| CallFailure::Uncertain),
+        outcome => outcome,
+    }
+}
+
+async fn post(port: u16, path: &str, token: &str, body: &[u8]) -> Result<Vec<u8>, CallFailure> {
     let address = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
     let mut stream = timeout(Duration::from_secs(2), TcpStream::connect(address))
         .await
         .map_err(|_| CallFailure::Unavailable)?
         .map_err(|_| CallFailure::Unavailable)?;
-    let response = timeout(Duration::from_secs(6), async {
+    timeout(Duration::from_secs(6), async {
         let headers = format!(
-            "POST {READING_PATH} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            "POST {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
             body.len()
         );
         stream.write_all(headers.as_bytes()).await?;
@@ -309,11 +423,10 @@ async fn call_once(
         let mut response = Vec::new();
         (&mut stream).take((MAX_RESPONSE + 1) as u64).read_to_end(&mut response).await?;
         Ok::<_, io::Error>(response)
-    }).await.map_err(|_| CallFailure::Uncertain)?.map_err(|_| CallFailure::Uncertain)?;
-    parse_receipt(&response, key)
+    }).await.map_err(|_| CallFailure::Uncertain)?.map_err(|_| CallFailure::Uncertain)
 }
 
-fn parse_receipt(response: &[u8], key: &str) -> Result<ReadingReceipt, CallFailure> {
+fn parse_http_body(response: &[u8]) -> Result<&str, CallFailure> {
     if response.len() > MAX_RESPONSE {
         return Err(CallFailure::Uncertain);
     }
@@ -360,12 +473,31 @@ fn parse_receipt(response: &[u8], key: &str) -> Result<ReadingReceipt, CallFailu
     if length != Some(body.len()) {
         return Err(CallFailure::Uncertain);
     }
-    let receipt: ReadingReceipt = serde_json::from_str(body).map_err(|_| CallFailure::Uncertain)?;
+    Ok(body)
+}
+
+fn parse_receipt(response: &[u8], key: &str) -> Result<ReadingReceipt, CallFailure> {
+    let receipt: ReadingReceipt =
+        serde_json::from_str(parse_http_body(response)?).map_err(|_| CallFailure::Uncertain)?;
     if receipt.version != "v1"
         || receipt.operation != "send_reading"
         || receipt.request_id != key
         || !valid_receipt_id(&receipt.delivery_id, "delivery_")
         || !valid_receipt_id(&receipt.document_id, "reader_")
+    {
+        return Err(CallFailure::Uncertain);
+    }
+    Ok(receipt)
+}
+
+fn parse_todo_receipt(response: &[u8], key: &str) -> Result<TodoReceipt, CallFailure> {
+    let receipt: TodoReceipt =
+        serde_json::from_str(parse_http_body(response)?).map_err(|_| CallFailure::Uncertain)?;
+    if receipt.version != "v1"
+        || receipt.operation != "suggest_todos"
+        || receipt.request_id != key
+        || !valid_receipt_id(&receipt.batch_id, "todo_batch_")
+        || (receipt.created && receipt.status != super::AgentProposalStatus::Pending)
     {
         return Err(CallFailure::Uncertain);
     }
@@ -383,9 +515,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn lifecycle_discovers_only_reading_and_never_executes_notifications() {
+    fn lifecycle_discovers_only_the_two_tools_and_never_executes_notifications() {
         let mut server = Protocol::default();
-        let no_send = |_| panic!("unexpected tool invocation");
+        let no_send = |_: &str, _| panic!("unexpected tool invocation");
         let denied = server
             .handle(
                 &json!({"jsonrpc":"2.0","id":1,"method":"tools/list"}),
@@ -412,9 +544,18 @@ mod tests {
             .unwrap();
         assert_eq!(found["id"], "list");
         let tools = found["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 1);
+        assert_eq!(tools.len(), 2);
         assert_eq!(tools[0]["name"], "send_reading");
         assert_eq!(tools[0]["inputSchema"]["additionalProperties"], false);
+        assert_eq!(tools[1]["name"], "suggest_todos");
+        assert_eq!(
+            tools[1]["inputSchema"]["properties"]["items"]["maxItems"],
+            20
+        );
+        assert_eq!(
+            tools[1]["inputSchema"]["properties"]["items"]["items"]["additionalProperties"],
+            false
+        );
         assert!(server
             .handle(
                 &json!({"jsonrpc":"2.0","method":"tools/call","params":{"name":"send_reading"}}),
@@ -447,6 +588,60 @@ mod tests {
         ));
         assert!(matches!(
             parse_receipt(b"HTTP/1.1 302 Found\r\nLocation: /\r\n\r\n", "known"),
+            Err(CallFailure::Uncertain)
+        ));
+    }
+
+    #[test]
+    fn todo_contract_validates_bounds_and_receipts_before_reporting_success() {
+        let one = json!({"text":" task ", "priority":"high", "due_date":"2028-02-29", "reason":"x".repeat(200)});
+        assert!(prepare_todo_body(json!({"items":[one.clone()]})).is_ok());
+        assert!(prepare_todo_body(json!({"items":vec![one.clone();20]})).is_ok());
+        assert!(prepare_todo_body(json!({"items":vec![one.clone();21]})).is_err());
+        for item in [
+            json!({"text":"", "priority":"high"}),
+            json!({"text":"task","priority":"urgent"}),
+            json!({"text":"task","priority":"low","due_date":"2026-02-29"}),
+            json!({"text":"task","priority":"medium","reason":"x".repeat(201)}),
+            json!({"text":"task","priority":"high","completed":true}),
+        ] {
+            assert_eq!(
+                prepare_todo_body(json!({"items":[one.clone(),item]})),
+                Err("invalid_payload")
+            );
+        }
+        assert_eq!(
+            prepare_todo_body(json!({"items":[one.clone()],"agent_id":"forged"})),
+            Err("invalid_payload")
+        );
+        assert_eq!(
+            prepare_todo_body(
+                json!({"items":vec![json!({"text":"中".repeat(4000),"priority":"low"});6]})
+            ),
+            Err("payload_too_large")
+        );
+        let (a, _) = prepare_todo_body(json!({"items":[one.clone()]})).unwrap();
+        let (b, _) = prepare_todo_body(json!({"items":[one]})).unwrap();
+        assert_ne!(a, b);
+        let receipt = json!({"version":"v1","operation":"suggest_todos","request_id":"known",
+            "batch_id":format!("todo_batch_{}", "a".repeat(32)),"status":"rejected","created":false})
+            .to_string();
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{receipt}",
+            receipt.len()
+        );
+        assert_eq!(
+            parse_todo_receipt(response.as_bytes(), "known")
+                .unwrap()
+                .status,
+            super::super::AgentProposalStatus::Rejected
+        );
+        assert!(matches!(
+            parse_todo_receipt(response.as_bytes(), "unknown"),
+            Err(CallFailure::Uncertain)
+        ));
+        assert!(matches!(
+            parse_receipt(response.as_bytes(), "known"),
             Err(CallFailure::Uncertain)
         ));
     }

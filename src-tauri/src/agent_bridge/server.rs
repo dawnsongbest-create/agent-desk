@@ -115,6 +115,11 @@ async fn handle_connection(
 ) -> Result<(), std::io::Error> {
     let request = match timeout(REQUEST_TIMEOUT, read_request(&mut stream)).await {
         Ok(Ok(request)) => request,
+        Ok(Err(error)) if error.kind() == std::io::ErrorKind::FileTooLarge => {
+            let (status, body) = CodexError::TooLarge.http();
+            write_response(&mut stream, status, body).await?;
+            return Ok(());
+        }
         _ => {
             write_response(&mut stream, 400, r#"{"error":"invalid_request"}"#).await?;
             return Ok(());
@@ -158,7 +163,7 @@ async fn route_request(
     match (request.method.as_str(), request.path.as_str()) {
         ("GET", "/api/v1/health") => (200, r#"{"version":"v1","status":"ok"}"#.to_owned()),
         ("GET", "/api/v1/capabilities") => serialize_ok(&capabilities.discover()),
-        (_, READING_PATH) => codex_error(CodexError::Forbidden),
+        (_, READING_PATH | crate::codex_delivery::TODO_PATH) => codex_error(CodexError::Forbidden),
         ("POST", "/api/v1/delivery") => {
             let Ok(input) = request.json::<OpenClawDeliveryRequest>() else {
                 return invalid_payload();
@@ -301,6 +306,14 @@ async fn read_request(stream: &mut TcpStream) -> Result<HttpRequest, std::io::Er
         .transpose()
         .map_err(|_| invalid_data("content length is invalid"))?
         .unwrap_or(0);
+    if path == crate::codex_delivery::TODO_PATH
+        && content_length > crate::domain::proposal::todo_batch::MAX_TODO_BODY
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::FileTooLarge,
+            "Todo request body exceeds the byte limit",
+        ));
+    }
     if content_length > MAX_BODY_BYTES {
         return Err(invalid_data("request body is too large"));
     }
@@ -420,12 +433,14 @@ mod tests {
         let reading_repository = SqliteReadingRepository::new(database.0.clone());
         let openclaw = Arc::new(OpenClawAdapter::new(
             DeliveryService::new(Arc::new(delivery_repository.clone())),
-            ProposalService::new(Arc::new(proposal_repository)),
+            ProposalService::new(Arc::new(proposal_repository.clone())),
             ReadingService::new(Arc::new(reading_repository), Arc::new(delivery_repository)),
         ));
         let codex = Arc::new(CodexDelivery::new(
             database.0.clone(),
             DeliveryService::new(Arc::new(SqliteDeliveryRepository::new(database.0.clone()))),
+            ProposalService::new(Arc::new(proposal_repository)),
+            Arc::new(|| {}),
             Arc::new(|| {}),
         ));
         let bridge =
@@ -459,6 +474,90 @@ mod tests {
         ).await;
         assert!(reading.starts_with("HTTP/1.1 200"));
         assert_eq!(response_json(&reading)["operation"], "send_reading");
+        let todo_secret = format!(
+            "{}{}{}",
+            crate::codex_delivery::TODO_TOKEN_PREFIX,
+            uuid::Uuid::new_v4().simple(),
+            uuid::Uuid::new_v4().simple()
+        );
+        let todo_hash = {
+            use sha2::{Digest, Sha256};
+            Sha256::digest(todo_secret.as_bytes()).to_vec()
+        };
+        sqlx::query("INSERT INTO codex_todo_suggestion_grant VALUES
+            ('codex-todo-suggestions', ?, 'active', 'suggest_todos', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)")
+            .bind(todo_hash).bind(uuid::Uuid::new_v4().simple().to_string())
+            .execute(&database.0).await.unwrap();
+        let todo_path = crate::codex_delivery::TODO_PATH;
+        let todo_body = r#"{"items":[{"text":"HTTP fixture","priority":"low"}],"idempotency_key":"fixture-http"}"#;
+        let boundary = format!(
+            "{todo_body}{}",
+            " ".repeat(crate::domain::proposal::todo_batch::MAX_TODO_BODY - todo_body.len())
+        );
+        let todo = request(
+            address,
+            "POST",
+            todo_path,
+            Some(&todo_secret),
+            Some(&boundary),
+        )
+        .await;
+        assert!(todo.starts_with("HTTP/1.1 200"));
+        assert_eq!(response_json(&todo)["operation"], "suggest_todos");
+        assert_eq!(response_json(&todo)["status"], "pending");
+        let replay = request(
+            address,
+            "POST",
+            todo_path,
+            Some(&todo_secret),
+            Some(todo_body),
+        )
+        .await;
+        assert_eq!(
+            response_json(&todo)["batch_id"],
+            response_json(&replay)["batch_id"]
+        );
+        assert_eq!(response_json(&replay)["created"], false);
+        assert!(request(
+            address,
+            "POST",
+            todo_path,
+            Some(&todo_secret),
+            Some(&(boundary + " "))
+        )
+        .await
+        .starts_with("HTTP/1.1 413"));
+        assert!(request(address, "POST", todo_path, Some(&todo_secret),
+            Some(r#"{"items":[{"text":"valid","priority":"low"},{"text":"invalid","priority":"urgent"}],"idempotency_key":"rejected-input"}"#)
+        ).await.starts_with("HTTP/1.1 400"));
+        let counts: (i64, i64) = sqlx::query_as(
+            "SELECT
+            (SELECT COUNT(*) FROM todo_suggestion_batches), (SELECT COUNT(*) FROM task_payloads)",
+        )
+        .fetch_one(&database.0)
+        .await
+        .unwrap();
+        assert_eq!(counts, (1, 0));
+        for bearer in [&issued.token, &codex_secret] {
+            assert!(request(
+                address,
+                "POST",
+                crate::codex_delivery::TODO_PATH,
+                Some(bearer),
+                Some("{}")
+            )
+            .await
+            .starts_with("HTTP/1.1 403"));
+        }
+        assert!(request(
+            address,
+            "POST",
+            crate::codex_delivery::TODO_PATH,
+            None,
+            Some("{}")
+        )
+        .await
+        .starts_with("HTTP/1.1 401"));
         assert!(request(
             address,
             "POST",

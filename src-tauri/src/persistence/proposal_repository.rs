@@ -11,6 +11,8 @@ use crate::{
     },
 };
 
+mod todo_batches;
+
 #[derive(Debug, sqlx::FromRow)]
 struct AgentProposalRow {
     id: String,
@@ -235,6 +237,42 @@ impl ProposalRepository for SqliteProposalRepository {
         let proposal = Self::resolve(&mut transaction, id, AgentProposalStatus::Rejected).await?;
         transaction.commit().await?;
         Ok(proposal)
+    }
+
+    async fn submit_todo_batch(
+        &self,
+        namespace: &str,
+        request_digest: &str,
+        items: &[crate::domain::proposal::todo_batch::TodoSuggestionItem],
+    ) -> Result<
+        (
+            crate::domain::proposal::todo_batch::TodoSuggestionBatch,
+            bool,
+        ),
+        ProposalRepositoryError,
+    > {
+        self.submit_batch(namespace, request_digest, items).await
+    }
+
+    async fn list_pending_todo_batches(
+        &self,
+    ) -> Result<
+        Vec<crate::domain::proposal::todo_batch::TodoSuggestionBatch>,
+        ProposalRepositoryError,
+    > {
+        self.pending_batches().await
+    }
+
+    async fn accept_todo_batch(
+        &self,
+        id: &str,
+    ) -> Result<crate::domain::proposal::todo_batch::AcceptedTodoBatch, ProposalRepositoryError>
+    {
+        self.accept_batch(id).await
+    }
+
+    async fn reject_todo_batch(&self, id: &str) -> Result<(), ProposalRepositoryError> {
+        self.reject_batch(id).await
     }
 }
 

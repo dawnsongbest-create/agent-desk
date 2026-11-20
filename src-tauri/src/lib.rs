@@ -77,22 +77,28 @@ pub fn run() {
             let delivery_service = application::delivery_service::DeliveryService::new(Arc::new(
                 delivery_repository.clone(),
             ));
+            let proposal_service = application::proposal_service::ProposalService::new(Arc::new(
+                proposal_repository.clone(),
+            ));
             let openclaw_adapter = adapters::openclaw::OpenClawAdapter::new(
                 delivery_service.clone(),
-                application::proposal_service::ProposalService::new(Arc::new(
-                    proposal_repository.clone(),
-                )),
+                proposal_service.clone(),
                 application::reading_service::ReadingService::new(
                     Arc::new(reading_repository.clone()),
                     Arc::new(delivery_repository.clone()),
                 ),
             );
             let handle = app.handle().clone();
+            let todo_handle = handle.clone();
             let codex = codex_delivery::CodexDelivery::new(
                 database.0.clone(),
                 delivery_service,
+                proposal_service,
                 Arc::new(move || {
                     let _ = handle.emit(codex_delivery::INBOX_CHANGED, ());
+                }),
+                Arc::new(move || {
+                    let _ = todo_handle.emit(codex_delivery::TODO_SUGGESTIONS_CHANGED, ());
                 }),
             );
             let agent_bridge_state = agent_bridge::AgentBridgeState::new(
@@ -188,13 +194,19 @@ pub fn run() {
             proposal::list_agent_proposals,
             proposal::accept_agent_proposal,
             proposal::reject_agent_proposal,
+            proposal::list_pending_todo_batches,
+            proposal::accept_todo_batch,
+            proposal::reject_todo_batch,
             agent_bridge::get_agent_bridge_status,
             agent_bridge::start_agent_bridge,
             agent_bridge::stop_agent_bridge,
             agent_bridge::generate_agent_token,
             agent_bridge::get_codex_pairing,
             agent_bridge::pair_codex,
-            agent_bridge::revoke_codex
+            agent_bridge::revoke_codex,
+            agent_bridge::get_codex_todo_grant,
+            agent_bridge::pair_codex_todo,
+            agent_bridge::revoke_codex_todo
         ])
         .run(tauri::generate_context!())
         .expect("error while running Agent Desk");

@@ -7,6 +7,10 @@ import type { DeliveriesPort } from "../../application/ports/delivery";
 import type { ReadingPlansPort } from "../../application/ports/reading";
 import type { AgentProposalsPort } from "../../application/ports/proposal";
 import type { AgentConnectionPort } from "../../application/ports/agentConnection";
+import type {
+  TodoSuggestionBatch,
+  TodoSuggestionsPort,
+} from "../../application/ports/todoSuggestions";
 import { defaultPreferences, type Preferences } from "../../domain/preferences";
 import type { ReaderDocument } from "../../domain/reader";
 import type { CreateStickyCardInput, StickyCard, StickyProfile } from "../../domain/sticky";
@@ -161,6 +165,7 @@ function renderHome(
   deliveries: DeliveriesPort = deliveryPort,
   proposals: AgentProposalsPort = proposalPort,
   leaveReader = vi.fn(),
+  todoSuggestionsPort?: TodoSuggestionsPort,
 ) {
   return render(
     <StickyHome
@@ -169,6 +174,7 @@ function renderHome(
       deliveryPort={deliveries}
       readingPort={readingPort}
       proposalPort={proposals}
+      todoSuggestionsPort={todoSuggestionsPort}
       agentConnectionPort={agentConnectionPort}
       preferences={preferences}
       preferenceSaveState="idle"
@@ -190,6 +196,86 @@ function renderHome(
     />,
   );
 }
+
+it("reviews multiple batches independently, preserves a Todo draft, and locates the accepted batch", async () => {
+  const user = userEvent.setup();
+  const longText = "检查合成发行说明".repeat(150);
+  const batches: TodoSuggestionBatch[] = [
+    {
+      id: "reject",
+      status: "pending",
+      createdAt: "",
+      items: [{ text: "暂不采用的候选", priority: "low" }],
+    },
+    {
+      id: "accept",
+      status: "pending",
+      createdAt: "",
+      items: [
+        { text: "先完成发行验证", priority: "high", due_date: "2026-12-01", reason: "影响交付" },
+        { text: longText, priority: "medium" },
+        { text: "整理附件", priority: "low" },
+      ],
+    },
+  ];
+  let pending = batches;
+  const sticky = new MemoryStickyPort([makeCard("old", "task", "现有待办", 0)]);
+  const listPending = vi.fn(async () => pending);
+  const reject = vi.fn(async (id: string) => {
+    pending = pending.filter((batch) => batch.id !== id);
+  });
+  const accept = vi.fn(async (id: string) => {
+    const batch = pending.find((item) => item.id === id)!;
+    pending = pending.filter((item) => item.id !== id);
+    const cards = batch.items.map((item, index) =>
+      makeCard(`batch-${index}`, "task", item.text, index + 1),
+    );
+    sticky.cards.push(...cards);
+    return { todoIds: cards.map((card) => card.id) };
+  });
+  renderHome(
+    sticky,
+    vi.fn(),
+    { ...defaultPreferences, stickyMode: "compact" },
+    vi.fn(),
+    vi.fn(),
+    vi.fn(),
+    readerPort,
+    deliveryPort,
+    proposalPort,
+    vi.fn(),
+    { listPending, accept, reject },
+  );
+  expect(screen.queryByRole("button", { name: /待确认建议/ })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "展开或拖动便利贴" })).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "展开或拖动便利贴" }));
+  await user.click(screen.getByRole("tab", { name: /待办/ }));
+  const entry = await screen.findByRole("button", { name: "待确认建议 · 2" });
+  await user.click(screen.getByRole("button", { name: /添加一个待办/ }));
+  const draft = screen.getByRole("textbox", { name: "新待办" });
+  await user.type(draft, "暂存草稿");
+  await user.click(entry);
+  await user.click(screen.getByRole("button", { name: /暂不采用的候选/ }));
+  await user.click(screen.getByRole("button", { name: "暂不处理" }));
+  expect(reject).not.toHaveBeenCalled();
+  expect(accept).not.toHaveBeenCalled();
+  await user.click(entry);
+  await user.click(screen.getByRole("button", { name: /暂不采用的候选/ }));
+  await user.click(screen.getByRole("button", { name: "拒绝" }));
+  expect(reject).toHaveBeenCalledExactlyOnceWith("reject");
+  await user.click(await screen.findByRole("button", { name: "待确认建议 · 1" }));
+  expect(screen.getByText(longText)).toBeVisible();
+  expect(screen.getByText("影响交付")).toBeVisible();
+  expect(sticky.cards.map((card) => card.id)).toEqual(["old"]);
+  await user.click(screen.getByRole("button", { name: "确认加入" }));
+  expect(accept).toHaveBeenCalledExactlyOnceWith("accept");
+  expect(await screen.findByText("已加入 3 项")).toBeVisible();
+  expect(await screen.findByRole("checkbox", { name: "完成待办：先完成发行验证" })).toBeVisible();
+  expect(draft).toHaveValue("暂存草稿");
+  expect(screen.queryByRole("button", { name: /待确认建议/ })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "查看刚加入的待办" }));
+  expect(document.activeElement).toHaveAttribute("data-todo-id", "batch-0");
+});
 
 function todoProposal(id: string, content: string): AgentProposal {
   return {

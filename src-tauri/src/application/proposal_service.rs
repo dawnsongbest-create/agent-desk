@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use serde_json::from_str;
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use crate::{
@@ -13,6 +14,10 @@ use crate::{
     },
     domain::{
         proposal::{
+            todo_batch::{
+                valid_request_key, AcceptedTodoBatch, TodoSuggestionBatch, TodoSuggestionItem,
+                MAX_REASON_CHARS, MAX_TODO_ITEMS,
+            },
             validate_proposal, AgentProposal, AgentProposalType, CreateAgentProposalInput,
             ProposalValidationError, ReadingProposalPayload, RecordProposalPayload,
             TodoProposalPayload,
@@ -138,5 +143,70 @@ impl ProposalService {
 
     pub async fn reject(&self, id: &str) -> Result<AgentProposal, ProposalServiceError> {
         Ok(self.repository.reject(id).await?)
+    }
+
+    pub fn prepare_todo_items(
+        mut items: Vec<TodoSuggestionItem>,
+    ) -> Result<Vec<TodoSuggestionItem>, ProposalServiceError> {
+        if !(1..=MAX_TODO_ITEMS).contains(&items.len()) {
+            return Err(ProposalValidationError::InvalidPayload.into());
+        }
+        for item in &mut items {
+            if item.text.contains('\0')
+                || item.reason.as_ref().is_some_and(|reason| {
+                    reason.contains('\0') || reason.chars().count() > MAX_REASON_CHARS
+                })
+            {
+                return Err(ProposalValidationError::InvalidPayload.into());
+            }
+            let card = StickyService::prepare_create(
+                StickyCardKind::Task,
+                std::mem::take(&mut item.text),
+                item.due_date.take(),
+            )?;
+            item.text = card.text;
+            item.due_date = card.due_date;
+            item.reason = item
+                .reason
+                .take()
+                .map(|reason| reason.trim().to_owned())
+                .filter(|reason| !reason.is_empty());
+        }
+        items.sort_by_key(|item| item.priority);
+        Ok(items)
+    }
+
+    pub async fn submit_todo_batch(
+        &self,
+        namespace: &str,
+        key: &str,
+        items: Vec<TodoSuggestionItem>,
+    ) -> Result<(TodoSuggestionBatch, bool), ProposalServiceError> {
+        if !valid_request_key(key) {
+            return Err(ProposalValidationError::InvalidPayload.into());
+        }
+        let items = Self::prepare_todo_items(items)?;
+        let digest = format!("{:x}", Sha256::digest(key.as_bytes()));
+        Ok(self
+            .repository
+            .submit_todo_batch(namespace, &digest, &items)
+            .await?)
+    }
+
+    pub async fn list_pending_todo_batches(
+        &self,
+    ) -> Result<Vec<TodoSuggestionBatch>, ProposalServiceError> {
+        Ok(self.repository.list_pending_todo_batches().await?)
+    }
+
+    pub async fn accept_todo_batch(
+        &self,
+        id: &str,
+    ) -> Result<AcceptedTodoBatch, ProposalServiceError> {
+        Ok(self.repository.accept_todo_batch(id).await?)
+    }
+
+    pub async fn reject_todo_batch(&self, id: &str) -> Result<(), ProposalServiceError> {
+        Ok(self.repository.reject_todo_batch(id).await?)
     }
 }

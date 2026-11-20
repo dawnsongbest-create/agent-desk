@@ -1297,6 +1297,72 @@
   font-size: 0.57rem;
 }
 
+.todo-suggestion-tray {
+  margin: 0 5px 8px;
+  color: var(--sticky-ink);
+  font-size: 0.65rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.todo-suggestion-link {
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.todo-suggestion-panel {
+  margin-top: 5px;
+  padding: 0 6px 6px;
+  border-inline-start: 1px solid var(--sticky-line);
+}
+
+.todo-suggestion-batches,
+.todo-suggestion-items {
+  max-block-size: 155px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-inline-start: 1.3em;
+}
+
+.todo-suggestion-items li + li {
+  border-top: 1px solid var(--sticky-line);
+  margin-top: 6px;
+  padding-top: 6px;
+}
+
+.todo-suggestion-items p {
+  margin: 2px 0;
+  white-space: pre-wrap;
+}
+
+.todo-suggestion-items small {
+  color: var(--sticky-muted);
+}
+
+.todo-suggestion-actions,
+.todo-suggestion-receipt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+
+.todo-suggestion-actions button {
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--sticky-line);
+  border-radius: 4px;
+  font: inherit;
+  padding: 3px 6px;
+}
+
 .quiet-state,
 .face-empty {
   margin: 22px 7px;

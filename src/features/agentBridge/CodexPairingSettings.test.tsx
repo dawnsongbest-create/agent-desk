@@ -6,7 +6,14 @@ import { CodexPairingSettings } from "./CodexPairingSettings";
 
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn().mockResolvedValue(vi.fn()) }));
 vi.mock("../../infrastructure/tauri/codexPairing", () => ({
-  tauriCodexPairing: { status: vi.fn(), authorize: vi.fn(), revoke: vi.fn() },
+  tauriCodexPairing: {
+    status: vi.fn(),
+    authorize: vi.fn(),
+    revoke: vi.fn(),
+    todoStatus: vi.fn().mockResolvedValue("disconnected"),
+    authorizeTodo: vi.fn(),
+    revokeTodo: vi.fn(),
+  },
 }));
 
 it("waits for explicit authorization after showing the registration instructions", async () => {
@@ -28,4 +35,26 @@ it("waits for explicit authorization after showing the registration instructions
   await user.click(screen.getByRole("button", { name: "断开 Codex" }));
   expect(await screen.findByText("Codex：未连接")).toBeVisible();
   expect(tauriCodexPairing.revoke).toHaveBeenCalledOnce();
+});
+
+it("requires a separate user click for Todo permission and revokes it without pairing reading", async () => {
+  const user = userEvent.setup();
+  vi.clearAllMocks();
+  vi.mocked(tauriCodexPairing.status).mockResolvedValue({
+    phase: "disconnected",
+    executable: "agent-desk",
+    arguments: [],
+  });
+  vi.mocked(tauriCodexPairing.authorizeTodo).mockResolvedValue("connected");
+  vi.mocked(tauriCodexPairing.revokeTodo).mockResolvedValue("disconnected");
+  render(<CodexPairingSettings bridgeRunning />);
+  const authorize = await screen.findByRole("button", { name: "允许提交待确认的待办建议" });
+  expect(tauriCodexPairing.authorizeTodo).not.toHaveBeenCalled();
+  await user.click(authorize);
+  expect(await screen.findByText("待办建议：已授权")).toBeVisible();
+  expect(screen.getByRole("button", { name: "断开 Codex" })).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "撤销待办建议权限" }));
+  expect(await screen.findByText("待办建议：未授权")).toBeVisible();
+  expect(tauriCodexPairing.authorize).not.toHaveBeenCalled();
+  expect(tauriCodexPairing.revoke).not.toHaveBeenCalled();
 });

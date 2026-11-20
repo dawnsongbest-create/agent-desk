@@ -45,6 +45,10 @@ vi.mock("./infrastructure/tauri/reading", () => ({
   tauriReadingPlans: { listPlans: mocks.listReadingPlans, createSession: vi.fn() },
 }));
 
+vi.mock("./infrastructure/tauri/todoSuggestions", () => ({
+  tauriTodoSuggestions: { listPending: vi.fn().mockResolvedValue([]) },
+}));
+
 vi.mock("./infrastructure/tauri/sticky", () => ({
   tauriStickyCards: {
     list: mocks.listCards,
@@ -446,6 +450,31 @@ describe("App Reader preferences", () => {
       await act(async () => callback?.({ event, id: 1, payload: null }));
       expect(await screen.findByText("Saved in the other window")).toBeVisible();
       expect(mocks.listCards).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it.each(["desktop", "main"] as const)(
+    "refreshes Todo cards in %s without resetting a Quote draft",
+    async (surface) => {
+      const user = userEvent.setup();
+      mocks.loadPreferences.mockResolvedValue({
+        ...defaultPreferences,
+        surfaceMode: surface === "desktop" ? "desktop" : "reader",
+        stickyMode: "expanded",
+      });
+      render(<App surface={surface} />);
+      await user.click(await screen.findByRole("button", { name: "写下你的便签一句" }));
+      const quote = screen.getByRole("textbox", { name: "编辑便签一句" });
+      await user.type(quote, "未保存的便签一句");
+      const event = "agent-desk://todo-cards-changed";
+      const callback = vi.mocked(listen).mock.calls.find(([name]) => name === event)?.[1];
+      expect(callback).toBeDefined();
+      const before = mocks.listCards.mock.calls.length;
+      const profileReads = mocks.getProfile.mock.calls.length;
+      await act(async () => callback?.({ event, id: 1, payload: null }));
+      await waitFor(() => expect(mocks.listCards).toHaveBeenCalledTimes(before + 1));
+      expect(mocks.getProfile).toHaveBeenCalledTimes(profileReads);
+      expect(quote).toHaveValue("未保存的便签一句");
     },
   );
 });

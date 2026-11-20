@@ -172,7 +172,8 @@ mod tests {
                   'cards', 'note_payloads', 'task_payloads', 'card_placements',
                   'sticky_surface_profile', 'reader_documents', 'record_source_refs', 'deliveries',
                   'reading_plans', 'reading_plan_deliveries', 'reading_sessions', 'agent_proposals',
-                  'agent_connections', 'codex_connection'
+                  'agent_connections', 'codex_connection', 'codex_todo_suggestion_grant',
+                  'todo_suggestion_batches'
               )
             "#,
         )
@@ -190,9 +191,79 @@ mod tests {
                 .await
                 .expect("migration history query");
 
-        assert_eq!(table_count, 14);
-        assert_eq!(applied_versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert_eq!(table_count, 16);
+        assert_eq!(applied_versions, (1..=10).collect::<Vec<_>>());
         assert_eq!(foreign_keys, 1);
+    }
+
+    #[tokio::test]
+    async fn upgrades_0009_without_replacing_reading_grant_or_sticky_tasks() {
+        use crate::{
+            application::{
+                ports::sticky_repository::StickyRepository, sticky_service::StickyService,
+            },
+            domain::sticky::StickyCardKind,
+            persistence::sticky_repository::SqliteStickyRepository,
+        };
+
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("upgrade-0009.sqlite3");
+        let options = sqlx::sqlite::SqliteConnectOptions::new()
+            .filename(&path)
+            .create_if_missing(true)
+            .foreign_keys(true);
+        let legacy = SqlitePoolOptions::new()
+            .connect_with(options)
+            .await
+            .unwrap();
+        sqlx::migrate::Migrator {
+            migrations: std::borrow::Cow::Owned(
+                MIGRATOR
+                    .iter()
+                    .filter(|m| m.version < 10)
+                    .cloned()
+                    .collect(),
+            ),
+            ..sqlx::migrate::Migrator::DEFAULT
+        }
+        .run(&legacy)
+        .await
+        .unwrap();
+        let old_task = SqliteStickyRepository::new(legacy.clone())
+            .create(
+                &StickyService::prepare_create(StickyCardKind::Task, "existing task".into(), None)
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO codex_connection VALUES ('codex-reading', zeroblob(32), 'active',
+            'send_reading', '0123456789abcdef0123456789abcdef', 'before', 'before', 'before')",
+        )
+        .execute(&legacy)
+        .await
+        .unwrap();
+        legacy.close().await;
+        let updated = connect(&path).await.unwrap().0;
+        let rows = SqliteStickyRepository::new(updated.clone())
+            .list()
+            .await
+            .unwrap();
+        assert_eq!(rows, vec![old_task]);
+        let grant: (String, String, String) =
+            sqlx::query_as("SELECT state, scope, delivered_at FROM codex_connection")
+                .fetch_one(&updated)
+                .await
+                .unwrap();
+        assert_eq!(
+            grant,
+            ("active".into(), "send_reading".into(), "before".into())
+        );
+        let count: i64 = sqlx::query_scalar("SELECT count(*) FROM codex_todo_suggestion_grant")
+            .fetch_one(&updated)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
     }
 
     #[tokio::test]
@@ -305,7 +376,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert_eq!(versions, (1..=10).collect::<Vec<_>>());
         assert_eq!(note, "保留的记录");
         assert_eq!(
             task,
@@ -375,7 +446,7 @@ mod tests {
             .fetch_one(&upgraded.0)
             .await
             .unwrap();
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert_eq!(versions, (1..=10).collect::<Vec<_>>());
         assert_eq!(note, "0004 保留记录");
         assert_eq!(
             reader,
@@ -444,7 +515,7 @@ mod tests {
         .fetch_one(&upgraded.0)
         .await
         .unwrap();
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert_eq!(versions, (1..=10).collect::<Vec<_>>());
         assert_eq!(
             delivery,
             (
@@ -515,7 +586,7 @@ mod tests {
         .fetch_one(&upgraded.0)
         .await
         .unwrap();
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert_eq!(versions, (1..=10).collect::<Vec<_>>());
         assert_eq!(
             preserved,
             ("delivery-0006".to_owned(), "会话正文".to_owned(), 2)

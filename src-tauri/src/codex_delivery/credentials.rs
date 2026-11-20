@@ -16,6 +16,10 @@ pub(super) fn credential_reference() -> String {
     }
 }
 
+pub(super) fn todo_credential_reference(reading_reference: &str) -> String {
+    format!("{reading_reference}-todo-suggestions")
+}
+
 #[cfg(target_os = "macos")]
 impl OsCredentialStore {
     fn entry(reference: &str) -> Result<keyring::Entry, CredentialError> {

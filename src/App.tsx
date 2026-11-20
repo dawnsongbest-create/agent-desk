@@ -10,6 +10,7 @@ import { tauriReadingPlans } from "./infrastructure/tauri/reading";
 import { tauriAgentProposals } from "./infrastructure/tauri/proposal";
 import { tauriAgentConnection } from "./infrastructure/tauri/agentConnection";
 import { tauriStickyCards } from "./infrastructure/tauri/sticky";
+import { tauriTodoSuggestions } from "./infrastructure/tauri/todoSuggestions";
 import { tauriDesktopSticky } from "./infrastructure/tauri/desktopSticky";
 import { applyTheme } from "./styles/theme";
 import "./App.css";
@@ -96,6 +97,7 @@ function App({ surface = "main" }: AppProps) {
       deliveryPort={tauriDeliveries}
       readingPort={tauriReadingPlans}
       proposalPort={tauriAgentProposals}
+      todoSuggestionsPort={tauriTodoSuggestions}
       agentConnectionPort={tauriAgentConnection}
       preferences={preferences}
       nativeSurface={surface}

@@ -1,5 +1,8 @@
 mod credentials;
 mod mcp;
+mod todo_grant;
+
+pub(crate) use todo_grant::{todo_suggestions_enabled, TodoGrantStatus};
 
 use std::sync::Arc;
 
@@ -13,24 +16,35 @@ use uuid::Uuid;
 use crate::{
     application::{
         delivery_service::{DeliveryService, DeliveryServiceError},
-        ports::{credentials::CredentialPort, delivery_repository::DeliveryRepositoryError},
+        ports::{
+            credentials::CredentialPort, delivery_repository::DeliveryRepositoryError,
+            proposal_repository::ProposalRepositoryError,
+        },
+        proposal_service::{ProposalService, ProposalServiceError},
     },
     domain::{
         delivery::CreateDeliveryInput,
+        proposal::{
+            todo_batch::{TodoSuggestionRequest, MAX_TODO_BODY},
+            AgentProposalStatus,
+        },
         reader::{ReaderDocumentType, ReaderSourceType},
     },
 };
 
 pub(crate) const MAX_CODEX_BODY: usize = 1024 * 1024;
 pub(crate) const READING_PATH: &str = "/api/v1/reading-deliveries";
+pub(crate) const TODO_PATH: &str = "/api/v1/todo-suggestions";
 pub(crate) const CODEX_TOKEN_PREFIX: &str = "adk_codex_";
+pub(crate) const TODO_TOKEN_PREFIX: &str = "adk_codex_todo_";
 pub(crate) const INBOX_CHANGED: &str = "agent-desk://inbox-changed";
+pub(crate) const TODO_SUGGESTIONS_CHANGED: &str = "agent-desk://todo-suggestions-changed";
 
 const CONNECTION_ID: &str = "codex-reading";
 const DISABLE_ENV: &str = "AGENT_DESK_DISABLE_CODEX";
 
 type PairingRow = (Option<Vec<u8>>, String, String, Option<String>);
-type InboxChanged = Arc<dyn Fn() + Send + Sync>;
+type Changed = Arc<dyn Fn() + Send + Sync>;
 
 pub fn start_stdio_connector(args: &[String]) -> i32 {
     mcp::run(args)
@@ -105,6 +119,17 @@ struct ReadingReceipt {
     created: bool,
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TodoReceipt {
+    version: String,
+    operation: String,
+    request_id: String,
+    batch_id: String,
+    status: AgentProposalStatus,
+    created: bool,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CodexError {
     Unauthorized,
@@ -149,29 +174,35 @@ pub(crate) struct PairingStatus {
 pub(crate) struct CodexDelivery {
     pool: SqlitePool,
     deliveries: DeliveryService,
+    proposals: ProposalService,
     credential_store: Arc<dyn CredentialPort>,
     credential_ref: String,
     enabled: bool,
     // Serialize Codex requests and configuration changes. Revocation returning
     // success means no in-flight authorized Codex write can still commit.
     gate: Mutex<()>,
-    inbox_changed: InboxChanged,
+    inbox_changed: Changed,
+    todo_suggestions_changed: Changed,
 }
 
 impl CodexDelivery {
     pub(crate) fn new(
         pool: SqlitePool,
         deliveries: DeliveryService,
-        inbox_changed: InboxChanged,
+        proposals: ProposalService,
+        inbox_changed: Changed,
+        todo_suggestions_changed: Changed,
     ) -> Self {
         Self {
             pool,
             deliveries,
+            proposals,
             credential_store: Arc::new(credentials::OsCredentialStore),
             credential_ref: credentials::credential_reference(),
             enabled: std::env::var_os(DISABLE_ENV).as_deref() != Some("1".as_ref()),
             gate: Mutex::new(()),
             inbox_changed,
+            todo_suggestions_changed,
         }
     }
 
@@ -185,9 +216,8 @@ impl CodexDelivery {
         .await
     }
 
-    async fn read_credential(&self) -> Result<Option<String>, String> {
+    async fn read_credential(&self, reference: String) -> Result<Option<String>, String> {
         let store = Arc::clone(&self.credential_store);
-        let reference = self.credential_ref.clone();
         tokio::task::spawn_blocking(move || store.read(&reference))
             .await
             .map_err(|_| credential_error())?
@@ -207,7 +237,7 @@ impl CodexDelivery {
         {
             if state != "active" {
                 PairingPhase::Disconnected
-            } else if match self.read_credential().await {
+            } else if match self.read_credential(self.credential_ref.clone()).await {
                 Ok(Some(secret)) => hash.as_deref().is_some_and(|h| hashes_match(h, &secret)),
                 _ => false,
             } {
@@ -245,28 +275,9 @@ impl CodexDelivery {
         let _guard = self.gate.lock().await;
         // Fail closed on partial pairing, without changing the OpenClaw row.
         self.revoke_db().await?;
-        let token = format!(
-            "{CODEX_TOKEN_PREFIX}{}{}",
-            Uuid::new_v4().simple(),
-            Uuid::new_v4().simple()
-        );
-        let hash = Sha256::digest(token.as_bytes()).to_vec();
-        let store = Arc::clone(&self.credential_store);
-        let reference = self.credential_ref.clone();
-        tokio::task::spawn_blocking(move || {
-            store.store(&reference, &token)?;
-            let expected: [u8; 32] = Sha256::digest(token.as_bytes()).into();
-            match store.read(&reference) {
-                Ok(Some(recovered)) if hashes_match(&expected, &recovered) => Ok(()),
-                _ => {
-                    let _ = store.delete(&reference);
-                    Err(crate::application::ports::credentials::CredentialError::OperationFailed)
-                }
-            }
-        })
-        .await
-        .map_err(|_| credential_error())?
-        .map_err(|_| credential_error())?;
+        let hash = self
+            .issue_credential(CODEX_TOKEN_PREFIX, self.credential_ref.clone())
+            .await?;
         let updated = sqlx::query(
             "INSERT INTO codex_connection
              (id, token_hash, state, scope, dedupe_namespace, created_at, updated_at, delivered_at)
@@ -280,10 +291,38 @@ impl CodexDelivery {
         .execute(&self.pool)
         .await;
         if updated.is_err() {
-            let _ = self.delete_credential().await;
+            let _ = self.delete_credential(self.credential_ref.clone()).await;
             return Err(unavailable());
         }
         self.status_locked(port).await
+    }
+
+    async fn issue_credential(&self, prefix: &str, reference: String) -> Result<Vec<u8>, String> {
+        let token = format!(
+            "{prefix}{}{}",
+            Uuid::new_v4().simple(),
+            Uuid::new_v4().simple()
+        );
+        let hash = Sha256::digest(token.as_bytes()).to_vec();
+        let store = Arc::clone(&self.credential_store);
+        tokio::task::spawn_blocking(move || {
+            if let Err(error) = store.store(&reference, &token) {
+                let _ = store.delete(&reference);
+                return Err(error);
+            }
+            let expected: [u8; 32] = Sha256::digest(token.as_bytes()).into();
+            match store.read(&reference) {
+                Ok(Some(recovered)) if hashes_match(&expected, &recovered) => Ok(()),
+                _ => {
+                    let _ = store.delete(&reference);
+                    Err(crate::application::ports::credentials::CredentialError::OperationFailed)
+                }
+            }
+        })
+        .await
+        .map_err(|_| credential_error())?
+        .map_err(|_| credential_error())?;
+        Ok(hash)
     }
 
     async fn revoke_db(&self) -> Result<(), String> {
@@ -298,9 +337,8 @@ impl CodexDelivery {
         Ok(())
     }
 
-    async fn delete_credential(&self) -> Result<(), String> {
+    async fn delete_credential(&self, reference: String) -> Result<(), String> {
         let store = Arc::clone(&self.credential_store);
-        let reference = self.credential_ref.clone();
         tokio::task::spawn_blocking(move || store.delete(&reference))
             .await
             .map_err(|_| credential_error())?
@@ -309,10 +347,24 @@ impl CodexDelivery {
 
     pub(crate) async fn revoke(&self, port: u16) -> Result<PairingStatus, String> {
         let _guard = self.gate.lock().await;
-        self.revoke_db().await?;
-        self.delete_credential()
+        let mut tx = self.pool.begin().await.map_err(|_| unavailable())?;
+        sqlx::query(
+            "UPDATE codex_connection SET token_hash=NULL, state='revoked',
+             updated_at=CURRENT_TIMESTAMP, delivered_at=NULL WHERE id=?",
+        )
+        .bind(CONNECTION_ID)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| unavailable())?;
+        Self::revoke_todo_db(&mut tx)
             .await
-            .map_err(|_| "Codex 服务端授权已撤销，但系统凭据清理失败；请重试断开。".to_owned())?;
+            .map_err(|_| unavailable())?;
+        tx.commit().await.map_err(|_| unavailable())?;
+        let reading = self.delete_credential(self.credential_ref.clone()).await;
+        let todo = self.delete_credential(self.todo_reference()).await;
+        if reading.is_err() || todo.is_err() {
+            return Err("Codex 服务端授权已撤销，但系统凭据清理失败；请重试断开。".to_owned());
+        }
         self.status_locked(port).await
     }
 
@@ -341,6 +393,13 @@ impl CodexDelivery {
         body: &[u8],
     ) -> Result<String, CodexError> {
         let _guard = self.gate.lock().await;
+        if token.starts_with(TODO_TOKEN_PREFIX) {
+            let namespace = self.authenticate_todo(token).await?;
+            if method != "POST" || path != TODO_PATH {
+                return Err(CodexError::Forbidden);
+            }
+            return self.suggest_todos(&namespace, body).await;
+        }
         let Some((Some(hash), state, namespace, _)) =
             self.row().await.map_err(|_| CodexError::Unavailable)?
         else {
@@ -404,6 +463,38 @@ impl CodexDelivery {
         })
         .map_err(|_| CodexError::Unavailable)
     }
+
+    async fn suggest_todos(&self, namespace: &str, body: &[u8]) -> Result<String, CodexError> {
+        if body.len() > MAX_TODO_BODY {
+            return Err(CodexError::TooLarge);
+        }
+        let request: TodoSuggestionRequest =
+            serde_json::from_slice(body).map_err(|_| CodexError::InvalidPayload)?;
+        let key = request.idempotency_key.ok_or(CodexError::InvalidPayload)?;
+        let (batch, created) = self
+            .proposals
+            .submit_todo_batch(namespace, &key, request.items)
+            .await
+            .map_err(|error| match error {
+                ProposalServiceError::Repository(ProposalRepositoryError::TodoBatchConflict) => {
+                    CodexError::Conflict
+                }
+                ProposalServiceError::Repository(_) => CodexError::Unavailable,
+                _ => CodexError::InvalidPayload,
+            })?;
+        if created {
+            (self.todo_suggestions_changed)();
+        }
+        serde_json::to_string(&TodoReceipt {
+            version: "v1".into(),
+            operation: "suggest_todos".into(),
+            request_id: key,
+            batch_id: batch.id,
+            status: batch.status,
+            created,
+        })
+        .map_err(|_| CodexError::Unavailable)
+    }
 }
 
 fn hashes_match(hash: &[u8], token: &str) -> bool {
@@ -421,8 +512,9 @@ fn unavailable() -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::sync::{
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         Mutex as SyncMutex,
     };
 
@@ -433,29 +525,41 @@ mod tests {
         domain::agent_connection::AgentConnectionStatus,
         persistence::{
             agent_connection_repository::SqliteAgentConnectionRepository,
-            delivery_repository::SqliteDeliveryRepository, sqlite,
+            delivery_repository::SqliteDeliveryRepository,
+            proposal_repository::SqliteProposalRepository, sqlite,
         },
     };
 
     #[derive(Default)]
     struct TestStore {
-        secret: SyncMutex<Option<String>>,
-        fail: std::sync::atomic::AtomicBool,
+        secrets: SyncMutex<HashMap<String, String>>,
+        fail: AtomicBool,
+        fail_read: AtomicBool,
+        fail_delete: AtomicBool,
     }
 
     impl CredentialPort for TestStore {
-        fn store(&self, _: &str, token: &str) -> Result<(), CredentialError> {
+        fn store(&self, reference: &str, token: &str) -> Result<(), CredentialError> {
             if self.fail.load(Ordering::SeqCst) {
                 return Err(CredentialError::Unavailable);
             }
-            *self.secret.lock().unwrap() = Some(token.to_owned());
+            self.secrets
+                .lock()
+                .unwrap()
+                .insert(reference.to_owned(), token.to_owned());
             Ok(())
         }
-        fn read(&self, _: &str) -> Result<Option<String>, CredentialError> {
-            Ok(self.secret.lock().unwrap().clone())
+        fn read(&self, reference: &str) -> Result<Option<String>, CredentialError> {
+            if self.fail_read.load(Ordering::SeqCst) {
+                return Err(CredentialError::Unavailable);
+            }
+            Ok(self.secrets.lock().unwrap().get(reference).cloned())
         }
-        fn delete(&self, _: &str) -> Result<(), CredentialError> {
-            self.secret.lock().unwrap().take();
+        fn delete(&self, reference: &str) -> Result<(), CredentialError> {
+            if self.fail_delete.load(Ordering::SeqCst) {
+                return Err(CredentialError::Unavailable);
+            }
+            self.secrets.lock().unwrap().remove(reference);
             Ok(())
         }
     }
@@ -466,6 +570,10 @@ mod tests {
             "subtitle": "阶段测试", "idempotency_key": key
         }))
         .unwrap()
+    }
+
+    fn proposals(pool: &SqlitePool) -> ProposalService {
+        ProposalService::new(Arc::new(SqliteProposalRepository::new(pool.clone())))
     }
 
     #[tokio::test]
@@ -483,16 +591,18 @@ mod tests {
         let mut codex = CodexDelivery::new(
             db.clone(),
             deliveries.clone(),
+            proposals(&db),
             Arc::new(move || {
                 count.fetch_add(1, Ordering::SeqCst);
             }),
+            Arc::new(|| {}),
         );
         let store = Arc::new(TestStore::default());
         codex.credential_store = store.clone();
         codex.enabled = true;
         let paired = codex.pair(47321).await.unwrap();
         assert!(matches!(paired.phase, PairingPhase::AwaitingTest));
-        let token = store.read("").unwrap().unwrap();
+        let token = store.read(&codex.credential_ref).unwrap().unwrap();
         let content = format!("# 标题\n\n{}\n", "**Unicode** — 中文🙂\n".repeat(2500));
         let payload = body("one-send", &content, "article");
         let ingest =
@@ -560,7 +670,7 @@ mod tests {
             PairingPhase::Disconnected
         ));
         assert_eq!(ingest(&payload).await, Err(CodexError::Unauthorized));
-        assert!(store.read("").unwrap().is_none());
+        assert!(store.read(&codex.credential_ref).unwrap().is_none());
         assert!(legacy.authenticate(&old).await.unwrap());
         drop(codex);
         db.close().await;
@@ -581,14 +691,16 @@ mod tests {
             .0;
         let mut codex = CodexDelivery::new(
             db.clone(),
-            DeliveryService::new(Arc::new(SqliteDeliveryRepository::new(db))),
+            DeliveryService::new(Arc::new(SqliteDeliveryRepository::new(db.clone()))),
+            proposals(&db),
+            Arc::new(|| {}),
             Arc::new(|| {}),
         );
         let store = Arc::new(TestStore::default());
         codex.enabled = true;
         codex.credential_store = store.clone();
         codex.pair(47321).await.unwrap();
-        let old = store.read("").unwrap().unwrap();
+        let old = store.read(&codex.credential_ref).unwrap().unwrap();
         store.fail.store(true, Ordering::SeqCst);
         assert!(codex.pair(47321).await.is_err());
         assert_eq!(
@@ -599,5 +711,147 @@ mod tests {
             codex.status(47321).await.unwrap().phase,
             PairingPhase::Disconnected
         ));
+    }
+
+    #[tokio::test]
+    async fn todo_grant_is_independent_fail_closed_and_stable_after_reauthorization() {
+        let temp = tempfile::tempdir().unwrap();
+        let pool = sqlite::connect(&temp.path().join("grant.sqlite3"))
+            .await
+            .unwrap()
+            .0;
+        let mut codex = CodexDelivery::new(
+            pool.clone(),
+            DeliveryService::new(Arc::new(SqliteDeliveryRepository::new(pool.clone()))),
+            proposals(&pool),
+            Arc::new(|| {}),
+            Arc::new(|| {}),
+        );
+        let store = Arc::new(TestStore::default());
+        codex.credential_store = store.clone();
+        codex.enabled = true;
+        let reference = codex.todo_reference();
+        assert_ne!(reference, codex.credential_ref);
+        assert_eq!(
+            codex.todo_status().await.unwrap(),
+            TodoGrantStatus::Disconnected
+        );
+        assert_eq!(
+            codex.authenticate_todo(TODO_TOKEN_PREFIX).await,
+            Err(CodexError::Unauthorized)
+        );
+        codex.pair(47321).await.unwrap();
+        let reading = store.read(&codex.credential_ref).unwrap().unwrap();
+        assert_eq!(codex.pair_todo().await.unwrap(), TodoGrantStatus::Connected);
+        let todo = store.read(&reference).unwrap().unwrap();
+        let namespace = codex.authenticate_todo(&todo).await.unwrap();
+        assert_eq!(
+            codex.dispatch(&reading, "POST", TODO_PATH, b"{}").await,
+            Err(CodexError::Forbidden)
+        );
+        for path in [READING_PATH, "/api/v1/proposal", "/api/v1/reading-plan"] {
+            assert_eq!(
+                codex.dispatch(&todo, "POST", path, b"{}").await,
+                Err(CodexError::Forbidden)
+            );
+        }
+        store.fail_delete.store(true, Ordering::SeqCst);
+        assert!(codex.revoke_todo().await.is_err());
+        assert!(store.read(&reference).unwrap().is_some());
+        assert_eq!(
+            codex.authenticate_todo(&todo).await,
+            Err(CodexError::Unauthorized)
+        );
+        assert!(codex
+            .dispatch(
+                &reading,
+                "POST",
+                READING_PATH,
+                &body("after-revoke", "reading", "brief")
+            )
+            .await
+            .is_ok());
+        store.fail_delete.store(false, Ordering::SeqCst);
+        store.fail_read.store(true, Ordering::SeqCst);
+        assert!(codex.pair_todo().await.is_err());
+        store.fail_read.store(false, Ordering::SeqCst);
+        assert!(store.read(&reference).unwrap().is_none());
+        store.fail.store(true, Ordering::SeqCst);
+        assert!(codex.pair_todo().await.is_err());
+        store.fail.store(false, Ordering::SeqCst);
+        codex.pair_todo().await.unwrap();
+        let new_todo = store.read(&reference).unwrap().unwrap();
+        assert!(todo != new_todo);
+        assert_eq!(codex.authenticate_todo(&new_todo).await.unwrap(), namespace);
+        assert!(store
+            .read(&codex.credential_ref)
+            .unwrap()
+            .is_some_and(|token| token == reading));
+        codex.revoke(47321).await.unwrap();
+        assert!(store.read(&reference).unwrap().is_none());
+        assert_eq!(
+            codex.authenticate_todo(&new_todo).await,
+            Err(CodexError::Unauthorized)
+        );
+        assert_eq!(
+            codex.dispatch(&reading, "POST", READING_PATH, b"{}").await,
+            Err(CodexError::Unauthorized)
+        );
+    }
+
+    #[tokio::test]
+    async fn todo_revocation_waits_for_in_flight_batch_commit() {
+        let temp = tempfile::tempdir().unwrap();
+        let pool = sqlite::connect(&temp.path().join("revoke-race.sqlite3"))
+            .await
+            .unwrap()
+            .0;
+        let mut codex = CodexDelivery::new(
+            pool.clone(),
+            DeliveryService::new(Arc::new(SqliteDeliveryRepository::new(pool.clone()))),
+            proposals(&pool),
+            Arc::new(|| {}),
+            Arc::new(|| {}),
+        );
+        let store = Arc::new(TestStore::default());
+        codex.credential_store = store.clone();
+        codex.enabled = true;
+        codex.pair_todo().await.unwrap();
+        let token = store.read(&codex.todo_reference()).unwrap().unwrap();
+        let request = br#"{"items":[{"text":"Fixture before revoke","priority":"high"}],"idempotency_key":"race"}"#;
+        let write_lock = pool.begin_with("BEGIN IMMEDIATE").await.unwrap();
+        let (submitted, revoked) =
+            tokio::join!(codex.dispatch(&token, "POST", TODO_PATH, request), async {
+                tokio::time::timeout(std::time::Duration::from_secs(2), async {
+                    while codex.gate.try_lock().is_ok() {
+                        tokio::task::yield_now().await;
+                    }
+                })
+                .await
+                .unwrap();
+                assert!(tokio::time::timeout(
+                    std::time::Duration::from_millis(25),
+                    codex.revoke_todo()
+                )
+                .await
+                .is_err());
+                write_lock.commit().await.unwrap();
+                codex.revoke_todo().await
+            });
+        assert!(submitted.is_ok());
+        assert_eq!(revoked.unwrap(), TodoGrantStatus::Disconnected);
+        assert_eq!(
+            codex.dispatch(&token, "POST", TODO_PATH, request).await,
+            Err(CodexError::Unauthorized)
+        );
+        assert_eq!(
+            codex
+                .proposals
+                .list_pending_todo_batches()
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
     }
 }

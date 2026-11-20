@@ -38,6 +38,7 @@ import type {
 import type { ReaderDocument } from "../../domain/reader";
 import type { InboxDelivery } from "../../domain/delivery";
 import type { AgentProposal } from "../../domain/proposal";
+import type { TodoSuggestionsPort } from "../../application/ports/todoSuggestions";
 import type { AgentBridgeStatus } from "../../domain/agentConnection";
 import {
   compactDragFrame,
@@ -64,6 +65,7 @@ import type { ReaderLoadState } from "../reader/useReaderDocument";
 import { playPageTurnSound } from "./pageTurnSound";
 import { tauriDesktopSticky } from "../../infrastructure/tauri/desktopSticky";
 import type { StickyLoadState } from "./useStickyCards";
+import { TodoSuggestionTray } from "./TodoSuggestionTray";
 import { AgentBridgeSettings } from "../agentBridge/AgentBridgeSettings";
 import type { AgentBridgeLoadState } from "../agentBridge/useAgentBridge";
 
@@ -84,6 +86,8 @@ type StickyShellProps = {
   agentProposals: AgentProposal[];
   proposalBusyId: string | null;
   proposalErrorId: string | null;
+  todoSuggestionsPort?: TodoSuggestionsPort;
+  onTodoBatchAccepted(): void;
   agentBridgeStatus: AgentBridgeStatus | null;
   agentBridgeState: AgentBridgeLoadState;
   issuedAgentToken: string | null;
@@ -691,6 +695,8 @@ function SortableTask({
       className="sticky-card-row"
       data-completed={card.completed}
       data-dragging={isDragging}
+      data-todo-id={card.id}
+      tabIndex={-1}
     >
       <button
         className="drag-handle"
@@ -1117,6 +1123,8 @@ export function StickyShell(props: StickyShellProps) {
     agentProposals,
     proposalBusyId,
     proposalErrorId,
+    todoSuggestionsPort,
+    onTodoBatchAccepted,
     agentBridgeStatus,
     agentBridgeState,
     issuedAgentToken,
@@ -1178,6 +1186,7 @@ export function StickyShell(props: StickyShellProps) {
   const [turnSerial, setTurnSerial] = useState(0);
   const [turnDirection, setTurnDirection] = useState<"forward" | "backward">("forward");
   const recordsRef = useRef<StickyCard[]>([]);
+  const todoListRef = useRef<HTMLDivElement>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -1587,6 +1596,21 @@ export function StickyShell(props: StickyShellProps) {
                       <p>接下来要做的事</p>
                       <span>{openTaskCount} 件未完成</span>
                     </div>
+                    {todoSuggestionsPort ? (
+                      <TodoSuggestionTray
+                        port={todoSuggestionsPort}
+                        onAccepted={onTodoBatchAccepted}
+                        onLocate={(id) => {
+                          const list = todoListRef.current;
+                          const row = Array.from(
+                            list?.querySelectorAll<HTMLElement>("[data-todo-id]") ?? [],
+                          ).find((element) => element.dataset.todoId === id);
+                          const target = row ?? list;
+                          target?.scrollIntoView?.({ block: "nearest" });
+                          target?.focus({ preventScroll: true });
+                        }}
+                      />
+                    ) : null}
                     <DndContext
                       sensors={sensors}
                       collisionDetection={closestCenter}
@@ -1596,7 +1620,7 @@ export function StickyShell(props: StickyShellProps) {
                         items={tasks.map((card) => card.id)}
                         strategy={verticalListSortingStrategy}
                       >
-                        <div className="sticky-list">
+                        <div className="sticky-list" ref={todoListRef} tabIndex={-1}>
                           {tasks.length === 0 ? (
                             <p className="face-empty">今天还没有待办。先写下一件小事。</p>
                           ) : null}

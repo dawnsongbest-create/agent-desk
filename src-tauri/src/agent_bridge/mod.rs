@@ -12,7 +12,7 @@ use crate::{
         agent_connection_service::{AgentConnectionService, IssuedAgentToken},
         capability_service::CapabilityService,
     },
-    codex_delivery::{CodexDelivery, PairingStatus},
+    codex_delivery::{CodexDelivery, PairingStatus, TodoGrantStatus},
     domain::agent_connection::{AgentConnection, AgentConnectionStatus, AGENT_API_VERSION},
     persistence::agent_connection_repository::SqliteAgentConnectionRepository,
 };
@@ -210,4 +210,28 @@ pub(crate) async fn revoke_codex(
 ) -> Result<PairingStatus, String> {
     let port = state.status().await?.port;
     state.codex.revoke(port).await
+}
+
+#[tauri::command]
+pub(crate) async fn get_codex_todo_grant(
+    state: State<'_, AgentBridgeState>,
+) -> Result<TodoGrantStatus, String> {
+    state.codex.todo_status().await
+}
+
+#[tauri::command]
+pub(crate) async fn pair_codex_todo(
+    state: State<'_, AgentBridgeState>,
+) -> Result<TodoGrantStatus, String> {
+    if !state.status().await?.running {
+        return Err("请先启用本地 Bridge，再授权待办建议。".to_owned());
+    }
+    state.codex.pair_todo().await
+}
+
+#[tauri::command]
+pub(crate) async fn revoke_codex_todo(
+    state: State<'_, AgentBridgeState>,
+) -> Result<TodoGrantStatus, String> {
+    state.codex.revoke_todo().await
 }
