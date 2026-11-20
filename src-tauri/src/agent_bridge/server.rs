@@ -25,6 +25,7 @@ use crate::{
 const MAX_HEADER_BYTES: usize = 8 * 1024;
 const MAX_BODY_BYTES: usize = 4 * 1024 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+const REJECTED_BODY_DRAIN_TIMEOUT: Duration = Duration::from_millis(500);
 
 pub struct RunningAgentBridge {
     local_addr: SocketAddr,
@@ -114,10 +115,20 @@ async fn handle_connection(
     codex: Arc<CodexDelivery>,
 ) -> Result<(), std::io::Error> {
     let request = match timeout(REQUEST_TIMEOUT, read_request(&mut stream)).await {
-        Ok(Ok(request)) => request,
-        Ok(Err(error)) if error.kind() == std::io::ErrorKind::FileTooLarge => {
+        Ok(Ok(RequestRead::Complete(request))) => request,
+        Ok(Ok(RequestRead::OversizeTodo { remaining })) => {
             let (status, body) = CodexError::TooLarge.http();
             write_response(&mut stream, status, body).await?;
+            // The response has been sent and the write half closed. Drain a
+            // bounded amount so macOS doesn't reset a socket with unread data.
+            // Never parse or retain the over-limit body, or wait on a slow peer.
+            let mut discarded = (&mut stream).take(remaining as u64);
+            let mut sink = tokio::io::sink();
+            let _ = timeout(
+                REJECTED_BODY_DRAIN_TIMEOUT,
+                tokio::io::copy(&mut discarded, &mut sink),
+            )
+            .await;
             return Ok(());
         }
         _ => {
@@ -248,7 +259,12 @@ fn invalid_payload() -> (u16, String) {
     (400, r#"{"error":"invalid_payload"}"#.to_owned())
 }
 
-async fn read_request(stream: &mut TcpStream) -> Result<HttpRequest, std::io::Error> {
+enum RequestRead {
+    Complete(HttpRequest),
+    OversizeTodo { remaining: usize },
+}
+
+async fn read_request(stream: &mut TcpStream) -> Result<RequestRead, std::io::Error> {
     let mut bytes = Vec::with_capacity(1024);
     let mut buffer = [0_u8; 4096];
     let header_end = loop {
@@ -306,19 +322,20 @@ async fn read_request(stream: &mut TcpStream) -> Result<HttpRequest, std::io::Er
         .transpose()
         .map_err(|_| invalid_data("content length is invalid"))?
         .unwrap_or(0);
+    let body_start = header_end + 4;
     if path == crate::codex_delivery::TODO_PATH
         && content_length > crate::domain::proposal::todo_batch::MAX_TODO_BODY
     {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::FileTooLarge,
-            "Todo request body exceeds the byte limit",
-        ));
+        return Ok(RequestRead::OversizeTodo {
+            remaining: content_length
+                .saturating_sub(bytes.len() - body_start)
+                .min(MAX_BODY_BYTES),
+        });
     }
     if content_length > MAX_BODY_BYTES {
         return Err(invalid_data("request body is too large"));
     }
 
-    let body_start = header_end + 4;
     while bytes.len() < body_start + content_length {
         let read = stream.read(&mut buffer).await?;
         if read == 0 {
@@ -327,12 +344,12 @@ async fn read_request(stream: &mut TcpStream) -> Result<HttpRequest, std::io::Er
         bytes.extend_from_slice(&buffer[..read]);
     }
     let body = bytes[body_start..body_start + content_length].to_vec();
-    Ok(HttpRequest {
+    Ok(RequestRead::Complete(HttpRequest {
         method,
         path,
         headers,
         body,
-    })
+    }))
 }
 
 fn find_header_end(bytes: &[u8]) -> Option<usize> {
@@ -527,6 +544,21 @@ mod tests {
         )
         .await
         .starts_with("HTTP/1.1 413"));
+        // A sender can wait for the status before sending the declared body.
+        // The server must not wait for the oversized body before replying.
+        let mut waiting = TcpStream::connect(address).await.unwrap();
+        let headers = format!(
+            "POST {todo_path} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: {}\r\n\r\n",
+            MAX_BODY_BYTES + 1
+        );
+        waiting.write_all(headers.as_bytes()).await.unwrap();
+        let mut refusal = String::new();
+        timeout(Duration::from_secs(2), waiting.read_to_string(&mut refusal))
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(refusal.starts_with("HTTP/1.1 413"));
+        drop(waiting);
         assert!(request(address, "POST", todo_path, Some(&todo_secret),
             Some(r#"{"items":[{"text":"valid","priority":"low"},{"text":"invalid","priority":"urgent"}],"idempotency_key":"rejected-input"}"#)
         ).await.starts_with("HTTP/1.1 400"));
