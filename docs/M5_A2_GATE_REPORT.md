@@ -4,6 +4,8 @@ Baseline: `cfdc245b7b4fadc75616bd0af5c4099d917bbb21` (M5-A1). This report separa
 local tests from native Codex acceptance and hosted CI. Do not promote the gate
 on automated tests alone.
 
+Implementation and truth build source: `6382b84701ac63e477d80fb46e5fa91993eeb164`.
+
 ## Checkpoints
 
 | Checkpoint | Scope | Local evidence |
@@ -90,21 +92,49 @@ together. A repeated accept returns that receipt and does not insert again.
 | M5-A2 truth release | `EABD320528F2E11B031234165E645D72361062E5D5481060CBF609748AB2A229` |
 | Production JS | `3E763D8A462EB6A8CFAA78F30B7FDB40127C64C04B9387FF10ADBF4FABBEF393` |
 | Production CSS | `93C5454917986CA29A4F36201E843B9ECFA19A36F2D550DEC2458E3369D9B978` |
-| M5-A1 canonical release (not replaced) | `F179C05565428569E3F4A28041C45E9FB91C55855260F9A3AEAB03927676D3FD` |
+| Installed M5-A2 canonical release | `EABD320528F2E11B031234165E645D72361062E5D5481060CBF609748AB2A229` |
+| Archived M5-A1 canonical (not a schema-compatible rollback) | `F179C05565428569E3F4A28041C45E9FB91C55855260F9A3AEAB03927676D3FD` |
 
 - Real local Codex CLI 0.169.1 used an ephemeral session and one-process
   MCP override, without persisting Codex configuration. The ungranted
   `suggest_todos` call failed with `credential_unavailable`, actionable
   authorization instructions and no submission receipt.
-- Isolated desktop launch and positive real Codex acceptance: pending.
-- The initial isolated desktop launch did not proceed while the production
-  single-instance client was running. It was not closed or replaced by this
-  verification.
-- Public-repository Windows / macOS CI: pending.
+- After the owner closed the formal instance, the matching truth release
+  launched with isolated SQLite, Store, WebView2 and OS credential scope.
+  The owner enabled the Bridge and authorized Todo suggestions. The verified
+  isolated process owned the IPv4 loopback listener.
+- Two real Codex calls committed pending batches. With both visible in native
+  Expanded Todo, the SQLite Todo count stayed at 0. “暂不处理” closed the preview
+  and the same batch reopened; “拒绝” resolved that batch, still with 0 Todo.
+- One native “确认加入” accepted the other batch. SQLite held four new tasks,
+  in the exact accepted receipt order, with the first task's date preserved.
+  The order was high, high, medium, low, preserving the relative order of the
+  two high items. The renderer showed “已加入 4 项” and its locate action.
+- Real Codex replays returned the same two batch IDs and `created=false`,
+  with statuses `rejected` and `accepted`; the SQLite count stayed at four.
+- [Native ordered preview](evidence/m5-a2/01-native-synthetic-ordered-preview.jpg)
+  and [native acceptance](evidence/m5-a2/02-native-synthetic-acceptance.jpg) are
+  from the truth release above and contain only synthetic content.
+- The owner revoked only the Todo grant. The verified isolated Bridge stayed
+  online. A real Codex `suggest_todos` call failed with `credential_unavailable`;
+  batches and Todo rows were identical before and after. In that session,
+  `send_reading` committed one synthetic Inbox delivery and its Reader document.
+  Authenticated OpenClaw compatibility tests passed; no native OpenClaw client
+  was run.
+- After native acceptance, the verified binary atomically replaced canonical.
+  The installed build was launched against the same isolated profile for over
+  ten seconds. Its loopback listener and WebView2 children came from that
+  isolated run, and the four Todo rows, batch receipts and synthetic reading
+  delivery survived the restart. Both test processes were stopped; no
+  isolated WebView2 children remained. The isolated reading test credential
+  was removed. The five formal AppData files retained their pre-test hashes
+  or absent status.
+- Hosted verification: [main CI runs](https://github.com/dawnsongbest-create/agent-desk/actions?query=branch%3Amain).
+  Use the Windows and macOS jobs for the push that includes this report;
+  the local checks above are not hosted-CI evidence.
 - Scoped public safety scan: no known credential signatures, personal
   absolute paths, or database/packaging/build files in the candidate changes;
   do not publish local logs, isolated state or binaries.
-- Implementation checkout: not published during local verification.
 
 ### Disable / forward rollback
 
