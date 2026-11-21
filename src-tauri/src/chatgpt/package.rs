@@ -124,7 +124,7 @@ fn package(port: u16, profile: &str, program: &[u8], windows: bool) -> io::Resul
         "description": "Send reading and pending task suggestions to Agent Desk on this computer.",
         "extensions": {"com.openai": {"requires_local_executor": true, "interface": {
             "displayName": "Agent Desk for ChatGPT",
-            "shortDescription": "Send reading and task suggestions to Agent Desk.",
+            "shortDescription": "Reading and task suggestions",
             "longDescription": "Local only. Submits reading or suggestions you ask to send; cannot read Agent Desk data or create tasks without your confirmation.",
             "developerName": "Agent Desk"
         }}}
@@ -133,9 +133,10 @@ fn package(port: u16, profile: &str, program: &[u8], windows: bool) -> io::Resul
         "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
         "mcpServers": {"agent-desk-chatgpt": {
             "type": "stdio",
-            "command": format!("${{PLUGIN_ROOT}}/{program_path}"),
-            "args": ["--chatgpt-mcp", &port.to_string(), profile],
-            "cwd": "${PLUGIN_ROOT}"
+            // The portable importer accepts a bare executable or a contained
+            // ./ path here. Placeholder expansion is not done during validation.
+            "command": format!("./{program_path}"),
+            "args": ["--chatgpt-mcp", &port.to_string(), profile]
         }}
     }))?;
     archive([
@@ -228,15 +229,25 @@ mod tests {
             assert_eq!(entries[2].1, b"synthetic executable");
             let config: serde_json::Value = serde_json::from_slice(&entries[1].1).unwrap();
             let server = &config["mcpServers"]["agent-desk-chatgpt"];
-            assert_eq!(
-                server["command"],
-                format!("${{PLUGIN_ROOT}}/{}", entries[2].0)
-            );
+            let command = server["command"].as_str().unwrap();
+            let member = command
+                .strip_prefix("./")
+                .expect("portable executable path");
+            assert_eq!(member, entries[2].0);
+            assert!(member
+                .split('/')
+                .all(|part| !part.is_empty() && !matches!(part, "." | "..")));
             assert_eq!(
                 server["args"],
                 json!(["--chatgpt-mcp", "47881", "desktop-v1"])
             );
             assert!(server.get("env").is_none());
+            assert!(server.get("cwd").is_none());
+            let manifest: serde_json::Value = serde_json::from_slice(&entries[0].1).unwrap();
+            let subtitle = manifest["extensions"]["com.openai"]["interface"]["shortDescription"]
+                .as_str()
+                .unwrap();
+            assert!(subtitle.chars().count() <= 30);
         }
         assert!(package(0, "desktop-v1", b"x", true).is_err());
         assert!(package(47881, "invalid profile", b"x", true).is_err());
@@ -247,5 +258,25 @@ mod tests {
         assert!(!contains_private_build_path(
             b"/agent-desk-cargo/synthetic/lib.rs"
         ));
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    #[ignore = "writes an isolated acceptance ZIP to an explicit local destination"]
+    fn export_isolated_portable_zip() {
+        let audit = crate::audit_data_dir().expect("isolated AppData required");
+        assert!(audit.is_dir());
+        let profile = crate::chatgpt::profile();
+        assert!(profile.starts_with("audit-"));
+        let port = std::env::var("AGENT_DESK_BRIDGE_PORT")
+            .unwrap()
+            .parse()
+            .unwrap();
+        let executable = std::env::var_os("AGENT_DESK_M5_C_ISOLATED_EXE").unwrap();
+        let destination = std::env::var_os("AGENT_DESK_M5_C_ISOLATED_ZIP").unwrap();
+        let program = read_program(Path::new(&executable)).unwrap();
+        assert!(!contains_private_build_path(&program));
+        let zip = package(port, &profile, &program, true).unwrap();
+        write_new(Path::new(&destination), &zip).unwrap();
     }
 }

@@ -8,7 +8,7 @@ ChatGPT Work Local → 插件包内 Agent Desk 可执行文件的 `--chatgpt-mcp
 - STDIO 工具读取同一 OS 用户的 Windows Credential Manager / macOS Keychain。仅在核对 Bridge 的 challenge HMAC 后发送正文；请求 HMAC 绑定 profile、端口、scope、随机 nonce 和正文摘要，服务端对 nonce 限时且一次性使用。仅 IPv4 loopback、严格 Host/Origin、无代理头、有限大小；无公网、无远程网关。授权变更、入站提交和停止通过同一 admission gate 串行；旧凭据不能穿越已完成的撤销。已落库内容不会回滚。
 - 这里认证的是 **Agent Desk 签发的本机权限**，不是客户端声明、更不是 ChatGPT 进程代码签名。已获得同一系统账户凭据访问权的程序不在这个边界之外；不要共享系统账户、插件安装或数据库备份。撤权后重新授权意味着当前系统账户中还留着的同款安装包也可恢复使用；永久移除应同时卸载。
 - ChatGPT-only 监听不会启用其他 Agent 的路由；原 Bridge 开关继续管理 OpenClaw/Codex/DuMate。ChatGPT 最后一项被撤销且其他 Agent 没有启用时，关闭监听。原生程序退出则全部连接不可用，重启按各自持久授权恢复。
-- ZIP 只含两个便携清单和实际构建的当前平台可执行文件，清单只用 `${PLUGIN_ROOT}`，不复制系统凭据、插件缓存、用户数据库或日志。Release 构建 remap 开发路径；导出再次拦截常见个人编译路径。包由用户手动安装；不写 ChatGPT 隐藏配置。
+- ZIP 只含两个便携清单和实际构建的当前平台可执行文件；启动命令使用包内 `./server/…` 相对路径，不设置不必要的工作目录。不复制系统凭据、插件缓存、用户数据库或日志。Release 构建 remap 开发路径；导出再次拦截常见个人编译路径。包由用户手动安装；不写 ChatGPT 隐藏配置。
 
 ## 回滚
 

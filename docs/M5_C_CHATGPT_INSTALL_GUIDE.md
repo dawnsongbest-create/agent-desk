@@ -2,7 +2,7 @@
 
 请使用带有 **ChatGPT** 连接卡的 Agent Desk，以及支持 **Work → Local** 的 ChatGPT 桌面端。网页版、移动端和云端会话不能启动这个安装包。安装过程不需要打开终端、复制 Token 或编辑配置。[OpenAI 桌面专用插件说明](https://developers.openai.com/plugins/deploy/desktop-only)
 
-1. 在 Agent Desk 打开 **设置 → Agent 连接 → ChatGPT → 开始连接**。主动选择「阅读投递」或「待办建议」，也可以都选。确认后点击「保存安装包」。
+1. 如果只看见桌面便利贴，点书本图标「打开阅读器」。在 Reader 点右上角「•••」，找到 **Agent Bridge → ChatGPT → 开始连接**。主动选择「阅读投递」或「待办建议」，也可以都选。确认后点击「保存安装包」。
 2. 在同一台电脑、同一系统账户的 **ChatGPT Desktop → Work → Local → Plugins**，用实际提供的本地安装入口选择生成的 ZIP。不要上传到公共目录，也不要覆盖旧的 Agent Desk 预览插件。没有本地导入选项时，先停在这里，不要切换成远程连接。
 3. 开一个新的 Local 会话，用 `@` 选择 **Agent Desk for ChatGPT**。第一次建议发一篇不含个人信息的测试文章或待办建议。Agent Desk 在收到有效请求之前会显示「已授权，等待首次调用」。
 
