@@ -7,7 +7,7 @@ export type TodoSuggestionItem = {
 
 export type TodoSuggestionBatch = {
   id: string;
-  source: "codex" | "dumate";
+  source: "codex" | "dumate" | "chatgpt";
   items: TodoSuggestionItem[];
   status: "pending" | "accepted" | "rejected";
   createdAt: string;

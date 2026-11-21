@@ -50,6 +50,10 @@ pub fn start_stdio_connector(args: &[String]) -> i32 {
     mcp::run(args)
 }
 
+pub fn start_chatgpt_connector(args: &[String]) -> i32 {
+    mcp::run_chatgpt(args)
+}
+
 #[derive(Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum ReadingType {

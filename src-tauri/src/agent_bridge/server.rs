@@ -34,6 +34,7 @@ use crate::{
         agent_connection_service::{AgentConnectionService, AuthenticatedAgentConnection},
         capability_service::CapabilityService,
     },
+    chatgpt::{self, ChatGpt},
     codex_delivery::{CodexDelivery, CodexError, CODEX_TOKEN_PREFIX, READING_PATH},
     domain::agent_connection::AGENT_API_VERSION,
 };
@@ -49,6 +50,8 @@ pub struct RunningAgentBridge {
     task: JoinHandle<()>,
     accepting: Arc<AtomicBool>,
     dumate: Arc<DuMate>,
+    chatgpt: Option<Arc<ChatGpt>>,
+    legacy_enabled: Arc<AtomicBool>,
 }
 
 impl RunningAgentBridge {
@@ -59,6 +62,7 @@ impl RunningAgentBridge {
         openclaw: Arc<OpenClawAdapter>,
         codex: Arc<CodexDelivery>,
         dumate: Arc<DuMate>,
+        chatgpt: Option<(Arc<ChatGpt>, bool)>,
     ) -> Result<Self, std::io::Error> {
         let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port)).await?;
         let local_addr = listener.local_addr()?;
@@ -66,6 +70,10 @@ impl RunningAgentBridge {
         let accepting = Arc::new(AtomicBool::new(true));
         let listener_admission = accepting.clone();
         let listener_dumate = dumate.clone();
+        let legacy_enabled = Arc::new(AtomicBool::new(chatgpt.as_ref().is_none_or(|(_, on)| *on)));
+        let chatgpt = chatgpt.map(|(service, _)| service);
+        let listener_chatgpt = chatgpt.clone();
+        let listener_legacy = legacy_enabled.clone();
         let task = tokio::spawn(async move {
             loop {
                 tokio::select! {
@@ -81,8 +89,10 @@ impl RunningAgentBridge {
                         let codex = codex.clone();
                         let dumate = listener_dumate.clone();
                         let accepting = listener_admission.clone();
+                        let chatgpt = listener_chatgpt.clone();
+                        let legacy_enabled = listener_legacy.clone();
                         tokio::spawn(async move {
-                            let _ = handle_connection(stream, connections, capabilities, openclaw, codex, dumate, accepting).await;
+                            let _ = handle_connection(stream, connections, capabilities, openclaw, codex, dumate, accepting, chatgpt, legacy_enabled).await;
                         });
                     }
                 }
@@ -94,6 +104,8 @@ impl RunningAgentBridge {
             task,
             accepting,
             dumate,
+            chatgpt,
+            legacy_enabled,
         })
     }
 
@@ -101,11 +113,29 @@ impl RunningAgentBridge {
         self.local_addr
     }
 
+    pub fn legacy_running(&self) -> bool {
+        self.legacy_enabled.load(Ordering::Acquire)
+    }
+
+    pub fn enable_legacy(&self) {
+        self.legacy_enabled.store(true, Ordering::Release);
+    }
+
+    pub async fn disable_legacy(&self) {
+        self.legacy_enabled.store(false, Ordering::Release);
+        drop(self.dumate.gate.lock().await);
+    }
+
     pub async fn stop(self) {
         self.accepting.store(false, Ordering::Release);
+        self.legacy_enabled.store(false, Ordering::Release);
         let _ = self.shutdown.send(());
         let _ = self.task.await;
         drop(self.dumate.gate.lock().await);
+        if let Some(chatgpt) = &self.chatgpt {
+            let _gate = chatgpt.gate.lock().await;
+            chatgpt.clear_tickets().await;
+        }
     }
 }
 
@@ -135,6 +165,7 @@ impl HttpRequest {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_connection(
     mut stream: TcpStream,
     connections: Arc<AgentConnectionService>,
@@ -143,6 +174,8 @@ async fn handle_connection(
     codex: Arc<CodexDelivery>,
     dumate: Arc<DuMate>,
     accepting: Arc<AtomicBool>,
+    chatgpt: Option<Arc<ChatGpt>>,
+    legacy_enabled: Arc<AtomicBool>,
 ) -> Result<(), std::io::Error> {
     let request = match timeout(REQUEST_TIMEOUT, read_request(&mut stream)).await {
         Ok(Ok(RequestRead::Complete(request))) => request,
@@ -171,11 +204,41 @@ async fn handle_connection(
         }
     };
 
+    if chatgpt::handles(&request.path) {
+        let (status, body) = if let Some(service) = &chatgpt {
+            let _gate = service.gate.lock().await;
+            if !accepting.load(Ordering::Acquire) {
+                codex_error(CodexError::Unavailable)
+            } else if request.header("content-type") != Some("application/json") {
+                invalid_payload()
+            } else {
+                match service
+                    .handle(
+                        stream.local_addr()?.port(),
+                        &request.method,
+                        &request.path,
+                        request.bearer_token(),
+                        &request.body,
+                    )
+                    .await
+                {
+                    Ok(value) => serialize_ok(&value),
+                    Err(error) => codex_error(error),
+                }
+            }
+        } else {
+            (404, r#"{"error":"not_found"}"#.to_owned())
+        };
+        return write_response(&mut stream, status, &body).await;
+    }
+    if !legacy_enabled.load(Ordering::Acquire) {
+        return write_response(&mut stream, 403, r#"{"error":"forbidden_capability"}"#).await;
+    }
     if request.path == mcp_http::PATH {
         let (status, body) = if dumate.preview_available {
             mcp_http::respond(
                 &dumate,
-                &accepting,
+                &legacy_enabled,
                 &request.method,
                 &request.headers,
                 &request.body,
@@ -187,7 +250,7 @@ async fn handle_connection(
         return write_http_response(&mut stream, status, &body, true).await;
     }
     let token = request.bearer_token().unwrap_or_default();
-    if token.starts_with(DUMATE_PREFIX) {
+    if token.starts_with(DUMATE_PREFIX) || token.starts_with(chatgpt::PREFIX) {
         write_response(&mut stream, 401, r#"{"error":"unauthorized"}"#).await?;
         return Ok(());
     }
@@ -220,6 +283,7 @@ async fn handle_connection(
         &openclaw,
         &codex,
         &dumate,
+        chatgpt.as_deref(),
     )
     .await;
     write_response(&mut stream, status, &body).await
@@ -232,6 +296,7 @@ async fn route_request(
     openclaw: &OpenClawAdapter,
     codex: &CodexDelivery,
     dumate: &DuMate,
+    chatgpt: Option<&ChatGpt>,
 ) -> (u16, String) {
     match (request.method.as_str(), request.path.as_str()) {
         ("GET", "/api/v1/health") => (200, r#"{"version":"v1","status":"ok"}"#.to_owned()),
@@ -265,6 +330,20 @@ async fn route_request(
             } else {
                 None
             };
+            let _chatgpt_key_guard =
+                if let (Some(service), Some(key)) = (chatgpt, input.idempotency_key.as_deref()) {
+                    if key.trim_start().starts_with("chatgpt-reading:") {
+                        let guard = service.gate.lock().await;
+                        if let Err(error) = service.reserve_legacy_key(key).await {
+                            return codex_error(error);
+                        }
+                        Some(guard)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
             adapter_result(identity, openclaw, openclaw.create_delivery(input).await)
         }
         ("POST", "/api/v1/proposal") => {
@@ -388,11 +467,12 @@ async fn read_request(stream: &mut TcpStream) -> Result<RequestRead, std::io::Er
 
     let mut headers = Vec::new();
     let mcp = path == mcp_http::PATH;
+    let chat = chatgpt::handles(&path);
     for line in lines {
         let (name, value) = line
             .split_once(':')
             .ok_or_else(|| invalid_data("request header is invalid"))?;
-        if mcp
+        if (mcp || chat)
             && (name.is_empty()
                 || !name
                     .bytes()
@@ -410,7 +490,7 @@ async fn read_request(stream: &mut TcpStream) -> Result<RequestRead, std::io::Er
         headers.push((name.trim().to_owned(), value.trim().to_owned()));
     }
     let body_start = header_end + 4;
-    if mcp {
+    if mcp || chat {
         if let Err(status) = mcp_http::validate_headers(&headers, stream.local_addr()?) {
             return Ok(RequestRead::Rejected {
                 status,
@@ -419,7 +499,8 @@ async fn read_request(stream: &mut TcpStream) -> Result<RequestRead, std::io::Er
             });
         }
         if let Some(transfer) = mcp_http::header(&headers, "transfer-encoding") {
-            if !transfer.eq_ignore_ascii_case("chunked")
+            if !mcp
+                || !transfer.eq_ignore_ascii_case("chunked")
                 || mcp_http::header(&headers, "content-length").is_some()
                 || method != "POST"
             {
@@ -471,6 +552,7 @@ async fn read_request(stream: &mut TcpStream) -> Result<RequestRead, std::io::Er
         .map_err(|_| invalid_data("content length is invalid"))?
         .unwrap_or(0);
     if (mcp && content_length > mcp_http::MAX_BODY)
+        || (chat && content_length > chatgpt::body_limit(&path))
         || (path == crate::codex_delivery::TODO_PATH
             && content_length > crate::domain::proposal::todo_batch::MAX_TODO_BODY)
     {
@@ -689,6 +771,7 @@ mod tests {
             openclaw,
             codex,
             dumate,
+            None,
         )
         .await
         .unwrap();

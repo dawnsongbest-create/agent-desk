@@ -42,6 +42,7 @@ impl BatchRow {
             source: match self.source.as_str() {
                 "codex" => TodoSuggestionSource::Codex,
                 "dumate" => TodoSuggestionSource::Dumate,
+                "chatgpt" => TodoSuggestionSource::Chatgpt,
                 _ => return Err(invalid_batch()),
             },
             items: serde_json::from_str(&self.items_json).map_err(|_| invalid_batch())?,

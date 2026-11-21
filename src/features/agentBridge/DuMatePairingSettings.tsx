@@ -86,7 +86,9 @@ export function DuMatePairingSettings({ bridgeRunning }: { bridgeRunning: boolea
   const selected = draft ?? { reading: status.reading, todo: status.todo };
   return (
     <section className="agent-bridge-settings" aria-label="百度搭子">
-      <strong>百度搭子</strong>
+      <strong>
+        <span aria-hidden="true">▧ </span>百度搭子
+      </strong>
       {!status.previewAvailable ? (
         <small>本地 MCP 仅在显式启用的隔离预览中可用，默认关闭。</small>
       ) : (
